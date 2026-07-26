@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { activateCardboardTracking, averageQuaternions, currentScreenOrientationAngle, quaternionAngularDistance, quaternionFromDeviceOrientation, relativeHeadPose, type CardboardHeadPose, type Quaternion } from './cardboardTracking'
+import { activateCardboardTracking, averageQuaternions, currentScreenOrientationAngle, quaternionAngularDistance, quaternionFromDeviceOrientation, relativeHeadPose, type CardboardHeadPose, type CardboardOrientationSignalSource, type Quaternion } from './cardboardTracking'
 
 export type CardboardTrackingStatus = 'idle' | 'waiting' | 'calibrating' | 'tracking' | 'denied' | 'unavailable' | 'lost'
 export type CardboardTrackingFailureReason = 'permission_denied' | 'insecure_context' | 'orientation_api_missing' | 'no_sensor_signal' | 'tracking_lost' | null
@@ -18,9 +18,11 @@ interface OrientationSample {
   at: number
 }
 
-const STABLE_WINDOW_MILLISECONDS = 1_000
-const MINIMUM_STABLE_SAMPLES = 10
-const MAXIMUM_STABLE_SPREAD_RADIANS = 2 * Math.PI / 180
+const CALIBRATION_SAMPLE_WINDOW_MILLISECONDS = 300
+const PREFERRED_CALIBRATION_MILLISECONDS = 220
+const MAXIMUM_CALIBRATION_MILLISECONDS = 600
+const MINIMUM_CALIBRATION_SAMPLES = 3
+const PREFERRED_CALIBRATION_SPREAD_RADIANS = 18 * Math.PI / 180
 const INITIAL_SIGNAL_TIMEOUT_MILLISECONDS = 8_000
 const TRACKING_LOSS_MILLISECONDS = 2_500
 
@@ -35,6 +37,7 @@ export function useCardboardHeadTracking(enabled: boolean, calibrationReady = tr
   const samplesRef = useRef<OrientationSample[]>([])
   const lastEventRef = useRef(0)
   const signalWaitStartedAtRef = useRef(-1)
+  const signalSourceRef = useRef<CardboardOrientationSignalSource | null>(null)
   const recenterCountRef = useRef(0)
   const lossCountRef = useRef(0)
 
@@ -59,6 +62,7 @@ export function useCardboardHeadTracking(enabled: boolean, calibrationReady = tr
     if (activation.permission === 'insecure') return updateStatus('unavailable', null, 0, 'insecure_context')
     if (activation.permission === 'unsupported') return updateStatus('unavailable', null, 0, 'orientation_api_missing')
     if (activation.permission === 'no_signal') return updateStatus('unavailable', null, 0, 'no_sensor_signal')
+    signalSourceRef.current = activation.signalSource ?? null
     latestRef.current = null
     referenceRef.current = null
     samplesRef.current = []
@@ -70,7 +74,10 @@ export function useCardboardHeadTracking(enabled: boolean, calibrationReady = tr
 
   useEffect(() => {
     calibrationReadyRef.current = calibrationReady
-    if (!enabled) return updateStatus('idle')
+    if (!enabled) {
+      signalSourceRef.current = null
+      return updateStatus('idle')
+    }
     if (!calibrationReady) {
       referenceRef.current = null
       samplesRef.current = []
@@ -93,6 +100,9 @@ export function useCardboardHeadTracking(enabled: boolean, calibrationReady = tr
 
     const handleOrientation = (event: DeviceOrientationEvent) => {
       if (event.alpha === null || event.beta === null || event.gamma === null) return
+      const source: CardboardOrientationSignalSource = event.type === 'deviceorientationabsolute' ? 'absolute' : 'relative'
+      if (signalSourceRef.current && signalSourceRef.current !== source) return
+      signalSourceRef.current = source
       const now = performance.now()
       const quaternion = quaternionFromDeviceOrientation(event.alpha, event.beta, event.gamma, currentScreenOrientationAngle())
       latestRef.current = quaternion
@@ -100,23 +110,26 @@ export function useCardboardHeadTracking(enabled: boolean, calibrationReady = tr
 
       if (statusRef.current === 'waiting' || statusRef.current === 'lost' || statusRef.current === 'unavailable' || statusRef.current === 'denied' || statusRef.current === 'idle') return
       if (statusRef.current === 'calibrating') {
-        const samples = [...samplesRef.current, { quaternion, at: now }].filter((sample) => now - sample.at <= STABLE_WINDOW_MILLISECONDS)
+        const samples = [...samplesRef.current, { quaternion, at: now }].filter((sample) => now - sample.at <= CALIBRATION_SAMPLE_WINDOW_MILLISECONDS)
         samplesRef.current = samples
-        const elapsed = samples.length > 1 ? samples.at(-1)!.at - samples[0].at : 0
+        const sampleElapsed = samples.length > 1 ? samples.at(-1)!.at - samples[0].at : 0
+        const calibrationElapsed = Math.max(0, now - signalWaitStartedAtRef.current)
         const average = averageQuaternions(samples.map((sample) => sample.quaternion))
         const maximumSpread = samples.reduce((maximum, sample) => Math.max(maximum, quaternionAngularDistance(average, sample.quaternion)), 0)
-        if (maximumSpread > MAXIMUM_STABLE_SPREAD_RADIANS) {
-          samplesRef.current = [{ quaternion, at: now }]
-          updateStatus('calibrating')
-          return
-        }
-        const progress = Math.min(1, elapsed / STABLE_WINDOW_MILLISECONDS)
-        if (elapsed < STABLE_WINDOW_MILLISECONDS * 0.9 || samples.length < MINIMUM_STABLE_SAMPLES) {
+        const preferredReferenceReady = (
+          samples.length >= MINIMUM_CALIBRATION_SAMPLES
+          && sampleElapsed >= PREFERRED_CALIBRATION_MILLISECONDS
+          && maximumSpread <= PREFERRED_CALIBRATION_SPREAD_RADIANS
+        )
+        const deadlineReached = calibrationElapsed >= MAXIMUM_CALIBRATION_MILLISECONDS
+        if (!preferredReferenceReady && !deadlineReached) {
+          const progress = Math.min(0.98, calibrationElapsed / MAXIMUM_CALIBRATION_MILLISECONDS)
           updateStatus('calibrating', null, progress)
           return
         }
-        referenceRef.current = average
-        updateStatus('tracking', relativeHeadPose(average, quaternion, event.absolute === true, now), 1)
+        const reference = preferredReferenceReady ? average : quaternion
+        referenceRef.current = reference
+        updateStatus('tracking', relativeHeadPose(reference, quaternion, event.absolute === true, now), 1)
         return
       }
       if (referenceRef.current) updateStatus('tracking', relativeHeadPose(referenceRef.current, quaternion, event.absolute === true, now), 1)

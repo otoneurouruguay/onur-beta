@@ -1,7 +1,7 @@
 import { LogOut, Pause, Play, RotateCcw, Scan } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
-import type { CardboardHeadPose } from '../exercise/cardboardTracking'
+import { smoothCardboardHeadPose, type CardboardHeadPose } from '../exercise/cardboardTracking'
 import type { CardboardViewerProfile } from '../exercise/cardboardViewerProfiles'
 import { immersiveMediaUrl, type ImmersiveDevice, type ImmersiveScenario } from './catalog'
 
@@ -88,6 +88,9 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
           return
         }
         loaded.colorSpace = THREE.SRGBColorSpace
+        loaded.minFilter = THREE.LinearMipmapLinearFilter
+        loaded.magFilter = THREE.LinearFilter
+        loaded.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy())
         texture = loaded
         material.map = loaded
         material.needsUpdate = true
@@ -117,6 +120,9 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
       }, { once: true })
       texture = new THREE.VideoTexture(video)
       texture.colorSpace = THREE.SRGBColorSpace
+      texture.minFilter = THREE.LinearFilter
+      texture.magFilter = THREE.LinearFilter
+      texture.generateMipmaps = false
       material.map = texture
       material.needsUpdate = true
       video.load()
@@ -145,10 +151,16 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
     }, { rootMargin: '120px' })
     visibilityObserver?.observe(container)
 
-    const render = () => {
+    let displayedPose: CardboardHeadPose | null = null
+    let previousRenderTime: number | null = null
+    const render = (time: number) => {
       if (!visible && !renderer.xr.isPresenting) return
       if (!renderer.xr.isPresenting) {
-        const pose = device === 'vr_box' ? headPoseRef.current : null
+        const frameDelta = previousRenderTime === null ? 16 : Math.min(100, time - previousRenderTime)
+        previousRenderTime = time
+        const targetPose = device === 'vr_box' ? headPoseRef.current : null
+        displayedPose = targetPose ? smoothCardboardHeadPose(displayedPose, targetPose, frameDelta) : null
+        const pose = displayedPose
         const view = manualViewRef.current
         camera.rotation.order = 'YXZ'
         camera.rotation.set(pose?.pitchRadians ?? view.pitch, pose?.yawRadians ?? view.yaw, pose ? -pose.rollRadians : 0)

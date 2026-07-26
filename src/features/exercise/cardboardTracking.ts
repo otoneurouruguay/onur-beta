@@ -24,6 +24,11 @@ export interface CardboardFieldOfView {
   verticalFovDegrees: number
 }
 
+export interface CardboardPoseSmoothingOptions {
+  deadZoneRadians?: number
+  timeConstantMilliseconds?: number
+}
+
 export type CardboardTrackingPermission = 'granted' | 'denied' | 'unsupported' | 'insecure' | 'no_signal'
 export type CardboardOrientationSignalSource = 'relative' | 'absolute'
 
@@ -45,6 +50,10 @@ const HALF_PI = Math.PI / 2
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value))
+}
+
+function shortestAngleDelta(from: number, to: number) {
+  return Math.atan2(Math.sin(to - from), Math.cos(to - from))
 }
 
 export function normalizeQuaternion(quaternion: Quaternion): Quaternion {
@@ -139,6 +148,30 @@ export function relativeHeadPose(reference: Quaternion, current: Quaternion, abs
     rollRadians: Math.atan2(-up.x, up.y),
     absolute,
     updatedAt,
+  }
+}
+
+export function smoothCardboardHeadPose(
+  previous: CardboardHeadPose | null,
+  target: CardboardHeadPose,
+  deltaMilliseconds: number,
+  options: CardboardPoseSmoothingOptions = {},
+): CardboardHeadPose {
+  if (!previous) return target
+  const deadZone = options.deadZoneRadians ?? 0.35 * DEG_TO_RAD
+  const timeConstant = Math.max(1, options.timeConstantMilliseconds ?? 70)
+  const alpha = 1 - Math.exp(-clamp(deltaMilliseconds, 0, 100) / timeConstant)
+  const interpolate = (from: number, to: number) => {
+    const delta = shortestAngleDelta(from, to)
+    if (Math.abs(delta) <= deadZone) return from
+    return from + delta * alpha
+  }
+  return {
+    yawRadians: interpolate(previous.yawRadians, target.yawRadians),
+    pitchRadians: interpolate(previous.pitchRadians, target.pitchRadians),
+    rollRadians: interpolate(previous.rollRadians, target.rollRadians),
+    absolute: target.absolute,
+    updatedAt: target.updatedAt,
   }
 }
 

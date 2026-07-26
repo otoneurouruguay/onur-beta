@@ -42,7 +42,7 @@ describe('ciclo de vida del seguimiento Cardboard', () => {
     expect(result.current.calibrationProgress).toBe(1)
   })
 
-  it('reinicia la ventana si la cabeza se mueve y luego permite recentrar', () => {
+  it('tolera movimiento durante la referencia y luego permite recentrar', () => {
     const { result } = renderHook(() => useCardboardHeadTracking(true))
     act(() => {
       orientation(0, 90, 0)
@@ -50,10 +50,10 @@ describe('ciclo de vida del seguimiento Cardboard', () => {
       orientation(15, 90, 0)
     })
     expect(result.current.status).toBe('calibrating')
-    expect(result.current.calibrationProgress).toBe(0)
+    expect(result.current.calibrationProgress).toBeGreaterThan(0)
 
     act(() => {
-      for (let index = 0; index < 12; index += 1) {
+      for (let index = 0; index < 4; index += 1) {
         orientation(15, 90, 0)
         vi.advanceTimersByTime(100)
       }
@@ -68,6 +68,44 @@ describe('ciclo de vida del seguimiento Cardboard', () => {
     act(() => { result.current.recenter() })
     expect(result.current.status).toBe('calibrating')
     expect(result.current.recenterCount).toBe(1)
+  })
+
+  it('tolera el ruido normal del sensor y calibra en menos de medio segundo', () => {
+    const { result } = renderHook(() => useCardboardHeadTracking(true))
+    act(() => {
+      for (const alpha of [0, 3, -2.5, 3.5, -3, 2]) {
+        orientation(alpha, 90, 0)
+        vi.advanceTimersByTime(80)
+      }
+    })
+    expect(result.current.status).toBe('tracking')
+    expect(result.current.calibrationProgress).toBe(1)
+  })
+
+  it('termina por límite de tiempo aunque el sensor permanezca muy ruidoso', () => {
+    const { result } = renderHook(() => useCardboardHeadTracking(true))
+    act(() => {
+      for (let index = 0; index < 8; index += 1) {
+        orientation(index % 2 === 0 ? -80 : 80, index % 2 === 0 ? 45 : 120, 35)
+        vi.advanceTimersByTime(100)
+      }
+    })
+    expect(result.current.status).toBe('tracking')
+    expect(result.current.calibrationProgress).toBe(1)
+  })
+
+  it('fija una sola fuente de orientación y evita saltos al recibir dos flujos Android', () => {
+    const { result } = renderHook(() => useCardboardHeadTracking(true))
+    act(() => {
+      for (let index = 0; index < 6; index += 1) {
+        orientation(0, 90, 0, 'deviceorientation')
+        orientation(45, 70, 20, 'deviceorientationabsolute')
+        vi.advanceTimersByTime(80)
+      }
+    })
+    expect(result.current.status).toBe('tracking')
+    expect(result.current.pose?.absolute).toBe(false)
+    expect(Math.abs(result.current.pose?.yawRadians ?? 1)).toBeLessThan(0.01)
   })
 
   it('se detiene si el navegador no entrega ninguna lectura', () => {

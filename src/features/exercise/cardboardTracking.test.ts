@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { averageQuaternions, headPoseToCanvasTransform, quaternionAngularDistance, quaternionFromAxisAngle, relativeHeadPose, waitForCardboardOrientationSignal } from './cardboardTracking'
+import { averageQuaternions, headPoseToCanvasTransform, quaternionAngularDistance, quaternionFromAxisAngle, relativeHeadPose, smoothCardboardHeadPose, waitForCardboardOrientationSignal } from './cardboardTracking'
 
 const identity = { x: 0, y: 0, z: 0, w: 1 }
 
@@ -36,6 +36,17 @@ describe('seguimiento Cardboard 3DoF', () => {
     const narrow = headPoseToCanvasTransform(pose, 400, 300, { horizontalFovDegrees: 60, verticalFovDegrees: 60 })
     const wide = headPoseToCanvasTransform(pose, 400, 300, { horizontalFovDegrees: 110, verticalFovDegrees: 90 })
     expect(Math.abs(narrow.offsetX)).toBeGreaterThan(Math.abs(wide.offsetX))
+  })
+
+  it('absorbe el ruido subgrado y suaviza los saltos entre lecturas', () => {
+    const initial = { yawRadians: 0, pitchRadians: 0, rollRadians: 0, absolute: false, updatedAt: 0 }
+    const jitter = smoothCardboardHeadPose(initial, { ...initial, yawRadians: 0.2 * Math.PI / 180, updatedAt: 16 }, 16)
+    expect(jitter.yawRadians).toBe(0)
+
+    const targetYaw = 30 * Math.PI / 180
+    const firstFrame = smoothCardboardHeadPose(initial, { ...initial, yawRadians: targetYaw, updatedAt: 32 }, 16)
+    expect(firstFrame.yawRadians).toBeGreaterThan(0)
+    expect(firstFrame.yawRadians).toBeLessThan(targetYaw)
   })
 
   it('comprueba una señal real antes de autorizar la preparación Cardboard', async () => {

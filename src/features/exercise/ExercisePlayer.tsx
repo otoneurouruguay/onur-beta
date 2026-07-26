@@ -84,7 +84,7 @@ function CardboardTrackingOverlay({ status, failureReason, calibrationProgress, 
   const failed = status === 'denied' || status === 'unavailable' || status === 'lost'
   const title = status === 'calibrating' ? 'Calibrando posición frontal' : status === 'waiting' ? 'Esperando recalibración' : status === 'denied' ? 'Permiso de movimiento rechazado' : status === 'lost' ? 'Se perdió el seguimiento' : 'Sensores no disponibles'
   const instruction = status === 'calibrating'
-    ? 'Mirá el + de frente y mantené la cabeza quieta. El ejercicio comenzará cuando la posición sea estable.'
+    ? 'Mirá el + de frente. La referencia se toma automáticamente y no necesitás quedar completamente inmóvil.'
     : status === 'waiting'
       ? 'Mantené la vista al frente. La plataforma volverá a calibrar antes de continuar.'
     : status === 'denied'
