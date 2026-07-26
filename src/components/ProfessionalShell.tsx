@@ -7,7 +7,6 @@ import {
   Globe2,
   LayoutDashboard,
   LogOut,
-  Menu,
   MonitorPlay,
   ShieldCheck,
   Upload,
@@ -155,7 +154,11 @@ export function ProfessionalShell() {
               onClick={() => setMenuOpen(true)}
               aria-label="Abrir menú"
             >
-              <Menu size={19} />
+              <span className="flex w-[19px] flex-col gap-1" aria-hidden="true">
+                <span className="h-0.5 w-full rounded-full bg-current" />
+                <span className="h-0.5 w-full rounded-full bg-current" />
+                <span className="h-0.5 w-full rounded-full bg-current" />
+              </span>
             </button>
             <div className="lg:hidden">
               <Brand compact />
