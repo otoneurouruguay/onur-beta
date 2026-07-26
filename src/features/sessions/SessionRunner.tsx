@@ -157,7 +157,7 @@ function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, o
       <p className="mt-5 text-xs font-black uppercase tracking-[.16em] text-[#E49A02]">Preparación de {viewerLabel}</p>
       <h2 className="mt-3 text-2xl font-black">El próximo ejercicio usa el visor</h2>
       <p className="mt-3 text-sm leading-6 text-white/65">Dejá el {viewerLabel} abierto y el celular listo. Al continuar tendrás {seconds} segundos para colocarlo en el visor. {viewerProfile === 'cardboard' ? 'Después se calibrará la posición frontal y el ejercicio comenzará cuando la cabeza esté estable.' : 'Después, el ejercicio comenzará solo.'}</p>
-      {viewerProfile === 'cardboard' && <p className="mt-3 text-xs leading-5 text-white/55">Cardboard usa giroscopio y acelerómetro para seguimiento 3DoF. Al finalizar la cuenta, mirá el + de frente y mantené la cabeza quieta. El perfil óptico activo ajustará los centros y el campo visual; no mide desplazamiento físico 6DoF ni corrige distorsión de lentes por QR.</p>}
+      {viewerProfile === 'cardboard' && <p className="mt-3 text-xs leading-5 text-white/55">Cardboard usa giroscopio y acelerómetro para seguimiento 3DoF. Al finalizar la cuenta, mirá el + de frente y mantené la cabeza quieta. El perfil óptico activo ajustará centros, campo visual y corrección radial; no mide desplazamiento físico 6DoF ni reemplaza el código QR específico del visor.</p>}
       <p className="mt-4 rounded-2xl bg-black/25 p-4 text-xs font-bold text-white/75">Próxima fase: {nextLabel}</p>
       {trackingPermissionError && <p role="alert" className="mt-4 rounded-2xl bg-[#c74750]/18 p-4 text-xs font-bold leading-5 text-[#ff9da4]">{trackingPermissionError}</p>}
       <button type="button" disabled={activatingSensors} onClick={() => void startVrPreparation()} className="mt-6 h-14 w-full rounded-2xl bg-[#E49A02] px-4 text-sm font-black text-white disabled:opacity-50">{activatingSensors ? 'Comprobando giroscopio… mové suavemente el celular' : viewerProfile === 'cardboard' ? 'Activar sensores y preparar Cardboard' : `Comenzar preparación de ${seconds} segundos`}</button>
@@ -219,6 +219,7 @@ export function SessionRunner({ session, onFinish, onExit }: { session: SessionA
         cardboard_vertical_offset_percent: report?.headTracking?.opticalProfile.verticalOffsetPercent,
         cardboard_horizontal_fov_degrees: report?.headTracking?.opticalProfile.horizontalFovDegrees,
         cardboard_vertical_fov_degrees: report?.headTracking?.opticalProfile.verticalFovDegrees,
+        cardboard_lens_distortion_percent: report?.headTracking?.opticalProfile.lensDistortionPercent,
         active_seconds: Math.max(0, Math.round(activeSeconds)), target_repetitions: report?.targetRepetitions,
         reported_repetitions: report?.reportedRepetitions, completion,
         cognitive_mode: report?.cognitive?.mode,

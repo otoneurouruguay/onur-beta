@@ -25,15 +25,21 @@ describe('avance del reproductor', () => {
     expect(onComplete.mock.calls[0][1]).toMatchObject({ doseMode: 'time', completion: 'target_completed' })
   })
 
-  it('Cardboard muestra controles binoculares para pausar, omitir y salir', () => {
+  it('Cardboard muestra los controles al tocar la pantalla y vuelve a ocultarlos', async () => {
+    vi.useFakeTimers()
     const onSkip = vi.fn()
     const onExit = vi.fn()
     render(<ExercisePlayer config={{ ...applyExercisePurpose(defaultExerciseConfig, 'optokinetic'), displayMode: 'vr_box', cardboardEnabled: true, doseMode: 'time', advanceMode: 'automatic', durationSeconds: 30, preparationSeconds: 0 }} onExit={onExit} onSkip={onSkip}/>)
 
+    expect(screen.queryByRole('button', { name: 'Pausar · lado izquierdo' })).not.toBeInTheDocument()
+    fireEvent.pointerDown(screen.getByRole('application'))
     expect(screen.getByRole('button', { name: 'Pausar · lado izquierdo' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Omitir ejercicio · lado izquierdo' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Salir de la sesión · lado derecho' })).toBeInTheDocument()
+    await act(async () => { vi.advanceTimersByTime(3_000) })
+    expect(screen.queryByRole('button', { name: 'Pausar · lado izquierdo' })).not.toBeInTheDocument()
 
+    fireEvent.pointerDown(screen.getByRole('application'))
     fireEvent.click(screen.getByRole('button', { name: 'Pausar · lado izquierdo' }))
     expect(screen.getByRole('button', { name: 'Continuar · lado derecho' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Omitir ejercicio · lado derecho' }))
@@ -46,6 +52,7 @@ describe('avance del reproductor', () => {
     const onExit = vi.fn()
     render(<ExercisePlayer config={{ ...applyExercisePurpose(defaultExerciseConfig, 'saccades'), displayMode: 'vr_box', cardboardEnabled: true, doseMode: 'time', advanceMode: 'automatic', preparationSeconds: 0 }} onExit={onExit}/>)
 
+    fireEvent.pointerDown(screen.getByRole('application'))
     fireEvent.click(screen.getByRole('button', { name: 'Salir de la sesión · lado izquierdo' }))
     expect(onExit).toHaveBeenCalledOnce()
   })

@@ -21,7 +21,7 @@ vi.mock('../exercise/ExercisePlayer', () => ({
       reportedRepetitions: props.config.doseMode === 'repetitions' ? props.config.targetRepetitions : undefined,
       headTracking: props.config.cardboardEnabled ? {
         mode: 'orientation_3dof', spatialAnchor: 'calibrated_direction', recenterCount: 1, trackingLossCount: 0, finalStatus: 'tracking',
-        opticalProfile: { name: 'VR Box clínica', imageSeparationPercent: 4, verticalOffsetPercent: -2, horizontalFovDegrees: 92, verticalFovDegrees: 78 },
+        opticalProfile: { name: 'VR Box clínica', imageSeparationPercent: 4, verticalOffsetPercent: -2, horizontalFovDegrees: 92, verticalFovDegrees: 78, lensDistortionPercent: 18 },
       } : undefined,
     })}>Completar ejercicio</button>
   },
@@ -110,7 +110,7 @@ describe('SessionRunner', () => {
 
     expect(onFinish.mock.calls[0][2]).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: 'vr_box_put_on', viewer_profile: 'cardboard' }),
-      expect.objectContaining({ type: 'exercise_completed', viewer_profile: 'cardboard', head_tracking_mode: 'orientation_3dof', spatial_anchor: 'calibrated_direction', cardboard_optical_profile: 'VR Box clínica', cardboard_image_separation_percent: 4, cardboard_vertical_offset_percent: -2, cardboard_horizontal_fov_degrees: 92, cardboard_vertical_fov_degrees: 78 }),
+      expect.objectContaining({ type: 'exercise_completed', viewer_profile: 'cardboard', head_tracking_mode: 'orientation_3dof', spatial_anchor: 'calibrated_direction', cardboard_optical_profile: 'VR Box clínica', cardboard_image_separation_percent: 4, cardboard_vertical_offset_percent: -2, cardboard_horizontal_fov_degrees: 92, cardboard_vertical_fov_degrees: 78, cardboard_lens_distortion_percent: 18 }),
       expect.objectContaining({ type: 'vr_box_take_off', viewer_profile: 'cardboard' }),
     ]))
   })

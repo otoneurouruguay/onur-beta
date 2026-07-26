@@ -27,6 +27,7 @@ export interface SessionEventLogEntry {
   cardboard_vertical_offset_percent?: number
   cardboard_horizontal_fov_degrees?: number
   cardboard_vertical_fov_degrees?: number
+  cardboard_lens_distortion_percent?: number
   active_seconds?: number
   target_repetitions?: number
   reported_repetitions?: number

@@ -40,7 +40,7 @@ export function buildExerciseExecutionPlan(config: ExerciseConfig, setting: Exer
   }
   if (config.displayMode === 'vr_box') {
     if (config.cardboardEnabled) {
-      warnings.push('Cardboard usa giroscopio y acelerómetro para un anclaje angular 3DoF relativo a una calibración frontal estable. El perfil local ajusta centros y campo visual, pero no mide traslación 6DoF, no interpreta códigos QR ni corrige la distorsión específica de las lentes.')
+      warnings.push('Cardboard usa giroscopio y acelerómetro para un anclaje angular 3DoF relativo a una calibración frontal estable. El perfil local ajusta centros, campo visual y una corrección radial manual; no mide traslación 6DoF ni interpreta el código QR específico del visor.')
       warnings.push('Si se pierde la señal, el ejercicio se pausa y exige retirar el visor, mirar al frente y recalibrar.')
       if (config.purpose === 'gaze_stabilization') {
         feasibility = setting === 'home' ? 'not_executable' : 'in_person_only'

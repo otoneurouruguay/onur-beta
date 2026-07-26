@@ -41,12 +41,12 @@ describe('plan práctico de ejecución', () => {
     expect(plan.warnings.join(' ')).toContain('fusionen en uno solo')
   })
 
-  it('identifica el perfil óptico manual sin prometer distorsión de lentes ni posición 6DoF', () => {
+  it('identifica la corrección radial manual sin prometer calibración QR ni posición 6DoF', () => {
     const config = { ...applyExercisePurpose(defaultExerciseConfig, 'optokinetic'), displayMode: 'vr_box' as const, cardboardEnabled: true, doseMode: 'time' as const, advanceMode: 'automatic' as const }
     const plan = buildExerciseExecutionPlan(config, 'home')
     expect(plan.equipment).toContain('Visor compatible con Cardboard preparado y abierto')
-    expect(plan.warnings.join(' ')).toContain('perfil local ajusta centros y campo visual')
-    expect(plan.warnings.join(' ')).toContain('no interpreta códigos QR')
+    expect(plan.warnings.join(' ')).toContain('perfil local ajusta centros, campo visual y una corrección radial manual')
+    expect(plan.warnings.join(' ')).toContain('interpreta el código QR específico')
     expect(plan.warnings.join(' ')).toContain('anclaje angular 3DoF')
     expect(plan.warnings.join(' ')).toContain('no mide traslación 6DoF')
   })

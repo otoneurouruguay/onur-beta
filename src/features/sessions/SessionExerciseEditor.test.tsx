@@ -35,7 +35,7 @@ describe('creación de ejercicios', () => {
     expect(cardboard).not.toBeChecked()
     fireEvent.click(cardboard)
     expect(cardboard).toBeChecked()
-    expect(screen.getByText(/no interpreta códigos QR/i)).toBeInTheDocument()
+    expect(document.body).toHaveTextContent('corrección radial')
   })
 
   it('Quest clínico fuerza dosis por tiempo y avance automático', () => {
@@ -95,6 +95,7 @@ describe('creación de ejercicios', () => {
     fireEvent.change(screen.getByLabelText('Separación binocular'), { target: { value: '6' } })
     fireEvent.change(screen.getByLabelText('Centro vertical'), { target: { value: '-3' } })
     fireEvent.change(screen.getByLabelText('Campo visual horizontal'), { target: { value: '96' } })
+    fireEvent.change(screen.getByLabelText('Corrección de lente'), { target: { value: '24' } })
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo perfil' }))
 
     expect(screen.getByLabelText('Perfil óptico Cardboard')).toHaveDisplayValue('Perfil 2')
@@ -103,6 +104,7 @@ describe('creación de ejercicios', () => {
     expect(stored).toContain('"imageSeparationPercent":6')
     expect(stored).toContain('"verticalOffsetPercent":-3')
     expect(stored).toContain('"horizontalFovDegrees":96')
+    expect(stored).toContain('"lensDistortionPercent":24')
   })
 
   it.each(['gaze_stabilization_x2', 'gaze_substitution_remembered'])('mantiene %s fuera de visores sin referencia espacial', (purpose) => {

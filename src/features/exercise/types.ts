@@ -45,6 +45,7 @@ export interface ExerciseCompletionReport {
       verticalOffsetPercent: number
       horizontalFovDegrees: number
       verticalFovDegrees: number
+      lensDistortionPercent: number
     }
   }
   immersive?: {
