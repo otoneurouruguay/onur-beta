@@ -9,7 +9,7 @@ export function Brand({ compact = false, light = false }: BrandProps) {
 
   return (
     <div className="flex items-center gap-3" aria-label="Otoneuro Uruguay, ONUr Beta">
-      <span className={`shrink-0 overflow-hidden rounded-xl ${light ? 'bg-white p-1.5' : ''}`}>
+      <span className={`shrink-0 overflow-hidden rounded-xl border border-[#E9E7E7] bg-white ${light ? 'p-1.5' : ''}`}>
         <img
           src={compact ? '/otoneuro-mark.png' : '/otoneuro-horizontal.png'}
           alt="Otoneuro Uruguay"

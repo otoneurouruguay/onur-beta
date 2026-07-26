@@ -157,6 +157,9 @@ export function ProfessionalShell() {
             >
               <Menu size={19} />
             </button>
+            <div className="lg:hidden">
+              <Brand compact />
+            </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#A36B00]">ONUr Beta</p>
               <p className="mt-0.5 text-sm font-semibold text-[#171717]">{currentSection}</p>
