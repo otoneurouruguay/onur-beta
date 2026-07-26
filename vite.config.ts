@@ -13,7 +13,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       workbox: {
-          cacheId: 'onur-beta-0.1.0-beta.32',
+          cacheId: 'onur-beta-0.1.0-beta.33',
         globIgnores: ['**/ocr/**', '**/three.module-*.js'],
         cleanupOutdatedCaches: true,
         skipWaiting: false,
