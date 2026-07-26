@@ -9,10 +9,12 @@ export function Brand({ compact = false, light = false }: BrandProps) {
 
   return (
     <div className="flex items-center gap-3" aria-label="Otoneuro Uruguay, ONUr Beta">
-      <span className="relative grid size-10 shrink-0 place-items-center rounded-xl border border-[#E9E7E7] bg-white" aria-hidden="true">
-        <span className="absolute h-[2px] w-5 rounded-full bg-[#171717]" />
-        <span className="absolute h-5 w-[2px] rounded-full bg-[#171717]" />
-        <span className="relative size-2.5 rounded-full bg-[#E49A02] ring-4 ring-white" />
+      <span className={`shrink-0 overflow-hidden rounded-xl ${light ? 'bg-white p-1.5' : ''}`}>
+        <img
+          src={compact ? '/otoneuro-mark.png' : '/otoneuro-horizontal.png'}
+          alt="Otoneuro Uruguay"
+          className={compact ? 'size-10 object-cover' : 'h-12 w-[150px] object-contain'}
+        />
       </span>
       {!compact && (
         <div className="flex min-w-0 items-center gap-3">

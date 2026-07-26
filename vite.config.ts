@@ -19,7 +19,7 @@ export default defineConfig({
         skipWaiting: false,
         clientsClaim: false,
       },
-      includeAssets: ['onur-mark.svg', 'onur-192.png', 'onur-512.png'],
+      includeAssets: ['otoneuro-mark.png', 'otoneuro-mark-192.png', 'otoneuro-mark-512.png', 'otoneuro-horizontal.png', 'otoneuro-vertical.png'],
       manifest: {
         name: 'ONUr Beta',
         short_name: 'ONUr',
@@ -32,13 +32,13 @@ export default defineConfig({
         scope: base,
         icons: [
           {
-            src: 'onur-192.png',
+            src: 'otoneuro-mark-192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: 'onur-512.png',
+            src: 'otoneuro-mark-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any',
