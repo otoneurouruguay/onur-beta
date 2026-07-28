@@ -1,7 +1,6 @@
 import { suggestions as demoSuggestionSeed } from '../../data/demo'
 import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 import type { SuggestionStatus } from '../../types/domain'
-import { metricLabel } from './catalog'
 import type { ClinicalStudyReview, ClinicalStudySummary, MetricRowInput, NormalizedMetricRow, SaveStudyImportInput, SaveStudyImportResult, StatisticalSuggestionRecord, StudyType } from './types'
 
 const IMPORT_STORAGE_KEY = 'onur-demo-study-imports-v1'
@@ -240,9 +239,4 @@ export async function reviewStatisticalSuggestion(id: string, status: Exclude<Su
   }
   const { error } = await supabase.rpc('review_statistical_suggestion', { target_suggestion_id: id, review_decision: status, review_text: professionalText || null })
   if (error) throw error
-}
-
-export function metricSummary(metric: NormalizedMetricRow) {
-  if (metric.normalizedNumericValue !== null) return `${metricLabel(metric.metricCode)}: ${metric.normalizedNumericValue} ${metric.unitCode || ''}`.trim()
-  return `${metricLabel(metric.metricCode)}: ${metric.normalizedTextValue ?? 'sin valor normalizado'}`
 }

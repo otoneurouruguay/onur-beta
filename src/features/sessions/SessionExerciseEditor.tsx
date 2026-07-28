@@ -1,5 +1,5 @@
 import { Accessibility, BookOpen, CircleCheck, ClipboardCheck, Eye, Play, ShieldAlert } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { clinicalSources } from '../clinicalGeneration/catalog'
 import { cognitiveInstruction, cognitiveSymbolLabels, cognitiveTaskLabel } from '../exercise/cognitive'
 import { ExerciseCanvas } from '../exercise/ExerciseCanvas'
@@ -46,6 +46,20 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
   const compatibility = analyzeExerciseCompatibility(config)
   const execution = buildExerciseExecutionPlan(config, setting)
   const cognitive = config.cognitiveTaskMode !== 'none'
+
+  useEffect(() => {
+    if (!config.cardboardEnabled) return
+    const current = config.cardboardViewerProfile
+    const unchanged = current
+      && current.id === viewerProfile.id
+      && current.name === viewerProfile.name
+      && current.imageSeparationPercent === viewerProfile.imageSeparationPercent
+      && current.verticalOffsetPercent === viewerProfile.verticalOffsetPercent
+      && current.horizontalFovDegrees === viewerProfile.horizontalFovDegrees
+      && current.verticalFovDegrees === viewerProfile.verticalFovDegrees
+      && current.lensDistortionPercent === viewerProfile.lensDistortionPercent
+    if (!unchanged) onChange({ ...config, cardboardViewerProfile: { ...viewerProfile } })
+  }, [config, onChange, viewerProfile])
   const evidenceSourceIds = new Set<string>(['SRC-001'])
   if (config.clinicalProtocol === 'pppd') { evidenceSourceIds.add('SRC-017'); evidenceSourceIds.add('SRC-018'); evidenceSourceIds.add('SRC-019') }
   if (config.purpose === 'optokinetic' || config.purpose === 'visual_habituation') evidenceSourceIds.add('SRC-022')
@@ -229,7 +243,7 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
           {setting === 'home' && <p className="mt-3 rounded-xl bg-[#F7F6F4] p-3 text-[11px] leading-5 text-[#747474]"><strong>Quest no se asigna al domicilio:</strong> cambiá la modalidad general a presencial para habilitarlo.</p>}
           {config.displayMode === 'vr_box' && <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-[#E8CE99] bg-[#FFFDF8] p-4 text-[#8A5B00]"><input type="checkbox" aria-label="Habilitar perfil Cardboard" disabled={isImmersive} className="mt-0.5 size-4 accent-[#E49A02] disabled:opacity-60" checked={config.cardboardEnabled} onChange={(event) => setCardboardEnabled(event.target.checked)}/><span><strong className="block text-xs">Usar Cardboard con seguimiento 3DoF{isImmersive ? ' · obligatorio para 360°' : ''}</strong><span className="mt-1 block text-[11px] leading-5">{isImmersive ? 'Solicita giroscopio y acelerómetro, calibra el frente y orienta la cámara dentro de una esfera equirectangular. Los controles duplicados permiten pausar, recentrar, omitir o salir.' : 'Solicita giroscopio y acelerómetro, calibra la dirección frontal y contrarresta el giro de la cabeza para crear un anclaje angular. También agrega controles para pausar, recentrar, omitir o salir. No equivale a posición 6DoF ni a calibración óptica por QR.'}</span></span></label>}
           {config.displayMode === 'vr_box' && config.cardboardEnabled && <div className="mt-3 rounded-2xl border border-[#B9D9C5] bg-[#F6FBF8] p-4 text-[#28613D]">
-            <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black">Perfil óptico de este teléfono y visor</p><p className="mt-1 text-[11px] leading-5 text-[#4D745B]">Se guarda solamente en este navegador. Creá un perfil distinto para cada combinación teléfono–VR Box.</p></div><button type="button" onClick={viewerProfiles.createProfile} className="rounded-xl bg-[#28613D] px-3 py-2 text-[10px] font-black text-white">Nuevo perfil</button></div>
+            <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black">Perfil óptico del teléfono y visor</p><p className="mt-1 text-[11px] leading-5 text-[#4D745B]">Se guarda en este navegador y una copia viaja dentro de la sesión para que el celular ejecute exactamente estos valores. Creá un perfil distinto para cada combinación teléfono–VR Box.</p></div><button type="button" onClick={viewerProfiles.createProfile} className="rounded-xl bg-[#28613D] px-3 py-2 text-[10px] font-black text-white">Nuevo perfil</button></div>
             <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
               <label className="text-[11px] font-black">Perfil<select aria-label="Perfil óptico Cardboard" className="mt-2 h-10 w-full rounded-xl border border-[#B9D9C5] bg-white px-3 text-xs" value={viewerProfile.id} onChange={(event) => viewerProfiles.selectProfile(event.target.value)}>{viewerProfiles.profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
               <label className="text-[11px] font-black">Nombre<input aria-label="Nombre del perfil óptico" className="mt-2 h-10 w-full rounded-xl border border-[#B9D9C5] bg-white px-3 text-xs" value={viewerProfile.name} onChange={(event) => viewerProfiles.updateActiveProfile({ name: event.target.value })}/></label>

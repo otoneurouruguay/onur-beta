@@ -15,7 +15,7 @@ afterEach(cleanup)
 
 function EditorHarness({ setting = 'unspecified' }: { setting?: 'home' | 'in_person' | 'unspecified' }) {
   const [config, setConfig] = useState<ExerciseConfig>(defaultExerciseConfig)
-  return <SessionExerciseEditor config={config} isFirst setting={setting} onChange={setConfig}/>
+  return <><SessionExerciseEditor config={config} isFirst setting={setting} onChange={setConfig}/><output data-testid="cardboard-profile-snapshot">{JSON.stringify(config.cardboardViewerProfile ?? null)}</output></>
 }
 
 describe('creación de ejercicios', () => {
@@ -105,6 +105,8 @@ describe('creación de ejercicios', () => {
     expect(stored).toContain('"verticalOffsetPercent":-3')
     expect(stored).toContain('"horizontalFovDegrees":96')
     expect(stored).toContain('"lensDistortionPercent":24')
+    expect(screen.getByTestId('cardboard-profile-snapshot')).toHaveTextContent('"imageSeparationPercent":6')
+    expect(screen.getByTestId('cardboard-profile-snapshot')).toHaveTextContent('"verticalOffsetPercent":-3')
   })
 
   it.each(['gaze_stabilization_x2', 'gaze_substitution_remembered'])('mantiene %s fuera de visores sin referencia espacial', (purpose) => {

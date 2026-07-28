@@ -13,7 +13,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); trackingPermissionMock.mockRese
 
 vi.mock('../exercise/ExercisePlayer', () => ({
   ExercisePlayer: (props: { config: ExerciseConfig; preparationSeconds?: number; onComplete?: (activeSeconds: number, report?: ExerciseCompletionReport) => void }) => {
-    exercisePlayerMock(props)
+    exercisePlayerMock({ config: props.config, preparationSeconds: props.preparationSeconds })
     return <button type="button" onClick={() => props.onComplete?.(1, {
       doseMode: props.config.doseMode,
       completion: 'target_completed',
@@ -47,14 +47,31 @@ describe('SessionRunner', () => {
     expect(document.body.dataset.onurSessionRunning).toBeUndefined()
   })
 
-  it('aplica la preparación únicamente al primer ejercicio', async () => {
+  it('aplica la preparación configurada antes de cada ejercicio', async () => {
     exercisePlayerMock.mockClear()
     render(<SessionRunner session={session} onFinish={vi.fn()} onExit={vi.fn()} />)
 
     expect(exercisePlayerMock.mock.calls.at(-1)?.[0]).toMatchObject({ preparationSeconds: 20 })
     fireEvent.click(screen.getByRole('button', { name: 'Completar ejercicio' }))
 
-    await waitFor(() => expect(exercisePlayerMock.mock.calls.at(-1)?.[0]).toMatchObject({ preparationSeconds: 0 }))
+    await waitFor(() => expect(exercisePlayerMock.mock.calls.at(-1)?.[0]).toMatchObject({ preparationSeconds: 10 }))
+  })
+
+  it('deja una transición mínima antes del segundo escenario WebXR', async () => {
+    exercisePlayerMock.mockClear()
+    const questSession = {
+      ...session,
+      mode: 'in_person' as const,
+      exercises: [
+        { ...defaultExerciseConfig, name: 'Escenario 1', purpose: 'immersive_context' as const, displayMode: 'quest_browser' as const, preparationSeconds: 0 as const, restSeconds: 0, rounds: 1 },
+        { ...defaultExerciseConfig, name: 'Escenario 2', purpose: 'immersive_context' as const, displayMode: 'quest_browser' as const, preparationSeconds: 0 as const, restSeconds: 0, rounds: 1 },
+      ],
+    }
+    render(<SessionRunner session={questSession} onFinish={vi.fn()} onExit={vi.fn()} />)
+
+    expect(exercisePlayerMock.mock.calls.at(-1)?.[0]).toMatchObject({ preparationSeconds: 0 })
+    fireEvent.click(screen.getByRole('button', { name: 'Completar ejercicio' }))
+    await waitFor(() => expect(exercisePlayerMock.mock.calls.at(-1)?.[0]).toMatchObject({ preparationSeconds: 5 }))
   })
 
   it('registra la cantidad informada y finaliza la fase por repeticiones solo tras confirmación', async () => {

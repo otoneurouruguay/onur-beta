@@ -1,3 +1,5 @@
+import type { CardboardViewerProfile } from './cardboardViewerProfiles'
+
 export type BackgroundType = 'solid' | 'bars' | 'spiral' | 'checkerboard' | 'dots'
 export type LinearMotionDirection = 'left' | 'right' | 'up' | 'down' | 'up_left' | 'up_right' | 'down_left' | 'down_right'
 export type MotionDirection = LinearMotionDirection | 'clockwise' | 'counterclockwise'
@@ -65,6 +67,7 @@ export interface ExerciseConfig {
   patientInstruction: string
   displayMode: ExerciseDisplayMode
   cardboardEnabled: boolean
+  cardboardViewerProfile?: CardboardViewerProfile
   doseMode: ExerciseDoseMode
   targetRepetitions: number
   advanceMode: ExerciseAdvanceMode

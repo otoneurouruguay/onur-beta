@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { analyzeExerciseCompatibility } from '../exercise/compatibility'
 import { buildExerciseExecutionPlan } from '../exercise/execution'
 import type { ExerciseConfig } from '../exercise/types'
+import { getImmersiveScenario } from '../immersive/catalog'
 
 export const cycleFormSchema = z.object({
   label: z.string().trim().min(3, 'Ingresá un nombre para el ciclo.').max(100),
@@ -32,7 +33,19 @@ export function validateSession(values: SessionFormValues) {
   if (values.exercises.length === 0) setExerciseError('Agregá al menos un ejercicio.')
   if (values.exercises.some((exercise) => !exercise.name.trim())) setExerciseError('Todos los ejercicios necesitan un nombre.')
   if (values.exercises.some((exercise) => !exercise.patientInstruction.trim())) setExerciseError('Todos los ejercicios necesitan una instrucción breve para el paciente.')
-  if (values.exercises.some((exercise) => exercise.doseMode === 'repetitions' && (exercise.targetRepetitions < 1 || exercise.targetRepetitions > 100))) setExerciseError('El objetivo por repeticiones debe estar entre 1 y 100.')
+  if (values.exercises.some((exercise) => exercise.doseMode === 'repetitions' && (!Number.isInteger(exercise.targetRepetitions) || exercise.targetRepetitions < 1 || exercise.targetRepetitions > 100))) setExerciseError('El objetivo por repeticiones debe ser un número entero entre 1 y 100.')
+  const invalidDuration = values.exercises.find((exercise) => {
+    if (exercise.doseMode !== 'time') return false
+    const maximum = exercise.purpose === 'immersive_context' ? getImmersiveScenario(exercise.immersiveScenarioId)?.maximumSeconds ?? 300 : 300
+    return !Number.isInteger(exercise.durationSeconds) || exercise.durationSeconds < 10 || exercise.durationSeconds > maximum
+  })
+  if (invalidDuration) {
+    const maximum = invalidDuration.purpose === 'immersive_context' ? getImmersiveScenario(invalidDuration.immersiveScenarioId)?.maximumSeconds ?? 300 : 300
+    setExerciseError(`La duración por ejercicio debe ser un número entero entre 10 y ${maximum} segundos.`)
+  }
+  if (values.exercises.some((exercise) => !Number.isInteger(exercise.restSeconds) || exercise.restSeconds < 0 || exercise.restSeconds > 180)) setExerciseError('El descanso debe ser un número entero entre 0 y 180 segundos.')
+  if (values.exercises.some((exercise) => !Number.isInteger(exercise.rounds) || exercise.rounds < 1 || exercise.rounds > (exercise.purpose === 'immersive_context' ? 1 : 10))) setExerciseError('Las vueltas deben ser un número entero entre 1 y 10; los escenarios 360° admiten una sola vuelta por escena.')
+  if (values.exercises.some((exercise) => ![0, 5, 10, 20].includes(exercise.preparationSeconds))) setExerciseError('La preparación debe ser de 0, 5, 10 o 20 segundos.')
   if (values.exercises.some((exercise) => exercise.doseMode === 'repetitions' && exercise.advanceMode !== 'manual')) setExerciseError('Los ejercicios por repeticiones requieren confirmación manual.')
   if (values.exercises.some((exercise) => exercise.displayMode === 'vr_box' && exercise.doseMode === 'repetitions')) setExerciseError('VR Box solo admite ejercicios por tiempo; las repeticiones se realizan con el celular fuera del visor.')
   if (values.exercises.some((exercise) => exercise.displayMode === 'vr_box' && exercise.advanceMode !== 'automatic')) setExerciseError('Los ejercicios VR Box deben finalizar automáticamente porque no dependen de botones ni controles externos.')

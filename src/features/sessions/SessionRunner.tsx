@@ -9,7 +9,7 @@ import { VR_BOX_TRANSITION_SECONDS } from './sequence'
 type ExerciseUnit = { type: 'exercise'; config: ExerciseConfig; label: string; exerciseIndex: number; round: number }
 type RestUnit = { type: 'rest'; seconds: number; label: string; nextLabel: string; displayMode: ExerciseDisplayMode; advanceMode: ExerciseConfig['advanceMode']; viewerProfile: ViewerProfile | null }
 type ViewerProfile = 'vr_box' | 'cardboard'
-type VrBoxTransitionUnit = { type: 'vr_box_transition'; direction: 'put_on' | 'take_off'; seconds: number; nextLabel: string; viewerProfile: ViewerProfile }
+type VrBoxTransitionUnit = { type: 'vr_box_transition'; direction: 'put_on' | 'take_off'; seconds: number; nextLabel: string; viewerProfile: ViewerProfile; nextStopCriteria?: string }
 type Unit = ExerciseUnit | RestUnit | VrBoxTransitionUnit
 
 function buildUnits(exercises: ExerciseConfig[]): Unit[] {
@@ -32,7 +32,7 @@ function buildUnits(exercises: ExerciseConfig[]): Unit[] {
       })
       if (desiredViewer) units.push({
         type: 'vr_box_transition', direction: 'put_on', seconds: VR_BOX_TRANSITION_SECONDS,
-        nextLabel: phase.config.name, viewerProfile: desiredViewer,
+        nextLabel: phase.config.name, viewerProfile: desiredViewer, nextStopCriteria: phase.config.stopCriteria,
       })
       activeViewer = desiredViewer
     }
@@ -94,7 +94,7 @@ function RestScreen({ seconds, label, nextLabel, displayMode, advanceMode, viewe
   return <div className={`fixed inset-0 z-[100] bg-[#171717] text-white ${vrBox ? 'grid grid-cols-2 divide-x divide-white/10' : ''}`}>{content('izquierdo')}{vrBox && content('derecho')}</div>
 }
 
-function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, onComplete, onExit }: VrBoxTransitionUnit & { onComplete: () => void; onExit: () => void }) {
+function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, nextStopCriteria, onComplete, onExit }: VrBoxTransitionUnit & { onComplete: () => void; onExit: () => void }) {
   const [started, setStarted] = useState(direction === 'take_off')
   const [remaining, setRemaining] = useState(seconds)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -159,6 +159,7 @@ function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, o
       <p className="mt-3 text-sm leading-6 text-white/65">Dejá el {viewerLabel} abierto y el celular listo. Al continuar tendrás {seconds} segundos para colocarlo en el visor. {viewerProfile === 'cardboard' ? 'Después se calibrará la posición frontal y el ejercicio comenzará cuando la cabeza esté estable.' : 'Después, el ejercicio comenzará solo.'}</p>
       {viewerProfile === 'cardboard' && <p className="mt-3 text-xs leading-5 text-white/55">Cardboard usa giroscopio y acelerómetro para seguimiento 3DoF. Al finalizar la cuenta, mirá el + de frente y mantené la cabeza quieta. El perfil óptico activo ajustará centros, campo visual y corrección radial; no mide desplazamiento físico 6DoF ni reemplaza el código QR específico del visor.</p>}
       <p className="mt-4 rounded-2xl bg-black/25 p-4 text-xs font-bold text-white/75">Próxima fase: {nextLabel}</p>
+      {nextStopCriteria && <p className="mt-3 rounded-2xl bg-[#c74750]/18 p-4 text-xs font-bold leading-5 text-[#ffb8bd]"><strong>Detener o pausar:</strong> {nextStopCriteria}</p>}
       {trackingPermissionError && <p role="alert" className="mt-4 rounded-2xl bg-[#c74750]/18 p-4 text-xs font-bold leading-5 text-[#ff9da4]">{trackingPermissionError}</p>}
       <button type="button" disabled={activatingSensors} onClick={() => void startVrPreparation()} className="mt-6 h-14 w-full rounded-2xl bg-[#E49A02] px-4 text-sm font-black text-white disabled:opacity-50">{activatingSensors ? 'Comprobando giroscopio… mové suavemente el celular' : viewerProfile === 'cardboard' ? 'Activar sensores y preparar Cardboard' : `Comenzar preparación de ${seconds} segundos`}</button>
       <button type="button" onClick={onExit} className="mt-4 text-xs font-bold text-white/55">Salir de la sesión</button>
@@ -251,7 +252,13 @@ export function SessionRunner({ session, onFinish, onExit }: { session: SessionA
 
   const progress = units.slice(0, index + 1).filter((item) => item.type === 'exercise').length
   const total = session.exercises.reduce((count, exercise) => count + exercise.rounds, 0)
-  const preparationSeconds = progress === 1 && unit.config.displayMode !== 'vr_box' ? unit.config.preparationSeconds : 0
+  const preparationSeconds = unit.config.displayMode === 'vr_box'
+    ? 0
+    : Math.max(
+      unit.config.stopCriteria ? 5 : 0,
+      unit.config.purpose === 'immersive_context' && unit.config.displayMode === 'quest_browser' && progress > 1 ? 5 : 0,
+      unit.config.preparationSeconds,
+    )
   return <>
     {unit.config.displayMode !== 'vr_box' && <div className="fixed left-4 top-20 z-[110] rounded-full bg-black/55 px-3 py-2 text-[10px] font-black text-white backdrop-blur">{unit.label} · {progress}/{total}</div>}
     <ExercisePlayer key={index} config={{ ...unit.config, rounds: 1 }} preparationSeconds={preparationSeconds} onComplete={(seconds, report) => advance(seconds, report)} onSkip={(seconds, report) => advance(seconds, report ?? { doseMode: unit.config.doseMode, completion: 'skipped' })} onExit={onExit}/>

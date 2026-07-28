@@ -6,6 +6,7 @@ import { InPersonSessionPage } from './InPersonSessionPage'
 const mocks = vi.hoisted(() => ({
   status: 'assigned' as 'assigned' | 'started',
   quest: false,
+  immersive: false,
   start: vi.fn(),
   complete: vi.fn(),
   createQuest: vi.fn(),
@@ -22,7 +23,7 @@ vi.mock('../features/sessions/hooks', () => ({
     data: [{
       id: 'assignment-in-person', patientId: 'patient-fictitious', patientName: 'Paciente Ficticio',
       treatmentCycleId: 'cycle-fictitious', sessionPlanId: 'plan-fictitious', title: 'Sesión presencial ficticia',
-      instructions: 'Indicaciones ficticias', mode: 'in_person', exercises: [{ rounds: 1, durationSeconds: 10, restSeconds: 0, displayMode: mocks.quest ? 'quest_browser' : 'standard' }],
+      instructions: 'Indicaciones ficticias', mode: 'in_person', exercises: [{ rounds: 1, durationSeconds: 10, restSeconds: 0, displayMode: mocks.quest ? 'quest_browser' : 'standard', purpose: mocks.immersive ? 'immersive_context' : 'optokinetic', stopCriteria: mocks.immersive ? 'Detener si supera el techo acordado.' : undefined }],
       availableFrom: '2026-07-17T00:00:00.000Z', availableUntil: '', status: mocks.status, createdAt: '2026-07-17T00:00:00.000Z',
       activeSeconds: 0, completedAt: '', initialDiscomfort: null, finalDiscomfort: null, perceivedDifficulty: null, patientComment: '',
     }],
@@ -54,6 +55,7 @@ describe('ejecución presencial desde la cuenta profesional', () => {
   beforeEach(() => {
     mocks.status = 'assigned'
     mocks.quest = false
+    mocks.immersive = false
     mocks.start.mockReset().mockResolvedValue('execution-fictitious')
     mocks.complete.mockReset().mockResolvedValue('execution-fictitious')
     mocks.createQuest.mockReset().mockResolvedValue({ id: 'pairing-fictitious', code: 'AB12CD34', status: 'ready', expiresAt: '2099-01-01T12:00:00.000Z' })
@@ -102,6 +104,16 @@ describe('ejecución presencial desde la cuenta profesional', () => {
     await waitFor(() => expect(mocks.createQuest).toHaveBeenCalledWith(expect.objectContaining({ status: 'started' })))
     expect(await screen.findByText('AB12CD34')).toBeInTheDocument()
     expect(screen.getByText(/no contiene credenciales/i)).toBeInTheDocument()
+  })
+
+  it('no ofrece ejecutar una exposición WebXR en la pantalla profesional', () => {
+    mocks.quest = true
+    mocks.immersive = true
+    renderPage()
+
+    expect(screen.getByText('Detener si supera el techo acordado.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /ejecutar en esta pantalla/i })).not.toBeInTheDocument()
+    expect(screen.getByText(/requieren Meta Quest Browser y WebXR/i)).toBeInTheDocument()
   })
 
   it('recupera un resultado Quest capturado después de recargar la pantalla profesional', async () => {

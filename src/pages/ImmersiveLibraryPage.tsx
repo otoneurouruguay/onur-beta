@@ -30,7 +30,7 @@ export function ImmersiveLibraryPage() {
       {[
         ['1', 'Elegir el contexto', 'Revisá movimiento de cámara, intensidad, límites y advertencias.'],
         ['2', 'Configurar el dispositivo', 'Quest usa WebXR. VR Box exige Cardboard 3DoF; no existe modo 360° sin seguimiento.'],
-        ['3', 'Asignar una única escena', 'En el perfil del paciente creá una sesión presencial y elegí la plantilla 360°.'],
+        ['3', 'Asignar escenas compatibles', 'En el perfil del paciente creá una sesión presencial y elegí uno o varios escenarios 360° para el mismo dispositivo.'],
       ].map(([step, title, text]) => <article key={step} className="rounded-2xl border border-[#E9E7E7] bg-white p-5"><span className="grid size-8 place-items-center rounded-full bg-[#FFF7E8] text-xs font-black text-[#A36B00]">{step}</span><h2 className="mt-4 text-sm font-black text-[#171717]">{title}</h2><p className="mt-2 text-xs leading-5 text-[#747474]">{text}</p></article>)}
     </section>
 

@@ -68,6 +68,5 @@ const vestibular: ExtractionFieldDefinition[] = [
   { code: 'professional_observations', label: 'Observaciones profesionales', group: 'Conclusión', studyType: 'vhit', metricCode: 'professional_observations_text', aliases: ['observaciones profesionales', 'observaciones'] },
 ]
 
-export const extractionFieldDefinitions = [...posturography, ...vestibular]
 export const posturographyFieldDefinitions = posturography
 export const vestibularFieldDefinitions = vestibular

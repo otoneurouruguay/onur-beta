@@ -1,6 +1,5 @@
 import type {
   PatientSummary,
-  QualityIssue,
   StatisticalSuggestion,
   TodaySession,
 } from '../types/domain'
@@ -118,24 +117,5 @@ export const suggestions: StatisticalSuggestion[] = [
     limitation: 'No se aplicó una tabla normativa; salida exclusivamente descriptiva.',
     createdAt: 'Ayer, 18:51',
     status: 'pending',
-  },
-]
-
-export const qualityIssues: QualityIssue[] = [
-  {
-    id: 'issue-1',
-    code: 'DQ-002',
-    field: 'LOS',
-    originalValue: '74,1',
-    message: 'La unidad no fue identificada. La comparación queda bloqueada.',
-    status: 'blocked',
-  },
-  {
-    id: 'issue-2',
-    code: 'DQ-004',
-    field: 'TUG',
-    originalValue: '0',
-    message: 'Confirmar si el valor es cero o si representa un dato ausente.',
-    status: 'review',
   },
 ]

@@ -96,6 +96,20 @@ describe('validación de sesión',()=>{
   it('rechaza una fecha final anterior',()=>expect(validateSession({...session([defaultExerciseConfig]),availableUntil:'2026-07-15'}).availableUntil).toBeTruthy())
 
   it.each([
+    ['duración menor al mínimo', config({ durationSeconds: 9 }), 'duración'],
+    ['descanso fuera de rango', config({ restSeconds: 181 }), 'descanso'],
+    ['cero vueltas', config({ rounds: 0 }), 'vueltas'],
+    ['vueltas fraccionarias', config({ rounds: 1.5 }), 'vueltas'],
+    ['preparación arbitraria', config({ preparationSeconds: 7 as ExerciseConfig['preparationSeconds'] }), 'preparación'],
+  ])('rechaza %s aunque el valor no venga del formulario HTML', (_label, exercise, message) => {
+    expect(validateSession(session([exercise])).exercises?.toLowerCase()).toContain(message)
+  })
+
+  it('ignora un identificador 360° residual cuando la finalidad ya no es inmersiva', () => {
+    expect(validateSession(session([config({ immersiveScenarioId: 'street_quiet', durationSeconds: 120 })]))).toEqual({})
+  })
+
+  it.each([
     ['repeticiones dentro de VR Box', optokinetic({ displayMode: 'vr_box', doseMode: 'repetitions', advanceMode: 'manual' }), 'VR Box'],
     ['avance manual dentro de VR Box', optokinetic({ displayMode: 'vr_box', doseMode: 'time', advanceMode: 'manual' }), 'automáticamente'],
     ['Quest domiciliario', optokinetic({ displayMode: 'quest_browser', doseMode: 'time', advanceMode: 'automatic', posture: 'seated', surface: 'firm', supervision: 'direct_clinician' }), 'solo para sesiones presenciales'],

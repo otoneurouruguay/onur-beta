@@ -269,7 +269,7 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
       disposed = true
       release?.()
     }
-  }, [activated, device, onDemand, scenario, viewerProfile?.horizontalFovDegrees, viewerProfile?.imageSeparationPercent, viewerProfile?.lensDistortionPercent, viewerProfile?.verticalFovDegrees, viewerProfile?.verticalOffsetPercent])
+  }, [activated, device, onDemand, scenario, viewerProfile])
 
   const enterQuestImmersion = async () => {
     const renderer = rendererRef.current

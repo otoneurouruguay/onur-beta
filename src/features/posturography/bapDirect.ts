@@ -1,6 +1,5 @@
 import type { MetricRowInput } from '../studies/types'
 
-export const BAP_DIRECT_VERSION = 'onur-bap-webserial-1.0-beta'
 export const BAP_DIRECT_CONDITIONS = [1, 2, 3, 4, 5, 6] as const
 export type BapConditionCode = typeof BAP_DIRECT_CONDITIONS[number]
 

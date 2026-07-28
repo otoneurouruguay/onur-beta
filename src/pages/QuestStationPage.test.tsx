@@ -18,7 +18,7 @@ describe('página pública de estación Quest', () => {
     sessionStorage.clear()
     mocks.claim.mockReset().mockResolvedValue({
       pairingId: 'pairing-fictitious', deviceToken: 'device-token-fictitious', expiresAt: '2099-01-01T00:00:00.000Z', patientLabel: 'Paciente F.',
-      session: { id: 'assignment-fictitious', title: 'Sesión Quest ficticia', instructions: 'Indicación ficticia', exercises: [{ displayMode: 'quest_browser' }] },
+      session: { id: 'assignment-fictitious', title: 'Sesión Quest ficticia', instructions: 'Indicación ficticia', exercises: [{ displayMode: 'quest_browser', purpose: 'optokinetic' }] },
     })
     mocks.submit.mockReset().mockResolvedValue('pairing-fictitious')
   })
@@ -50,5 +50,25 @@ describe('página pública de estación Quest', () => {
     fireEvent.click(screen.getByRole('button', { name: /reintentar envío/i }))
     expect(await screen.findByRole('heading', { name: /ejecución enviada/i })).toBeInTheDocument()
     expect(mocks.submit).toHaveBeenCalledTimes(2)
+  })
+
+  it('explica WebXR y muestra criterios de detención para una sesión 360°', async () => {
+    mocks.claim.mockResolvedValueOnce({
+      pairingId: 'pairing-immersive', deviceToken: 'device-token-immersive', expiresAt: '2099-01-01T00:00:00.000Z', patientLabel: 'Paciente F.',
+      session: {
+        id: 'assignment-immersive', title: 'Exposición contextual', instructions: 'Indicación ficticia',
+        exercises: [
+          { displayMode: 'quest_browser', purpose: 'immersive_context', stopCriteria: 'Pausar si supera el techo acordado.' },
+          { displayMode: 'quest_browser', purpose: 'immersive_context', stopCriteria: 'Pausar si supera el techo acordado.' },
+        ],
+      },
+    })
+    render(<QuestStationPage/>)
+    fireEvent.change(screen.getByLabelText(/código temporal/i), { target: { value: 'AB12CD34' } })
+    fireEvent.click(screen.getByRole('button', { name: /cargar sesión/i }))
+
+    expect(await screen.findByText(/abrirá WebXR inmersivo/i)).toBeInTheDocument()
+    expect(screen.getByText('Pausar si supera el techo acordado.')).toBeInTheDocument()
+    expect(screen.queryByText(/modo WebXR inmersivo se habilitará/i)).not.toBeInTheDocument()
   })
 })
