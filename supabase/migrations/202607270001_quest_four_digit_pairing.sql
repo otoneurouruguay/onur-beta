@@ -176,4 +176,3 @@ revoke all on function public.create_quest_session_pairing(uuid) from public;
 revoke all on function public.claim_quest_session_pairing(text) from public;
 grant execute on function public.create_quest_session_pairing(uuid) to authenticated;
 grant execute on function public.claim_quest_session_pairing(text) to anon, authenticated;
-
