@@ -64,6 +64,9 @@ export interface SessionAssignmentRecord {
   perceivedDifficulty: number | null; patientComment: string
   professionalObservation?: string; supervised?: boolean; operatedBy?: string
   eventLog?: SessionEventLogEntry[]
+  revokedAt?: string
+  revokedBy?: string
+  revokedReason?: string
 }
 
 export interface SessionCompletionInput {
@@ -119,7 +122,7 @@ function assignmentFromRow(row:Record<string,unknown>):SessionAssignmentRecord {
   const executions=(row.session_executions??[]) as Record<string,unknown>[]
   const execution=[...executions].sort((a,b)=>String(b.created_at??b.started_at??'').localeCompare(String(a.created_at??a.started_at??'')))[0]
   const definition=(plan.plan_definition??{}) as {mode?:'home'|'in_person';exercises?:ExerciseConfig[]}
-  return {id:String(row.id),patientId:String(row.patient_id),patientName:String(patient.full_name??''),treatmentCycleId:String(row.treatment_cycle_id??''),sessionPlanId:String(row.session_plan_id),title:String(plan.title??'Sesión'),instructions:String(plan.instructions??''),mode:definition.mode??'home',exercises:(definition.exercises??[]).map(exercise=>normalizeExerciseConfig(exercise,0)),availableFrom:String(row.available_from),availableUntil:String(row.available_until??''),status:row.status as AssignmentStatus,createdAt:String(row.created_at),activeSeconds:Number(execution?.active_seconds??0),completedAt:String(execution?.finished_at??''),initialDiscomfort:execution?.initial_discomfort==null?null:Number(execution.initial_discomfort),finalDiscomfort:execution?.final_discomfort==null?null:Number(execution.final_discomfort),perceivedDifficulty:execution?.perceived_difficulty==null?null:Number(execution.perceived_difficulty),patientComment:String(execution?.patient_comment??''),professionalObservation:String(execution?.professional_observation??''),supervised:Boolean(execution?.supervised),operatedBy:String(execution?.operated_by??''),eventLog:Array.isArray(execution?.event_log)?execution.event_log as SessionEventLogEntry[]:[]}
+  return {id:String(row.id),patientId:String(row.patient_id),patientName:String(patient.full_name??''),treatmentCycleId:String(row.treatment_cycle_id??''),sessionPlanId:String(row.session_plan_id),title:String(plan.title??'Sesión'),instructions:String(plan.instructions??''),mode:definition.mode??'home',exercises:(definition.exercises??[]).map(exercise=>normalizeExerciseConfig(exercise,0)),availableFrom:String(row.available_from),availableUntil:String(row.available_until??''),status:row.status as AssignmentStatus,createdAt:String(row.created_at),activeSeconds:Number(execution?.active_seconds??0),completedAt:String(execution?.finished_at??''),initialDiscomfort:execution?.initial_discomfort==null?null:Number(execution.initial_discomfort),finalDiscomfort:execution?.final_discomfort==null?null:Number(execution.final_discomfort),perceivedDifficulty:execution?.perceived_difficulty==null?null:Number(execution.perceived_difficulty),patientComment:String(execution?.patient_comment??''),professionalObservation:String(execution?.professional_observation??''),supervised:Boolean(execution?.supervised),operatedBy:String(execution?.operated_by??''),eventLog:Array.isArray(execution?.event_log)?execution.event_log as SessionEventLogEntry[]:[],revokedAt:String(row.revoked_at??''),revokedBy:String(row.revoked_by??''),revokedReason:String(row.revoked_reason??'')}
 }
 
 export async function listTreatmentCycles(patientId:string):Promise<TreatmentCycleRecord[]> {
@@ -150,6 +153,10 @@ export function canManageSessionAssignment(assignment: Pick<SessionAssignmentRec
   return assignment.status === 'assigned'
 }
 
+export function canRevokeSessionAssignment(assignment: Pick<SessionAssignmentRecord, 'status'>) {
+  return assignment.status !== 'revoked'
+}
+
 export async function updateSessionAssignment(assignment:SessionAssignmentRecord,values:SessionFormValues):Promise<SessionAssignmentRecord>{
   if(!canManageSessionAssignment(assignment))throw new Error('La sesión ya tiene actividad registrada y su historial no puede modificarse.')
   if(!isSupabaseConfigured||!supabase){
@@ -175,23 +182,20 @@ export async function updateSessionAssignment(assignment:SessionAssignmentRecord
   return {...assignment,treatmentCycleId:values.treatmentCycleId,title:String(data.title),instructions:String(data.instructions??''),mode:values.mode,exercises:values.exercises,availableFrom:new Date(`${values.availableFrom}T00:00:00`).toISOString(),availableUntil:values.availableUntil?new Date(`${values.availableUntil}T23:59:59`).toISOString():''}
 }
 
-export async function deleteSessionAssignment(assignment:SessionAssignmentRecord):Promise<void>{
-  if(!canManageSessionAssignment(assignment))throw new Error('La sesión ya tiene actividad registrada y su historial no puede eliminarse.')
+export async function revokeSessionAssignment(assignment:SessionAssignmentRecord,reason:string):Promise<void>{
+  const cleanReason=reason.trim()
+  if(cleanReason.length<8||cleanReason.length>500)throw new Error('Ingresá un motivo de anulación entre 8 y 500 caracteres.')
+  if(!canRevokeSessionAssignment(assignment))throw new Error('La sesión ya fue anulada.')
   if(!isSupabaseConfigured||!supabase){
     const all=readAssignments()
     const current=all.find(item=>item.id===assignment.id&&item.patientId===assignment.patientId)
     if(!current)throw new Error('Sesión no encontrada.')
-    if(!canManageSessionAssignment(current))throw new Error('La sesión ya tiene actividad registrada y su historial no puede eliminarse.')
-    write(ASSIGNMENTS_KEY,all.filter(item=>item.id!==assignment.id))
+    if(!canRevokeSessionAssignment(current))throw new Error('La sesión ya fue anulada.')
+    write(ASSIGNMENTS_KEY,all.map(item=>item.id===assignment.id?{...item,status:'revoked' as const,revokedAt:new Date().toISOString(),revokedBy:'demo-professional',revokedReason:cleanReason}:item))
     return
   }
-  const {data:current,error:currentError}=await supabase.from('session_assignments').select('id, session_plan_id, status').eq('id',assignment.id).eq('patient_id',assignment.patientId).single()
-  if(currentError)throw currentError
-  if(current.status!=='assigned')throw new Error('La sesión ya tiene actividad registrada y su historial no puede eliminarse.')
-  const {data:deleted,error}=await supabase.from('session_assignments').delete().eq('id',assignment.id).eq('status','assigned').select('id').maybeSingle()
+  const {error}=await supabase.rpc('revoke_session_assignment',{target_assignment_id:assignment.id,revocation_reason:cleanReason})
   if(error)throw error
-  if(!deleted)throw new Error('La sesión comenzó mientras se intentaba eliminar y su historial fue conservado.')
-  await supabase.from('session_plans').delete().eq('id',current.session_plan_id)
 }
 
 export async function getCurrentPatientAssignment():Promise<SessionAssignmentRecord|null>{

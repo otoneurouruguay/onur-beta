@@ -10,7 +10,7 @@ const labels: Record<string, string> = {
   pending: 'Pendiente',
   assigned: 'Asignada',
   paused: 'Pausado',
-  revoked: 'Revocada',
+  revoked: 'Anulada',
   completed: 'Completada',
   partial: 'Parcial',
   interrupted: 'Interrumpida',

@@ -8,8 +8,8 @@ import {
   completeSupervisedInPersonSession,
   createSessionAssignment,
   createTreatmentCycle,
-  deleteSessionAssignment,
   listSessionAssignments,
+  revokeSessionAssignment,
   startSessionAssignment,
   startSupervisedInPersonSession,
   updateSessionAssignment,
@@ -82,7 +82,6 @@ describe('simulación integral de una consulta nueva', () => {
     home = await updateSessionAssignment(home, { ...homeValues, title: 'Domicilio · plan confirmado' })
     await startSessionAssignment(home)
     const startedHome = (await listSessionAssignments(patient.id)).find((item) => item.id === home.id)!
-    await expect(deleteSessionAssignment(startedHome)).rejects.toThrow(/historial/i)
     await completeSessionAssignment({
       assignment: startedHome,
       activeSeconds: 20,
@@ -160,7 +159,7 @@ describe('simulación integral de una consulta nueva', () => {
     }
     expect(validateSession(quest2dValues)).toEqual({})
     const quest2d = await createSessionAssignment(patient.id, quest2dValues)
-    await deleteSessionAssignment(quest2d)
+    await revokeSessionAssignment(quest2d, 'Sesión de prueba del flujo Quest 2D')
 
     const immersiveValues: SessionFormValues = {
       title: 'Clínica · Quest 360° múltiple',
@@ -196,7 +195,7 @@ describe('simulación integral de una consulta nueva', () => {
     const saved = await listSessionAssignments(patient.id)
     expect(saved.find((item) => item.id === home.id)).toMatchObject({ status: 'completed', title: 'Domicilio · plan confirmado' })
     expect(saved.find((item) => item.id === immersive.id)).toMatchObject({ status: 'completed', supervised: true, activeSeconds: 60 })
-    expect(saved.some((item) => item.id === quest2d.id)).toBe(false)
+    expect(saved.find((item) => item.id === quest2d.id)).toMatchObject({ status: 'revoked', revokedReason: 'Sesión de prueba del flujo Quest 2D' })
     expect(saved.find((item) => item.id === cardboard.id)?.exercises).toHaveLength(2)
   })
 })
