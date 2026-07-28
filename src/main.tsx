@@ -7,9 +7,9 @@ import App from './App.tsx'
 import { AuthProvider } from './features/auth/AuthProvider.tsx'
 
 registerSW({
-  // Las actualizaciones quedan listas en segundo plano y se activan cuando el
-  // usuario cierra la app. Nunca recargamos un formulario o una sesión activa.
-  immediate: false,
+  // Buscamos la versión nueva al abrir, pero no recargamos automáticamente la
+  // página actual: una sesión clínica que ya está corriendo no se interrumpe.
+  immediate: true,
   onRegisteredSW: (_serviceWorkerUrl, registration) => {
     if (registration) {
       void registration.update()

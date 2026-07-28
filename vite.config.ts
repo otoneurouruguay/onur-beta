@@ -11,12 +11,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
       workbox: {
-        cacheId: 'onur-beta-0.1.0-beta.36',
+        cacheId: 'onur-beta-0.1.0-beta.37',
         globIgnores: ['**/ocr/**', '**/three.module-*.js'],
         cleanupOutdatedCaches: true,
-        skipWaiting: false,
+        skipWaiting: true,
         clientsClaim: false,
       },
       includeAssets: ['otoneuro-mark.png', 'otoneuro-mark-192.png', 'otoneuro-mark-512.png', 'otoneuro-horizontal.png', 'otoneuro-vertical.png'],
