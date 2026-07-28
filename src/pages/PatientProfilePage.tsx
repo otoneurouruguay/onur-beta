@@ -1,4 +1,4 @@
-import { Activity, CalendarDays, ChevronLeft, Copy, FileImage, FileText, KeyRound, Pencil, PlayCircle, Plus, Trash2 } from 'lucide-react'
+import { Activity, CalendarDays, ChevronLeft, Copy, FileImage, FileText, IdCard, KeyRound, Pencil, PlayCircle, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
@@ -95,12 +95,13 @@ export function PatientProfilePage() {
             </div>
           </div>
           <dl className="mt-7 space-y-4 text-sm">
+            <div className="flex justify-between gap-4 border-b border-[#E9E7E7] pb-4"><dt className="inline-flex items-center gap-2 text-[#747474]"><IdCard size={15}/> Cédula</dt><dd className="font-black text-[#2F2F2F]">{patient.documentNumber || 'Sin registrar'}</dd></div>
             <div className="flex justify-between gap-4 border-b border-[#E9E7E7] pb-4"><dt className="text-[#747474]">Ciclo actual</dt><dd className="font-black text-[#2F2F2F]">{activeCycle?.label ?? 'Sin ciclo activo'}</dd></div>
             <div className="flex justify-between gap-4 border-b border-[#E9E7E7] pb-4"><dt className="text-[#747474]">Mutualista</dt><dd className="font-black text-[#2F2F2F]">{patient.insurer}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-[#747474]">Permisos activos</dt><dd className="font-black text-[#2F2F2F]">1 documento</dd></div>
           </dl>
           <Link to={`/app/pacientes/${patient.id}/acceso`} className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#E9E7E7] px-4 py-3 text-sm font-black text-[#2F2F2F]">
-            <KeyRound size={17} /> Gestionar acceso
+            <KeyRound size={17} /> {patient.portalAccess === 'enabled' ? 'Gestionar acceso domiciliario' : 'Habilitar acceso domiciliario'}
           </Link>
         </article>
 

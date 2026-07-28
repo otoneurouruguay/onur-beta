@@ -1,9 +1,11 @@
 import { patients as demoSeed } from '../../data/demo'
 import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 import type { PatientSummary } from '../../types/domain'
+import { createPortalAccount as enablePatientPortal } from '../access/repository'
 import type { PatientFormValues } from './schema'
 
 export interface PatientRecord extends PatientSummary {
+  documentNumber: string
   birthDate: string
   affiliateNumber: string
   phone: string
@@ -38,14 +40,21 @@ function ageFrom(date: string) {
 function seedRecords(): PatientRecord[] {
   return demoSeed.map((patient) => ({
     ...patient,
-    birthDate: '', affiliateNumber: '', phone: '', privateNotes: '', username: '',
+    documentNumber: '', birthDate: '', affiliateNumber: '', phone: '', privateNotes: '', username: '',
   }))
 }
 
 function readDemo() {
   const stored = localStorage.getItem(STORAGE_KEY)
   if (!stored) return seedRecords()
-  try { return JSON.parse(stored) as PatientRecord[] } catch { return seedRecords() }
+  try {
+    return (JSON.parse(stored) as PatientRecord[]).map((patient) => ({
+      ...patient,
+      documentNumber: patient.documentNumber ?? '',
+    }))
+  } catch {
+    return seedRecords()
+  }
 }
 
 function writeDemo(records: PatientRecord[]) {
@@ -60,7 +69,7 @@ function fromRow(row: Record<string, unknown>): PatientRecord {
     insurer: String(row.insurer ?? 'Sin mutualista'), status: row.status as 'active' | 'inactive',
     cycleLabel: 'Sin ciclo activo', todaySession: null, lastActivity: 'Sin actividad',
     portalAccess: 'disabled', birthDate, affiliateNumber: String(row.affiliate_number ?? ''),
-    phone: String(row.phone ?? ''), privateNotes: '', username: '',
+    documentNumber: '', phone: String(row.phone ?? ''), privateNotes: '', username: '',
   }
 }
 
@@ -78,10 +87,11 @@ export async function getPatient(id: string): Promise<PatientRecord | null> {
   if (!data) return null
   const patient = fromRow(data)
   const [{ data: note }, { data: portal }] = await Promise.all([
-    supabase.from('patient_private_notes').select('notes').eq('patient_id', id).maybeSingle(),
+    supabase.from('patient_private_notes').select('notes, document_number').eq('patient_id', id).maybeSingle(),
     supabase.from('patient_portal_accounts').select('username_normalized, enabled').eq('patient_id', id).maybeSingle(),
   ])
   patient.privateNotes = note?.notes ?? ''
+  patient.documentNumber = note?.document_number ?? ''
   patient.username = portal?.username_normalized ?? ''
   patient.portalAccess = portal?.enabled ? 'enabled' : 'disabled'
   return patient
@@ -95,9 +105,12 @@ export async function createPatient(values: PatientFormValues): Promise<SavePati
       cycleLabel: 'Sin ciclo activo', todaySession: null, lastActivity: 'Creado recién',
       portalAccess: values.createPortalAccount ? 'enabled' : 'disabled', birthDate: values.birthDate ?? '',
       affiliateNumber: values.affiliateNumber ?? '', phone: values.phone ?? '', privateNotes: values.privateNotes ?? '',
-      username: values.createPortalAccount ? values.username ?? '' : '',
+      documentNumber: values.documentNumber ?? '', username: values.createPortalAccount ? values.username ?? '' : '',
     }
     writeDemo([...readDemo(), record])
+    if (values.createPortalAccount) {
+      await enablePatientPortal(record.id, values.username ?? '', values.temporaryCi ?? '')
+    }
     return { patient: record }
   }
   const { data: authData, error: authError } = await supabase.auth.getUser()
@@ -108,16 +121,22 @@ export async function createPatient(values: PatientFormValues): Promise<SavePati
     phone: values.phone || null, status: values.status,
   }).select().single()
   if (error) throw error
-  if (values.privateNotes) {
-    const { error: noteError } = await supabase.from('patient_private_notes').insert({ patient_id: data.id, updated_by: authData.user.id, notes: values.privateNotes })
+  if (values.privateNotes || values.documentNumber) {
+    const { error: noteError } = await supabase.from('patient_private_notes').insert({
+      patient_id: data.id,
+      updated_by: authData.user.id,
+      notes: values.privateNotes ?? '',
+      document_number: values.documentNumber || null,
+    })
     if (noteError) throw noteError
   }
   let warning: string | undefined
   if (values.createPortalAccount) {
-    const { error: portalError } = await supabase.functions.invoke('create-patient-account', {
-      body: { patient_id: data.id, username: values.username, temporary_ci: values.temporaryCi },
-    })
-    if (portalError) warning = 'El paciente fue creado, pero no se pudo habilitar su cuenta de portal.'
+    try {
+      await enablePatientPortal(data.id, values.username ?? '', values.temporaryCi ?? '')
+    } catch {
+      warning = 'El paciente fue creado, pero no se pudo habilitar su cuenta de portal.'
+    }
   }
   return { patient: (await getPatient(data.id)) ?? fromRow(data), warning }
 }
@@ -127,18 +146,34 @@ export async function updatePatient(id: string, values: PatientFormValues): Prom
     const records = readDemo()
     const current = records.find((patient) => patient.id === id)
     if (!current) throw new Error('Paciente no encontrado.')
-    const updated: PatientRecord = { ...current, fullName: values.fullName, initials: initials(values.fullName), age: ageFrom(values.birthDate ?? ''), birthDate: values.birthDate ?? '', insurer: values.insurer || 'Sin mutualista', affiliateNumber: values.affiliateNumber ?? '', phone: values.phone ?? '', privateNotes: values.privateNotes ?? '', status: values.status }
+    const updated: PatientRecord = { ...current, fullName: values.fullName, initials: initials(values.fullName), age: ageFrom(values.birthDate ?? ''), documentNumber: values.documentNumber ?? '', birthDate: values.birthDate ?? '', insurer: values.insurer || 'Sin mutualista', affiliateNumber: values.affiliateNumber ?? '', phone: values.phone ?? '', privateNotes: values.privateNotes ?? '', status: values.status, portalAccess: values.createPortalAccount ? 'enabled' : current.portalAccess, username: values.createPortalAccount ? values.username ?? current.username : current.username }
     writeDemo(records.map((patient) => patient.id === id ? updated : patient))
+    if (values.createPortalAccount) {
+      await enablePatientPortal(id, values.username ?? '', values.temporaryCi ?? '')
+    }
     return { patient: updated }
   }
   const { error } = await supabase.from('patients').update({ full_name: values.fullName, birth_date: values.birthDate || null, insurer: values.insurer || null, affiliate_number: values.affiliateNumber || null, phone: values.phone || null, status: values.status }).eq('id', id)
   if (error) throw error
   const { data: authData } = await supabase.auth.getUser()
-  const { error: noteError } = await supabase.from('patient_private_notes').upsert({ patient_id: id, updated_by: authData.user?.id, notes: values.privateNotes ?? '' }, { onConflict: 'patient_id' })
+  const { error: noteError } = await supabase.from('patient_private_notes').upsert({
+    patient_id: id,
+    updated_by: authData.user?.id,
+    notes: values.privateNotes ?? '',
+    document_number: values.documentNumber || null,
+  }, { onConflict: 'patient_id' })
   if (noteError) throw noteError
+  let warning: string | undefined
+  if (values.createPortalAccount) {
+    try {
+      await enablePatientPortal(id, values.username ?? '', values.temporaryCi ?? '')
+    } catch {
+      warning = 'Los datos del paciente se guardaron, pero no se pudo habilitar el acceso domiciliario.'
+    }
+  }
   const patient = await getPatient(id)
   if (!patient) throw new Error('Paciente no encontrado después de actualizar.')
-  return { patient }
+  return { patient, warning }
 }
 
 export async function deletePatient(id: string): Promise<DeletePatientResult> {
