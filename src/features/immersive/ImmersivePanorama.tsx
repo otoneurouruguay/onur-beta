@@ -3,7 +3,22 @@ import { useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
 import { smoothCardboardHeadPose, type CardboardHeadPose } from '../exercise/cardboardTracking'
 import { cardboardEyeProjectionFrustum, defaultCardboardViewerProfile, type CardboardEye, type CardboardViewerProfile } from '../exercise/cardboardViewerProfiles'
-import { immersiveMediaUrl, type ImmersiveDevice, type ImmersiveScenario } from './catalog'
+import type { ImmersiveTargetShape } from '../exercise/types'
+import { immersiveAudioUrl, immersiveMediaUrl, type ImmersiveDevice, type ImmersiveScenario } from './catalog'
+
+interface SpatialTargetConfig {
+  enabled: boolean
+  color: string
+  size: number
+  shape: ImmersiveTargetShape
+  azimuthDegrees: number
+  elevationDegrees: number
+}
+
+interface AmbientAudioConfig {
+  enabled: boolean
+  volume: number
+}
 
 interface ImmersivePanoramaProps {
   scenario: ImmersiveScenario
@@ -14,6 +29,8 @@ interface ImmersivePanoramaProps {
   controlsVisible?: boolean
   canEnterImmersion?: boolean
   formattedTime?: string
+  spatialTarget?: SpatialTargetConfig
+  ambientAudio?: AmbientAudioConfig
   className?: string
   onImmersionChange?: (active: boolean) => void
   onTogglePause?: () => void
@@ -22,13 +39,14 @@ interface ImmersivePanoramaProps {
 
 type XrSessionLike = NonNullable<Parameters<THREE.WebXRManager['setSession']>[0]>
 
-export function ImmersivePanorama({ scenario, device, paused = false, headPose = null, viewerProfile, controlsVisible = true, canEnterImmersion = true, formattedTime, className = '', onImmersionChange, onTogglePause, onExit }: ImmersivePanoramaProps) {
+export function ImmersivePanorama({ scenario, device, paused = false, headPose = null, viewerProfile, controlsVisible = true, canEnterImmersion = true, formattedTime, spatialTarget, ambientAudio, className = '', onImmersionChange, onTogglePause, onExit }: ImmersivePanoramaProps) {
   const onDemand = device === undefined
   const [activated, setActivated] = useState(!onDemand)
   const containerRef = useRef<HTMLDivElement>(null)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const xrSessionRef = useRef<XrSessionLike | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const pausedRef = useRef(paused)
   const headPoseRef = useRef(headPose)
   const onImmersionChangeRef = useRef(onImmersionChange)
@@ -39,9 +57,14 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
 
   useEffect(() => {
     pausedRef.current = paused
-    if (!videoRef.current) return
-    if (paused) videoRef.current.pause()
-    else void videoRef.current.play().catch(() => undefined)
+    if (videoRef.current) {
+      if (paused) videoRef.current.pause()
+      else void videoRef.current.play().catch(() => undefined)
+    }
+    if (audioRef.current) {
+      if (paused) audioRef.current.pause()
+      else void audioRef.current.play().catch(() => undefined)
+    }
   }, [paused])
   useEffect(() => { headPoseRef.current = headPose }, [headPose])
   useEffect(() => { onImmersionChangeRef.current = onImmersionChange }, [onImmersionChange])
@@ -78,6 +101,51 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
     const sphere = new THREE.Mesh(geometry, material)
     sphere.rotation.y = -Math.PI / 2
     scene.add(sphere)
+
+    let targetTexture: THREE.CanvasTexture | null = null
+    let targetMaterial: THREE.SpriteMaterial | null = null
+    if (spatialTarget?.enabled && scenario.spatialTargetAllowed && scenario.motion === 'static') {
+      const canvas = document.createElement('canvas')
+      canvas.width = 128
+      canvas.height = 128
+      const context = canvas.getContext('2d')
+      if (context) {
+        context.clearRect(0, 0, 128, 128)
+        context.fillStyle = spatialTarget.color
+        context.strokeStyle = '#ffffff'
+        context.lineWidth = 6
+        context.beginPath()
+        if (spatialTarget.shape === 'diamond') {
+          context.moveTo(64, 8); context.lineTo(120, 64); context.lineTo(64, 120); context.lineTo(8, 64); context.closePath()
+        } else if (spatialTarget.shape === 'cross') {
+          context.rect(48, 8, 32, 112); context.rect(8, 48, 112, 32)
+        } else context.arc(64, 64, 54, 0, Math.PI * 2)
+        context.fill()
+        context.stroke()
+        targetTexture = new THREE.CanvasTexture(canvas)
+        targetTexture.colorSpace = THREE.SRGBColorSpace
+        targetMaterial = new THREE.SpriteMaterial({ map: targetTexture, transparent: true, depthTest: false, depthWrite: false })
+        const target = new THREE.Sprite(targetMaterial)
+        const yaw = THREE.MathUtils.degToRad(spatialTarget.azimuthDegrees)
+        const elevation = THREE.MathUtils.degToRad(spatialTarget.elevationDegrees)
+        const radius = 10
+        target.position.set(Math.sin(yaw) * Math.cos(elevation) * radius, Math.sin(elevation) * radius, -Math.cos(yaw) * Math.cos(elevation) * radius)
+        const scale = Math.max(0.28, Math.min(1.7, spatialTarget.size / 50))
+        target.scale.set(scale, scale, 1)
+        target.renderOrder = 10
+        scene.add(target)
+      }
+    }
+
+    if (ambientAudio?.enabled && scenario.ambientAudio && device === 'quest') {
+      const audio = document.createElement('audio')
+      audioRef.current = audio
+      audio.src = immersiveAudioUrl(scenario)
+      audio.loop = true
+      audio.preload = 'auto'
+      audio.volume = Math.max(0, Math.min(0.5, ambientAudio.volume / 100))
+      audio.load()
+    }
 
     const opticalProfile = viewerProfile ?? defaultCardboardViewerProfile
     const eyeTarget = new THREE.WebGLRenderTarget(1, 1, {
@@ -251,7 +319,13 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
       videoRef.current?.removeAttribute('src')
       videoRef.current?.load()
       videoRef.current = null
+      audioRef.current?.pause()
+      audioRef.current?.removeAttribute('src')
+      audioRef.current?.load()
+      audioRef.current = null
       texture?.dispose()
+      targetTexture?.dispose()
+      targetMaterial?.dispose()
       material.dispose()
       geometry.dispose()
       eyeTarget.dispose()
@@ -271,7 +345,7 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
       disposed = true
       release?.()
     }
-  }, [activated, device, onDemand, scenario, viewerProfile])
+  }, [activated, ambientAudio?.enabled, ambientAudio?.volume, device, onDemand, scenario, spatialTarget?.azimuthDegrees, spatialTarget?.color, spatialTarget?.elevationDegrees, spatialTarget?.enabled, spatialTarget?.shape, spatialTarget?.size, viewerProfile])
 
   const enterQuestImmersion = async () => {
     const renderer = rendererRef.current
@@ -283,6 +357,7 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
       return
     }
     try {
+      if (audioRef.current && !pausedRef.current) void audioRef.current.play().catch(() => undefined)
       if (!await xr.isSessionSupported('immersive-vr')) {
         setStatus('unsupported')
         setMessage('Este dispositivo no informa compatibilidad con WebXR inmersivo.')

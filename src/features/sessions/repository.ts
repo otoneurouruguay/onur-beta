@@ -41,6 +41,11 @@ export interface SessionEventLogEntry {
   cognitive_reported_count?: number
   immersive_scenario_id?: string
   immersive_rendering?: 'webxr_6dof' | 'cardboard_3dof'
+  immersive_audio_enabled?: boolean
+  immersive_audio_volume?: number
+  immersive_target_enabled?: boolean
+  immersive_target_azimuth_degrees?: number
+  immersive_target_elevation_degrees?: number
   skipped_exercises?: number
 }
 

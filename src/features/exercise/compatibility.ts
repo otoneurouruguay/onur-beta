@@ -126,6 +126,7 @@ export function applyExercisePurpose(config: ExerciseConfig, purpose: ExercisePu
   }
   if (purpose === 'immersive_context') {
     const scenario = getImmersiveScenario(config.immersiveScenarioId) ?? getImmersiveScenario('street_quiet')!
+    const preserveEnhancements = config.purpose === 'immersive_context'
     return {
       ...common,
       name: scenario.title,
@@ -140,7 +141,9 @@ export function applyExercisePurpose(config: ExerciseConfig, purpose: ExercisePu
       supervision: 'direct_clinician',
       backgroundType: 'solid',
       backgroundSpeed: 0,
-      objectEnabled: false,
+      objectEnabled: preserveEnhancements && Boolean(scenario.spatialTargetAllowed) ? config.objectEnabled : false,
+      objectMode: 'fixed',
+      immersiveAudioEnabled: preserveEnhancements && Boolean(scenario.ambientAudio) && config.displayMode === 'quest_browser' ? config.immersiveAudioEnabled : false,
       metronomeEnabled: false,
       cognitiveTaskMode: 'none',
       durationSeconds: scenario.recommendedSeconds,
@@ -274,6 +277,16 @@ export function analyzeExerciseCompatibility(config: ExerciseConfig): ExerciseCo
     if (config.rounds !== 1) issues.push(issue('immersive-rounds', 'Esta primera versión no repite un escenario dentro de la misma sesión porque reiniciaría WebXR o reproduciría nuevamente el video.', 'Usá una sola vuelta y registrá otra sesión si el profesional decide repetirla.'))
     if (config.supervision !== 'direct_clinician') issues.push(issue('immersive-supervision', 'La biblioteca contextual 360° inicial es exclusivamente clínica y requiere supervisión profesional directa.', 'Elegí supervisión profesional directa y modalidad presencial.'))
     if (config.metronomeEnabled || cognitive) issues.push(issue('immersive-extra-task', 'La exposición contextual inicial no agrega metrónomo ni tarea cognitiva dentro del visor.', 'Desactivá la señal rítmica y la tarea cognitiva.'))
+    if (config.objectEnabled) {
+      if (!scenario?.spatialTargetAllowed || scenario.motion !== 'static') issues.push(issue('immersive-target-scene', 'La referencia espacial solo está habilitada en escenas de cámara fija revisadas para este uso.', 'Ocultá la referencia o elegí una escena estática compatible.'))
+      if (config.objectMode !== 'fixed') issues.push(issue('immersive-target-mode', 'La referencia contextual debe permanecer fija en el espacio del escenario.', 'Elegí comportamiento Fijo.'))
+      if (config.immersiveTargetAzimuthDegrees < -120 || config.immersiveTargetAzimuthDegrees > 120 || config.immersiveTargetElevationDegrees < -45 || config.immersiveTargetElevationDegrees > 45) issues.push(issue('immersive-target-position', 'La referencia está fuera del campo angular configurable.', 'Elegí azimut entre -120° y 120° y elevación entre -45° y 45°.'))
+    }
+    if (config.immersiveAudioEnabled) {
+      if (!scenario?.ambientAudio) issues.push(issue('immersive-audio-missing', 'Este escenario no tiene un sonido ambiente con licencia y procedencia verificadas.', 'Desactivá el sonido o elegí una escena que lo incluya.'))
+      if (config.displayMode !== 'quest_browser') issues.push(issue('immersive-audio-device', 'El sonido ambiente se habilita inicialmente solo en Quest, donde el botón de inmersión puede desbloquear la reproducción de forma confiable.', 'Usá Quest o desactivá el sonido para VR Box.'))
+      if (config.immersiveAudioVolume < 0 || config.immersiveAudioVolume > 50) issues.push(issue('immersive-audio-volume', 'El volumen ambiente supera el límite técnico conservador.', 'Elegí un volumen entre 0% y 50%.'))
+    }
     if (scenario && (config.durationSeconds < 10 || config.durationSeconds > scenario.maximumSeconds)) issues.push(issue('immersive-duration', `Este escenario admite entre 10 y ${scenario.maximumSeconds} segundos en la versión validada.`, `Elegí una duración de hasta ${scenario.maximumSeconds} segundos.`))
   }
 
@@ -317,8 +330,8 @@ export function analyzeExerciseCompatibility(config: ExerciseConfig): ExerciseCo
   if ((config.purpose === 'optokinetic' || config.purpose === 'visual_habituation') && headset) explanation = `El patrón se mueve respecto de los ojos dentro de ${deviceName}; no necesita estar anclado al ambiente y se realiza sentado, con la cabeza quieta.`
   if (config.purpose === 'cognitive_visual' && config.displayMode === 'standard') explanation = 'Las figuras se presentan en una pantalla inmóvil, sentado, con una consigna y una respuesta definidas antes de comenzar.'
   if (config.purpose === 'guided_functional' && config.displayMode === 'standard') explanation = 'La tarea se realiza fuera del visor, con el entorno visible y confirmación manual cuando corresponde.'
-  if (config.purpose === 'immersive_context' && config.displayMode === 'quest_browser') explanation = 'Quest inicia una sesión WebXR inmersiva: la esfera permanece en el espacio virtual y la vista cambia con el seguimiento 6DoF del visor.'
-  if (config.purpose === 'immersive_context' && config.displayMode === 'vr_box' && config.cardboardEnabled) explanation = 'Cardboard usa la orientación 3DoF del celular para explorar la esfera 360° desde un punto fijo. No mide desplazamiento corporal ni convierte la escena en una tarea de marcha.'
+  if (config.purpose === 'immersive_context' && config.displayMode === 'quest_browser') explanation = `Quest inicia una sesión WebXR inmersiva: la esfera permanece en el espacio virtual y la vista cambia con el seguimiento 6DoF del visor.${config.objectEnabled ? ' La referencia opcional queda anclada a una dirección del escenario; no es un ejercicio de RVO.' : ''}`
+  if (config.purpose === 'immersive_context' && config.displayMode === 'vr_box' && config.cardboardEnabled) explanation = `Cardboard usa la orientación 3DoF del celular para explorar la esfera 360° desde un punto fijo. No mide desplazamiento corporal ni convierte la escena en una tarea de marcha.${config.objectEnabled ? ' La referencia queda anclada angularmente al escenario, no a la pantalla.' : ''}`
   if (free) explanation = issues.length === 0
     ? 'Modo Libre: la configuración puede guardarse y ejecutarse, pero la plataforma no valida su equivalencia con un protocolo clínico.'
     : 'El modo Libre permite guardar cualquier combinación; esta combinación no puede ejecutarse con seguridad técnica en el dispositivo seleccionado.'

@@ -151,6 +151,15 @@ describe('coherencia clínica y espacial de ejercicios', () => {
     expect(analyzeExerciseCompatibility({ ...quest, rounds: 2 }).issues.some((item) => item.code === 'immersive-rounds')).toBe(true)
   })
 
+  it('permite referencia espacial solo en escenas fijas y sonido ambiente trazable solo en Quest', () => {
+    const cafe = exercise('immersive_context', { immersiveScenarioId: 'cafe_comfy', objectEnabled: true, objectMode: 'fixed', immersiveAudioEnabled: true, immersiveAudioVolume: 20 })
+    expect(analyzeExerciseCompatibility(cafe).valid).toBe(true)
+    expect(analyzeExerciseCompatibility({ ...cafe, displayMode: 'vr_box', cardboardEnabled: true }).issues.some((item) => item.code === 'immersive-audio-device')).toBe(true)
+    expect(analyzeExerciseCompatibility({ ...cafe, immersiveAudioVolume: 80 }).issues.some((item) => item.code === 'immersive-audio-volume')).toBe(true)
+    const moving = exercise('immersive_context', { immersiveScenarioId: 'urban_ride_nyc', objectEnabled: true, objectMode: 'fixed' })
+    expect(analyzeExerciseCompatibility(moving).issues.some((item) => item.code === 'immersive-target-scene')).toBe(true)
+  })
+
   it('verifica exhaustivamente las combinaciones operativas de VR Box', () => {
     const purposes = Object.keys({
       gaze_stabilization: 1, gaze_stabilization_x2: 1, gaze_substitution_remembered: 1,

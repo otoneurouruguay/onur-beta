@@ -44,12 +44,29 @@ const files = [
   ['urban_ride_nyc_quest.mp4', 'urban_ride_nyc/quest.mp4', 'video/mp4', 'dd193fc3f6a5748417d4d7532e69d51f8db19a1df6e64cffdb3b72ccb61acd98'],
   ['urban_ride_nyc_vrbox.mp4', 'urban_ride_nyc/vrbox.mp4', 'video/mp4', '2c47ba6977441f27a7e54c6f74f799b70b47eb70e2a67d07850db57081f420b0'],
   ['urban_ride_nyc_thumb.jpg', 'urban_ride_nyc/thumb.jpg', 'image/jpeg', '4f3d3e7370a1f093908ef0b15dc4cf8be7a93ad40f7caada2a866c136a68fb45'],
+  ['park_quiet_quest.jpg', 'park_quiet/quest.jpg', 'image/jpeg', '3d32edb2e18851946a119dec72ffa7f9be704ad850d23b0df46c52755c631de1'],
+  ['park_quiet_vrbox.jpg', 'park_quiet/vrbox.jpg', 'image/jpeg', '5e9c3e229a7791d95cfb2064ac99df4517f8906f1b7df8369e13c9985340b231'],
+  ['park_quiet_thumb.jpg', 'park_quiet/thumb.jpg', 'image/jpeg', '28a129d0bdf1ee748a0eb3613d1d1a67ac98ce04ad5fe058c06813495a82deee'],
+  ['cafe_comfy_quest.jpg', 'cafe_comfy/quest.jpg', 'image/jpeg', 'fc671c9e1a37da639e886ee170c793327410e58709e287e7ca2d08dc414d1f6a'],
+  ['cafe_comfy_vrbox.jpg', 'cafe_comfy/vrbox.jpg', 'image/jpeg', 'b24b2235ca619a6c3acd34c67f9b22bfddc867f0ff7da3df0f83e194e32759a3'],
+  ['cafe_comfy_thumb.jpg', 'cafe_comfy/thumb.jpg', 'image/jpeg', '805712a2b723dff4bbc37240347611211aee8be039f9399d889ffec80fbb158e'],
+  ['market_arcade_quest.jpg', 'market_arcade/quest.jpg', 'image/jpeg', 'e8b8f996569b8957b4c4066c2db95d94c8ec37802a3ad4e43085431720a511f4'],
+  ['market_arcade_vrbox.jpg', 'market_arcade/vrbox.jpg', 'image/jpeg', 'cb1ff43d668a5686ec9321075166f3e5ff6b720d57fd1d46ec2d26a7cad64871'],
+  ['market_arcade_thumb.jpg', 'market_arcade/thumb.jpg', 'image/jpeg', '844f677ea3c6820650117dce1f5ebff8e7e49c72d4daa644ffd21e7dee91c20c'],
+  ['airport_terminal_quest.jpg', 'airport_terminal/quest.jpg', 'image/jpeg', '1f42abddf1d9b9deed643a5add93b578dff5c80f5bc22a2a9f2e8539ebbbcf5b'],
+  ['airport_terminal_vrbox.jpg', 'airport_terminal/vrbox.jpg', 'image/jpeg', '74107386dda06844e5391e58e3037d6e79e13e6f3abaa40e3ea54d9f573901bc'],
+  ['airport_terminal_thumb.jpg', 'airport_terminal/thumb.jpg', 'image/jpeg', '714e8ec3c13fe401346a694adcc45bfcb4e085c17eb94b036c1f07443140aefa'],
+  ['subway_access_quest.jpg', 'subway_access/quest.jpg', 'image/jpeg', '37f637e7312c78c52e3f7b9a5299289c6423b0827c6cb204795b4e2045530acb'],
+  ['subway_access_vrbox.jpg', 'subway_access/vrbox.jpg', 'image/jpeg', '8facaa24cbe967fe1fed5a131f5a68f8b6f54b1401a79189ca102ec69a277656'],
+  ['subway_access_thumb.jpg', 'subway_access/thumb.jpg', 'image/jpeg', 'aef19879c61c9e5f69032d1f5ffead1f53fedb15be66d51ef750967e68d791f0'],
+  ['restaurant_ambience.mp3', 'audio/restaurant_ambience.mp3', 'audio/mpeg', '13e2cc3c9bac7cf9beacff0cb1b977581e558219ac902ab55377cfe02ed64db1'],
+  ['train_station.mp3', 'audio/train_station.mp3', 'audio/mpeg', 'd5704e6cd4cc84bcddba0ba51238e3d9d9530a8275c404164e532f8113f8e8fa'],
 ]
 
 const client = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
 const { error: createBucketError } = await client.storage.createBucket('immersive-media', {
   public: true,
-  allowedMimeTypes: ['image/jpeg', 'video/mp4'],
+  allowedMimeTypes: ['image/jpeg', 'video/mp4', 'audio/mpeg'],
 })
 if (createBucketError && !/already exists|duplicate/i.test(createBucketError.message)) throw createBucketError
 const { data: bucket, error: bucketError } = await client.storage.getBucket('immersive-media')
@@ -60,7 +77,7 @@ const limitArgument = process.argv.find((argument) => argument.startsWith('--set
 if (limitArgument) {
   const fileSizeLimit = Number(limitArgument.split('=')[1])
   if (!Number.isFinite(fileSizeLimit) || fileSizeLimit < 1) throw new Error('El límite solicitado no es válido.')
-  const { error } = await client.storage.updateBucket('immersive-media', { public: true, fileSizeLimit, allowedMimeTypes: ['image/jpeg', 'video/mp4'] })
+  const { error } = await client.storage.updateBucket('immersive-media', { public: true, fileSizeLimit, allowedMimeTypes: ['image/jpeg', 'video/mp4', 'audio/mpeg'] })
   if (error) throw new Error(`El proyecto no admite un límite de ${fileSizeLimit} bytes: ${error.message}`)
   process.stdout.write(`Límite actualizado a ${fileSizeLimit} bytes.\n`)
   process.exit(0)
@@ -83,7 +100,8 @@ function resumableUpload(storagePath, contentType, body, sha256) {
   })
 }
 
-for (const [fileName, storagePath, contentType, expectedSha256] of files) {
+const filesToUpload = process.argv.includes('--new-only') ? files.slice(-17) : files
+for (const [fileName, storagePath, contentType, expectedSha256] of filesToUpload) {
   const body = await readFile(resolve(derivativeDirectory, fileName))
   const sha256 = createHash('sha256').update(body).digest('hex')
   if (sha256 !== expectedSha256) throw new Error(`Checksum inesperado en ${fileName}.`)

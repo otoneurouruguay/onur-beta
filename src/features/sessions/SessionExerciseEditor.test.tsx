@@ -60,6 +60,25 @@ describe('creación de ejercicios', () => {
     expect(screen.getByText('Vista panorámica')).toBeInTheDocument()
   })
 
+  it('configura audio Quest y una referencia espacial sin habilitarlos por defecto', () => {
+    render(<EditorHarness setting="in_person"/>)
+    fireEvent.change(screen.getByLabelText('Objetivo del ejercicio'), { target: { value: 'immersive_context' } })
+    fireEvent.change(screen.getByLabelText('Escenario clínico 360°'), { target: { value: 'cafe_comfy' } })
+    const target = screen.getByRole('checkbox', { name: 'Referencia espacial fija' })
+    const audio = screen.getByRole('checkbox', { name: 'Sonido ambiente' })
+    expect(target).not.toBeChecked()
+    expect(audio).not.toBeChecked()
+    expect(audio).not.toBeDisabled()
+    fireEvent.click(target)
+    fireEvent.click(audio)
+    expect(screen.getByLabelText('Color de referencia espacial')).toBeInTheDocument()
+    expect(screen.getByText('Volumen: 20%')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Modo'), { target: { value: 'vr_box' } })
+    expect(screen.getByRole('checkbox', { name: 'Sonido ambiente' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Sonido ambiente' })).toBeDisabled()
+    expect(screen.getByText('Configuración coherente')).toBeInTheDocument()
+  })
+
   it('al elegir ejercicio físico muestra postura, superficie y supervisión', () => {
     render(<EditorHarness/>)
     fireEvent.change(screen.getByLabelText('Tipo'), { target: { value: 'guided_physical' } })

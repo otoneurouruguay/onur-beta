@@ -18,6 +18,7 @@ export type ExerciseSupervision = 'independent_after_approval' | 'trained_helper
 export type CognitiveTaskMode = 'none' | 'rare_target' | 'go_no_go' | 'short_memory'
 export type CognitiveResponseMode = 'count_at_end' | 'verbal' | 'screen_tap'
 export type CognitiveSymbol = 'circle' | 'square' | 'triangle' | 'diamond' | 'star'
+export type ImmersiveTargetShape = 'circle' | 'diamond' | 'cross'
 
 export interface CognitivePerformanceReport {
   mode: Exclude<CognitiveTaskMode, 'none'>
@@ -53,6 +54,11 @@ export interface ExerciseCompletionReport {
   immersive?: {
     scenarioId: string
     rendering: 'webxr_6dof' | 'cardboard_3dof'
+    ambientAudioEnabled: boolean
+    ambientAudioVolume?: number
+    spatialTargetEnabled: boolean
+    spatialTargetAzimuthDegrees?: number
+    spatialTargetElevationDegrees?: number
   }
 }
 
@@ -101,6 +107,11 @@ export interface ExerciseConfig {
   cognitiveStimulusSeconds: number
   cognitiveMemorySpan: 1 | 2 | 3
   immersiveScenarioId?: string
+  immersiveAudioEnabled: boolean
+  immersiveAudioVolume: number
+  immersiveTargetAzimuthDegrees: number
+  immersiveTargetElevationDegrees: number
+  immersiveTargetShape: ImmersiveTargetShape
 }
 
 export const defaultExerciseConfig: ExerciseConfig = {
@@ -142,6 +153,11 @@ export const defaultExerciseConfig: ExerciseConfig = {
   cognitiveResponseMode: 'count_at_end',
   cognitiveStimulusSeconds: 2.5,
   cognitiveMemorySpan: 1,
+  immersiveAudioEnabled: false,
+  immersiveAudioVolume: 20,
+  immersiveTargetAzimuthDegrees: 0,
+  immersiveTargetElevationDegrees: 0,
+  immersiveTargetShape: 'circle',
 }
 
 export function inferExercisePurpose(config: Partial<ExerciseConfig>): ExercisePurpose {
@@ -162,6 +178,10 @@ export function normalizeExerciseConfig(config: Partial<ExerciseConfig>, legacyP
     ...config,
     purpose: inferExercisePurpose(config),
     cardboardEnabled: config.cardboardEnabled === true,
+    immersiveAudioEnabled: config.immersiveAudioEnabled === true,
+    immersiveAudioVolume: Math.max(0, Math.min(50, Number(config.immersiveAudioVolume ?? 20))),
+    immersiveTargetAzimuthDegrees: Math.max(-120, Math.min(120, Number(config.immersiveTargetAzimuthDegrees ?? 0))),
+    immersiveTargetElevationDegrees: Math.max(-45, Math.min(45, Number(config.immersiveTargetElevationDegrees ?? 0))),
     preparationSeconds,
     // Las asignaciones antiguas continúan automáticamente; las nuevas usan el valor manual del predeterminado.
     advanceMode: config.advanceMode ?? 'automatic',

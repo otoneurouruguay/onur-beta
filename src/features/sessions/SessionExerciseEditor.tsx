@@ -30,6 +30,7 @@ const directionLabels: Record<MotionDirection, string> = {
 const objectDirectionLabels: Record<ObjectDirection, string> = {
   horizontal: 'Horizontal', vertical: 'Vertical', diagonal_down: 'Diagonal ↖ ↘', diagonal_up: 'Diagonal ↙ ↗',
 }
+const orderedImmersiveScenarios = [...immersiveScenarios].sort((a, b) => a.intensity - b.intensity)
 
 export function SessionExerciseEditor({ config, isFirst = false, setting = 'unspecified', onChange }: SessionExerciseEditorProps) {
   const [playing, setPlaying] = useState(false)
@@ -79,7 +80,7 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
       : config.backgroundDirection === 'clockwise' || config.backgroundDirection === 'counterclockwise' ? 'left' : config.backgroundDirection,
   })
   const setDisplayMode = (displayMode: ExerciseConfig['displayMode']) => onChange(displayMode === 'vr_box'
-    ? { ...config, displayMode, cardboardEnabled: isImmersive ? true : config.cardboardEnabled, doseMode: 'time', advanceMode: 'automatic', posture: 'seated', surface: 'firm', supervision: isImmersive ? 'direct_clinician' : config.supervision, metronomeEnabled: false }
+    ? { ...config, displayMode, cardboardEnabled: isImmersive ? true : config.cardboardEnabled, doseMode: 'time', advanceMode: 'automatic', posture: 'seated', surface: 'firm', supervision: isImmersive ? 'direct_clinician' : config.supervision, metronomeEnabled: false, immersiveAudioEnabled: false }
     : displayMode === 'quest_browser'
       ? { ...config, displayMode, cardboardEnabled: false, doseMode: 'time', advanceMode: 'automatic', posture: 'seated', surface: 'firm', supervision: 'direct_clinician', metronomeEnabled: false }
       : { ...config, displayMode, cardboardEnabled: false })
@@ -160,9 +161,31 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
               <option value="cognitive_visual">{exercisePurposeLabels.cognitive_visual}</option>
               <option value="custom_free">{exercisePurposeLabels.custom_free}</option>
             </>}</select></label>
-          {isImmersive && <label className="mt-4 block text-xs font-black text-[#2F2F2F]">Escenario clínico 360°<select className={input} value={config.immersiveScenarioId ?? ''} onChange={(event) => setImmersiveScenario(event.target.value)}>{immersiveScenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>Nivel {scenario.intensity} · {scenario.title}</option>)}</select></label>}
+          {isImmersive && <label className="mt-4 block text-xs font-black text-[#2F2F2F]">Escenario clínico 360°<select className={input} value={config.immersiveScenarioId ?? ''} onChange={(event) => setImmersiveScenario(event.target.value)}>{orderedImmersiveScenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>Nivel {scenario.intensity} · {scenario.title}</option>)}</select></label>}
           <label className="mt-4 block text-xs font-black text-[#2F2F2F]">Instrucción para el paciente<textarea rows={3} className="mt-2 w-full rounded-2xl border border-[#E9E7E7] bg-white p-3 text-sm font-normal" value={config.patientInstruction} onChange={(event) => set('patientInstruction', event.target.value)} /></label>
           {immersiveScenario && <div className="mt-4 rounded-2xl border border-[#B9D9C5] bg-[#F0F8F3] p-4 text-[#28613D]"><p className="text-xs font-black">Exposición contextual · intensidad técnica {immersiveScenario.intensity}/3</p><p className="mt-2 text-[11px] leading-5">{immersiveScenario.clinicalUse}</p><ul className="mt-2 space-y-1 text-[10px] leading-4">{immersiveScenario.cautions.map((caution) => <li key={caution}>• {caution}</li>)}</ul><p className="mt-3 border-t border-[#B9D9C5] pt-3 text-[10px] font-bold">No es RVO, prueba diagnóstica, marcha virtual ni progresión automática.</p></div>}
+          {immersiveScenario && <section className="mt-4 rounded-2xl border border-[#E9E7E7] bg-white p-4">
+            <h3 className="text-sm font-black text-[#171717]">Capas opcionales del escenario</h3>
+            <p className="mt-1 text-[11px] leading-5 text-[#747474]">Agregalas de a una para poder atribuir la respuesta a la complejidad visual, al sonido o a la referencia.</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl bg-[#F7F6F4] p-4">
+                <label className="flex items-center gap-2 text-xs font-black text-[#2F2F2F]"><input type="checkbox" disabled={!immersiveScenario.spatialTargetAllowed || immersiveScenario.motion !== 'static'} checked={config.objectEnabled} onChange={(event) => set('objectEnabled', event.target.checked)} /> Referencia espacial fija</label>
+                <p className="mt-2 text-[10px] leading-4 text-[#747474]">Queda anclada al escenario. Sirve para orientación o búsqueda; no convierte la escena en RVO x1.</p>
+                {config.objectEnabled && <div className="mt-3 space-y-3">
+                  <label className="block text-[10px] font-black">Forma<select className={input} value={config.immersiveTargetShape} onChange={(event) => set('immersiveTargetShape', event.target.value as ExerciseConfig['immersiveTargetShape'])}><option value="circle">Círculo</option><option value="diamond">Rombo</option><option value="cross">Cruz</option></select></label>
+                  <label className="block text-[10px] font-black">Color<input aria-label="Color de referencia espacial" type="color" className="mt-2 h-10 w-full rounded-xl border border-[#E9E7E7] bg-white p-1" value={config.objectColor} onChange={(event) => set('objectColor', event.target.value)} /></label>
+                  <label className="block text-[10px] font-black">Tamaño: {config.objectSize}px<input type="range" min="12" max="90" step="2" className="mt-2 w-full accent-[#E49A02]" value={config.objectSize} onChange={(event) => set('objectSize', Number(event.target.value))} /></label>
+                  <label className="block text-[10px] font-black">Posición horizontal: {config.immersiveTargetAzimuthDegrees}°<input type="range" min="-120" max="120" step="5" className="mt-2 w-full accent-[#E49A02]" value={config.immersiveTargetAzimuthDegrees} onChange={(event) => set('immersiveTargetAzimuthDegrees', Number(event.target.value))} /></label>
+                  <label className="block text-[10px] font-black">Altura: {config.immersiveTargetElevationDegrees}°<input type="range" min="-45" max="45" step="5" className="mt-2 w-full accent-[#E49A02]" value={config.immersiveTargetElevationDegrees} onChange={(event) => set('immersiveTargetElevationDegrees', Number(event.target.value))} /></label>
+                </div>}
+              </div>
+              <div className="rounded-2xl bg-[#F7F6F4] p-4">
+                <label className="flex items-center gap-2 text-xs font-black text-[#2F2F2F]"><input type="checkbox" disabled={!immersiveScenario.ambientAudio || config.displayMode !== 'quest_browser'} checked={config.immersiveAudioEnabled} onChange={(event) => set('immersiveAudioEnabled', event.target.checked)} /> Sonido ambiente</label>
+                <p className="mt-2 text-[10px] leading-4 text-[#747474]">{immersiveScenario.ambientAudio ? config.displayMode === 'quest_browser' ? 'Disponible en Quest; apagado por defecto y no sincronizado con la imagen fija.' : 'Disponible solo al elegir Quest. En VR Box se evita depender del desbloqueo de audio del navegador móvil.' : 'No hay una fuente sonora coherente y licenciada para esta escena.'}</p>
+                {config.immersiveAudioEnabled && <label className="mt-3 block text-[10px] font-black">Volumen: {config.immersiveAudioVolume}%<input type="range" min="0" max="50" step="5" className="mt-2 w-full accent-[#E49A02]" value={config.immersiveAudioVolume} onChange={(event) => set('immersiveAudioVolume', Number(event.target.value))} /></label>}
+              </div>
+            </div>
+          </section>}
           {config.clinicalProtocol === 'pppd' && <div className="mt-4 rounded-2xl border border-[#B9D9C5] bg-[#F0F8F3] p-4 text-[#28613D]">
             <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-[#28613D] px-3 py-1 text-[10px] font-black text-white">PPPD</span><strong className="text-xs">Nivel {config.progressionLevel ?? 'sin definir'} de 3</strong></div>
             {config.progressionCriteria && <p className="mt-3 text-[11px] leading-5"><strong>Criterio de avance:</strong> {config.progressionCriteria}</p>}
@@ -310,7 +333,7 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
       <aside className="xl:sticky xl:top-24 xl:self-start">
         <div className="overflow-hidden rounded-2xl border border-[#E9E7E7] bg-white">
           <div className="flex items-center gap-2 p-4 text-sm font-black text-[#171717]"><Eye size={17} className="text-[#E49A02]" /> Vista previa</div>
-          <div className="relative aspect-video bg-[#081113]">{isPhysical ? <div className="grid size-full place-items-center p-6 text-center text-white"><div><Accessibility className="mx-auto text-[#E49A02]" size={54}/><p className="mt-4 text-sm font-black">{config.patientInstruction || 'Instrucción física pendiente'}</p><p className="mt-3 text-xs text-white/55">{config.posture === 'seated' ? 'Sentado' : config.posture === 'standing' ? 'De pie' : 'Marcha'} · {config.surface === 'firm' ? 'Superficie firme' : 'Superficie inestable'}</p></div></div> : isImmersive && immersiveScenario ? <ImmersivePanorama scenario={immersiveScenario} className="absolute inset-0"/> : config.displayMode === 'vr_box' ? <StereoscopicExerciseCanvas config={config} viewerProfile={viewerProfile}/> : <ExerciseCanvas config={config} className="size-full" />}</div>
+          <div className="relative aspect-video bg-[#081113]">{isPhysical ? <div className="grid size-full place-items-center p-6 text-center text-white"><div><Accessibility className="mx-auto text-[#E49A02]" size={54}/><p className="mt-4 text-sm font-black">{config.patientInstruction || 'Instrucción física pendiente'}</p><p className="mt-3 text-xs text-white/55">{config.posture === 'seated' ? 'Sentado' : config.posture === 'standing' ? 'De pie' : 'Marcha'} · {config.surface === 'firm' ? 'Superficie firme' : 'Superficie inestable'}</p></div></div> : isImmersive && immersiveScenario ? <ImmersivePanorama scenario={immersiveScenario} spatialTarget={{ enabled: config.objectEnabled, color: config.objectColor, size: config.objectSize, shape: config.immersiveTargetShape, azimuthDegrees: config.immersiveTargetAzimuthDegrees, elevationDegrees: config.immersiveTargetElevationDegrees }} className="absolute inset-0"/> : config.displayMode === 'vr_box' ? <StereoscopicExerciseCanvas config={config} viewerProfile={viewerProfile}/> : <ExerciseCanvas config={config} className="size-full" />}</div>
           <div className="p-5">
             <p className="text-sm font-black text-[#2F2F2F]">{config.name}</p>
             <p className="mt-2 text-xs text-[#747474]">{config.doseMode === 'time' ? `${config.durationSeconds} s` : `${config.targetRepetitions} repeticiones`} × {config.rounds} vueltas · avance {config.advanceMode === 'manual' ? 'manual' : 'automático'}</p>

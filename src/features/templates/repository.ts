@@ -13,7 +13,7 @@ export interface ExerciseTemplateRecord {
 
 const STORAGE_KEY = 'onur-demo-exercise-templates-v1'
 const SEED_VERSION_KEY = 'onur-demo-exercise-templates-seed-version'
-const SEED_VERSION = '5'
+const SEED_VERSION = '6'
 const seedDate = '2026-07-20T00:00:00.000Z'
 
 const rvoX2Horizontal = {
@@ -61,19 +61,23 @@ const shortMemory = {
   cognitiveMemorySpan: 1 as const,
 }
 
-const immersiveTemplates: ExerciseTemplateRecord[] = immersiveScenarios.map((scenario) => ({
+const pppdProgressionCriteria = 'Avanzar cuando complete dos exposiciones separadas con técnica segura, dificultad percibida hasta 3/5 y aumento de malestar no mayor de 2/10 al finalizar.'
+const pppdStopCriteria = 'Pausar y revisar si hay caída o casi caída, visión doble, cefalea intensa, náusea marcada, síntomas neurológicos nuevos o aumento de malestar mayor de 3/10.'
+
+const immersiveTemplates: ExerciseTemplateRecord[] = [...immersiveScenarios].sort((a, b) => a.intensity - b.intensity).map((scenario) => ({
   id: `template-immersive-${scenario.id}`,
   name: `360° · ${scenario.shortTitle}`,
   config: {
     ...applyExercisePurpose({ ...defaultExerciseConfig, immersiveScenarioId: scenario.id }, 'immersive_context'),
     name: `360° · ${scenario.shortTitle}`,
+    clinicalProtocol: 'pppd',
+    progressionLevel: scenario.intensity,
+    progressionCriteria: pppdProgressionCriteria,
+    stopCriteria: pppdStopCriteria,
   },
   createdAt: seedDate,
   updatedAt: seedDate,
 }))
-
-const pppdProgressionCriteria = 'Avanzar cuando complete dos exposiciones separadas con técnica segura, dificultad percibida hasta 3/5 y aumento de malestar no mayor de 2/10 al finalizar.'
-const pppdStopCriteria = 'Pausar y revisar si hay caída o casi caída, visión doble, cefalea intensa, náusea marcada, síntomas neurológicos nuevos o aumento de malestar mayor de 3/10.'
 
 function pppdVisualLevel(
   level: 1 | 2 | 3,

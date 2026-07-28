@@ -232,6 +232,11 @@ export function SessionRunner({ session, onFinish, onExit }: { session: SessionA
         cognitive_reported_count: report?.cognitive?.reportedCount,
         immersive_scenario_id: report?.immersive?.scenarioId ?? unit.config.immersiveScenarioId,
         immersive_rendering: report?.immersive?.rendering,
+        immersive_audio_enabled: report?.immersive?.ambientAudioEnabled,
+        immersive_audio_volume: report?.immersive?.ambientAudioVolume,
+        immersive_target_enabled: report?.immersive?.spatialTargetEnabled,
+        immersive_target_azimuth_degrees: report?.immersive?.spatialTargetAzimuthDegrees,
+        immersive_target_elevation_degrees: report?.immersive?.spatialTargetElevationDegrees,
       })
     } else if (unit?.type === 'vr_box_transition') {
       eventLogRef.current.push({ type: unit.direction === 'put_on' ? 'vr_box_put_on' : 'vr_box_take_off', at: new Date().toISOString(), active_seconds: unit.seconds, viewer_profile: unit.viewerProfile })
