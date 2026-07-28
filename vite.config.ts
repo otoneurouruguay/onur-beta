@@ -13,7 +13,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
-        cacheId: 'onur-beta-0.1.0-beta.38',
+        cacheId: 'onur-beta-0.1.0-beta.39',
         globIgnores: ['**/ocr/**', '**/three.module-*.js'],
         cleanupOutdatedCaches: true,
         skipWaiting: true,
