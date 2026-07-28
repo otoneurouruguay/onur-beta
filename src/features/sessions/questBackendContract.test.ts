@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import migration from '../../../supabase/migrations/202607210001_quest_clinic_pairing.sql?raw'
+import fourDigitMigration from '../../../supabase/migrations/202607270001_quest_four_digit_pairing.sql?raw'
 
 describe('contrato backend de la estación Quest', () => {
   it('usa códigos y credenciales efímeras almacenadas como hash', () => {
@@ -7,6 +8,14 @@ describe('contrato backend de la estación Quest', () => {
     expect(migration).toContain("extensions.digest(raw_code, 'sha256')")
     expect(migration).toContain("extensions.digest(raw_device_token, 'sha256')")
     expect(migration).toContain("status in ('ready', 'claimed', 'captured', 'expired', 'revoked')")
+  })
+
+  it('expone un código numérico de cuatro dígitos, efímero y de un solo uso', () => {
+    expect(fourDigitMigration).toContain("trim(pairing_code_input) !~ '^[0-9]{4}$'")
+    expect(fourDigitMigration).toContain("where status = 'ready'")
+    expect(fourDigitMigration).toContain("pairing.status = 'ready'")
+    expect(fourDigitMigration).toContain("pairing.expires_at > now()")
+    expect(fourDigitMigration).toContain("extensions.digest(raw_code, 'sha256')")
   })
 
   it('limita la preparación a profesional, presencial iniciada y plan Quest completo', () => {

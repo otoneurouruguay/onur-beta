@@ -12,6 +12,8 @@ interface ImmersivePanoramaProps {
   headPose?: CardboardHeadPose | null
   viewerProfile?: CardboardViewerProfile
   controlsVisible?: boolean
+  canEnterImmersion?: boolean
+  formattedTime?: string
   className?: string
   onImmersionChange?: (active: boolean) => void
   onTogglePause?: () => void
@@ -20,7 +22,7 @@ interface ImmersivePanoramaProps {
 
 type XrSessionLike = NonNullable<Parameters<THREE.WebXRManager['setSession']>[0]>
 
-export function ImmersivePanorama({ scenario, device, paused = false, headPose = null, viewerProfile, controlsVisible = true, className = '', onImmersionChange, onTogglePause, onExit }: ImmersivePanoramaProps) {
+export function ImmersivePanorama({ scenario, device, paused = false, headPose = null, viewerProfile, controlsVisible = true, canEnterImmersion = true, formattedTime, className = '', onImmersionChange, onTogglePause, onExit }: ImmersivePanoramaProps) {
   const onDemand = device === undefined
   const [activated, setActivated] = useState(!onDemand)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -358,12 +360,14 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
       {device !== 'vr_box' && <span className="rounded-full bg-black/45 px-3 py-2 text-[10px] font-black">Arrastrá para explorar</span>}
     </div>}
     {(status === 'loading' || status === 'error' || status === 'unsupported') && <div role={status === 'error' ? 'alert' : 'status'} className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-[#081113]/88 p-6 text-center text-white"><div><Scan className="mx-auto text-[#E49A02]" size={36}/><p className="mt-4 text-sm font-black">{message}</p></div></div>}
-    {device === 'quest' && status !== 'xr_active' && <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 to-transparent p-5 text-center text-white">
-      <p className="text-[11px] leading-5 text-white/70">El tiempo clínico comienza recién cuando WebXR confirma la inmersión.</p>
-      <button type="button" disabled={status === 'loading'} onClick={() => void enterQuestImmersion()} className="mt-3 inline-flex h-12 items-center gap-2 rounded-2xl bg-[#E49A02] px-5 text-xs font-black text-white disabled:opacity-40"><Scan size={17}/> Entrar en inmersión Quest</button>
+    {device === 'quest' && status !== 'xr_active' && canEnterImmersion && <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 to-transparent p-5 text-center text-white">
+      <p className="text-[11px] font-bold leading-5 text-white/85">Escenario preparado. El ejercicio todavía no comenzó.</p>
+      <p className="mt-1 text-[10px] leading-5 text-white/60">Tocá el botón una vez. El cronómetro empieza únicamente cuando Quest confirma la inmersión.</p>
+      <button type="button" disabled={status !== 'ready'} onClick={() => void enterQuestImmersion()} className="mt-3 inline-flex h-12 items-center gap-2 rounded-2xl bg-[#E49A02] px-5 text-xs font-black text-white disabled:opacity-40"><Scan size={17}/> Iniciar ejercicio en inmersión</button>
       {onExit && <button type="button" onClick={onExit} className="ml-2 h-12 rounded-2xl bg-[#c74750] px-5 text-xs font-black text-white">Salir</button>}
     </div>}
-    {device === 'quest' && status === 'xr_active' && <div className="absolute inset-x-0 bottom-0 z-40 flex justify-center gap-2 p-5 [contain:layout]" data-webxr-dom-overlay>
+    {device === 'quest' && status === 'xr_active' && <div className="absolute inset-x-0 bottom-0 z-40 flex flex-wrap items-center justify-center gap-2 p-5 [contain:layout]" data-webxr-dom-overlay>
+      {formattedTime && <span className="rounded-2xl bg-black/65 px-4 py-3 text-xs font-black tabular-nums text-white">{formattedTime}</span>}
       {onTogglePause && <button type="button" onClick={onTogglePause} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-white px-4 text-xs font-black text-[#171717]">{paused ? <Play size={16}/> : <Pause size={16}/>} {paused ? 'Continuar' : 'Pausar'}</button>}
       <button type="button" onClick={() => void leaveQuestImmersion()} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-white/90 px-4 text-xs font-black text-[#171717]"><RotateCcw size={16}/> Salir de inmersión</button>
       {onExit && <button type="button" onClick={onExit} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#c74750] px-4 text-xs font-black text-white"><LogOut size={16}/> Salir de sesión</button>}

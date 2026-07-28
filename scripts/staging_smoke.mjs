@@ -235,7 +235,7 @@ try{
   const foreignPairing=await foreignProfessional.rpc('create_quest_session_pairing',{target_assignment_id:questAssignment.id})
   assert(foreignPairing.error,'Un profesional ajeno pudo preparar la estación Quest.')
   const pairing=assertNoError(await professional.rpc('create_quest_session_pairing',{target_assignment_id:questAssignment.id}),'crear vínculo Quest')
-  assert(/^[0-9A-F]{8}$/.test(pairing.code),'El vínculo Quest no devolvió un código temporal válido.')
+  assert(/^[0-9]{4}$/.test(pairing.code),'El vínculo Quest no devolvió un código numérico temporal de cuatro dígitos.')
   const questStation=client()
   const claim=assertNoError(await questStation.rpc('claim_quest_session_pairing',{pairing_code_input:pairing.code}),'reclamar vínculo Quest anónimo')
   assert(claim.pairingId===pairing.id&&claim.deviceToken&&claim.patientLabel==='Paciente F.','La estación Quest no recibió el vínculo mínimo esperado.')

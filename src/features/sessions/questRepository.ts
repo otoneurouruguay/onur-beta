@@ -44,7 +44,7 @@ interface DemoPairing extends QuestPairingRecord {
 }
 
 const DEMO_PAIRINGS_KEY = 'onur-demo-quest-pairings-v1'
-const CODE_ALPHABET = '0123456789ABCDEF'
+const QUEST_CODE_LENGTH = 4
 
 function readDemoPairings(): DemoPairing[] {
   const raw = localStorage.getItem(DEMO_PAIRINGS_KEY)
@@ -57,8 +57,9 @@ function writeDemoPairings(pairings: DemoPairing[]) {
 }
 
 function randomCode() {
-  const bytes = crypto.getRandomValues(new Uint8Array(8))
-  return Array.from(bytes, (value) => CODE_ALPHABET[value % CODE_ALPHABET.length]).join('')
+  const bytes = crypto.getRandomValues(new Uint8Array(2))
+  const value = ((bytes[0] << 8) | bytes[1]) % (10 ** QUEST_CODE_LENGTH)
+  return String(value).padStart(QUEST_CODE_LENGTH, '0')
 }
 
 function normalizeCapture(value: unknown): QuestCaptureResult | null {
@@ -159,8 +160,8 @@ export async function findQuestSessionPairingForAssignment(assignmentId: string)
 }
 
 export async function claimQuestSessionPairing(code: string): Promise<ClaimedQuestSession> {
-  const normalizedCode = code.trim().toUpperCase()
-  if (!/^[0-9A-F]{8}$/.test(normalizedCode)) throw new Error('Ingresá los ocho caracteres del código Quest.')
+  const normalizedCode = code.trim()
+  if (!/^[0-9]{4}$/.test(normalizedCode)) throw new Error('Ingresá los cuatro números del código Quest.')
 
   if (!isSupabaseConfigured || !supabase) {
     const pairings = readDemoPairings()

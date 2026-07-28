@@ -260,7 +260,7 @@ export function SessionRunner({ session, onFinish, onExit }: { session: SessionA
       unit.config.preparationSeconds,
     )
   return <>
-    {unit.config.displayMode !== 'vr_box' && <div className="fixed left-4 top-20 z-[110] rounded-full bg-black/55 px-3 py-2 text-[10px] font-black text-white backdrop-blur">{unit.label} · {progress}/{total}</div>}
+    {unit.config.displayMode !== 'vr_box' && !(unit.config.displayMode === 'quest_browser' && unit.config.purpose === 'immersive_context') && <div className="fixed left-4 top-20 z-[110] rounded-full bg-black/55 px-3 py-2 text-[10px] font-black text-white backdrop-blur">{unit.label} · {progress}/{total}</div>}
     <ExercisePlayer key={index} config={{ ...unit.config, rounds: 1 }} preparationSeconds={preparationSeconds} onComplete={(seconds, report) => advance(seconds, report)} onSkip={(seconds, report) => advance(seconds, report ?? { doseMode: unit.config.doseMode, completion: 'skipped' })} onExit={onExit}/>
   </>
 }

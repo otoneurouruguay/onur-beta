@@ -33,7 +33,7 @@ describe('estación Quest clínica en modo demo', () => {
   it('vincula, reclama y captura sin credenciales del paciente', async () => {
     const assignment = await questAssignment()
     const pairing = await createQuestSessionPairing(assignment)
-    expect(pairing.code).toMatch(/^[0-9A-F]{8}$/)
+    expect(pairing.code).toMatch(/^[0-9]{4}$/)
     expect((await getQuestSessionPairing(pairing.id)).status).toBe('ready')
 
     const claim = await claimQuestSessionPairing(pairing.code)

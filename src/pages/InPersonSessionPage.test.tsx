@@ -58,7 +58,7 @@ describe('ejecución presencial desde la cuenta profesional', () => {
     mocks.immersive = false
     mocks.start.mockReset().mockResolvedValue('execution-fictitious')
     mocks.complete.mockReset().mockResolvedValue('execution-fictitious')
-    mocks.createQuest.mockReset().mockResolvedValue({ id: 'pairing-fictitious', code: 'AB12CD34', status: 'ready', expiresAt: '2099-01-01T12:00:00.000Z' })
+    mocks.createQuest.mockReset().mockResolvedValue({ id: 'pairing-fictitious', code: '1234', status: 'ready', expiresAt: '2099-01-01T12:00:00.000Z' })
     mocks.revokeQuest.mockReset().mockResolvedValue('pairing-fictitious')
     mocks.recoveredQuest = null
   })
@@ -102,7 +102,7 @@ describe('ejecución presencial desde la cuenta profesional', () => {
 
     await waitFor(() => expect(mocks.start).toHaveBeenCalledWith(expect.objectContaining({ initialDiscomfort: 2 })))
     await waitFor(() => expect(mocks.createQuest).toHaveBeenCalledWith(expect.objectContaining({ status: 'started' })))
-    expect(await screen.findByText('AB12CD34')).toBeInTheDocument()
+    expect(await screen.findByText('1234')).toBeInTheDocument()
     expect(screen.getByText(/no contiene credenciales/i)).toBeInTheDocument()
   })
 
