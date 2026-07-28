@@ -13,11 +13,11 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
-        cacheId: 'onur-beta-0.1.0-beta.43',
+        cacheId: 'onur-beta-0.1.0-beta.44',
         globIgnores: ['**/ocr/**', '**/three.module-*.js'],
         cleanupOutdatedCaches: true,
         skipWaiting: true,
-        clientsClaim: false,
+        clientsClaim: true,
       },
       includeAssets: ['otoneuro-mark.png', 'otoneuro-mark-192.png', 'otoneuro-mark-512.png', 'otoneuro-horizontal.png'],
       manifest: {
