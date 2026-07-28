@@ -141,6 +141,54 @@ export async function createSessionAssignment(patientId:string,values:SessionFor
   if(error){await supabase.from('session_plans').delete().eq('id',plan.id);throw error}return assignmentFromRow(data)
 }
 
+export function canManageSessionAssignment(assignment: Pick<SessionAssignmentRecord, 'status'>) {
+  return assignment.status === 'assigned'
+}
+
+export async function updateSessionAssignment(assignment:SessionAssignmentRecord,values:SessionFormValues):Promise<SessionAssignmentRecord>{
+  if(!canManageSessionAssignment(assignment))throw new Error('La sesión ya tiene actividad registrada y su historial no puede modificarse.')
+  if(!isSupabaseConfigured||!supabase){
+    const all=readAssignments()
+    const current=all.find(item=>item.id===assignment.id&&item.patientId===assignment.patientId)
+    if(!current)throw new Error('Sesión no encontrada.')
+    if(!canManageSessionAssignment(current))throw new Error('La sesión ya tiene actividad registrada y su historial no puede modificarse.')
+    const updated:SessionAssignmentRecord={...current,treatmentCycleId:values.treatmentCycleId,title:values.title.trim(),instructions:values.instructions.trim(),mode:values.mode,exercises:values.exercises,availableFrom:new Date(`${values.availableFrom}T00:00:00`).toISOString(),availableUntil:values.availableUntil?new Date(`${values.availableUntil}T23:59:59`).toISOString():''}
+    write(ASSIGNMENTS_KEY,all.map(item=>item.id===updated.id?updated:item))
+    return updated
+  }
+  const {data:current,error:currentError}=await supabase.from('session_assignments').select('id, patient_id, session_plan_id, treatment_cycle_id, available_from, available_until, status').eq('id',assignment.id).eq('patient_id',assignment.patientId).single()
+  if(currentError)throw currentError
+  if(current.status!=='assigned')throw new Error('La sesión ya tiene actividad registrada y su historial no puede modificarse.')
+  const {data:updatedAssignment,error:assignmentError}=await supabase.from('session_assignments').update({treatment_cycle_id:values.treatmentCycleId,available_from:new Date(`${values.availableFrom}T00:00:00`).toISOString(),available_until:values.availableUntil?new Date(`${values.availableUntil}T23:59:59`).toISOString():null}).eq('id',assignment.id).eq('status','assigned').select('id').maybeSingle()
+  if(assignmentError)throw assignmentError
+  if(!updatedAssignment)throw new Error('La sesión comenzó mientras se estaba editando y no fue modificada.')
+  const {data,error}=await supabase.from('session_plans').update({title:values.title.trim(),instructions:values.instructions.trim()||null,plan_definition:{mode:values.mode,exercises:values.exercises}}).eq('id',current.session_plan_id).select().single()
+  if(error){
+    await supabase.from('session_assignments').update({treatment_cycle_id:current.treatment_cycle_id,available_from:current.available_from,available_until:current.available_until}).eq('id',assignment.id).eq('status','assigned')
+    throw error
+  }
+  return {...assignment,treatmentCycleId:values.treatmentCycleId,title:String(data.title),instructions:String(data.instructions??''),mode:values.mode,exercises:values.exercises,availableFrom:new Date(`${values.availableFrom}T00:00:00`).toISOString(),availableUntil:values.availableUntil?new Date(`${values.availableUntil}T23:59:59`).toISOString():''}
+}
+
+export async function deleteSessionAssignment(assignment:SessionAssignmentRecord):Promise<void>{
+  if(!canManageSessionAssignment(assignment))throw new Error('La sesión ya tiene actividad registrada y su historial no puede eliminarse.')
+  if(!isSupabaseConfigured||!supabase){
+    const all=readAssignments()
+    const current=all.find(item=>item.id===assignment.id&&item.patientId===assignment.patientId)
+    if(!current)throw new Error('Sesión no encontrada.')
+    if(!canManageSessionAssignment(current))throw new Error('La sesión ya tiene actividad registrada y su historial no puede eliminarse.')
+    write(ASSIGNMENTS_KEY,all.filter(item=>item.id!==assignment.id))
+    return
+  }
+  const {data:current,error:currentError}=await supabase.from('session_assignments').select('id, session_plan_id, status').eq('id',assignment.id).eq('patient_id',assignment.patientId).single()
+  if(currentError)throw currentError
+  if(current.status!=='assigned')throw new Error('La sesión ya tiene actividad registrada y su historial no puede eliminarse.')
+  const {data:deleted,error}=await supabase.from('session_assignments').delete().eq('id',assignment.id).eq('status','assigned').select('id').maybeSingle()
+  if(error)throw error
+  if(!deleted)throw new Error('La sesión comenzó mientras se intentaba eliminar y su historial fue conservado.')
+  await supabase.from('session_plans').delete().eq('id',current.session_plan_id)
+}
+
 export async function getCurrentPatientAssignment():Promise<SessionAssignmentRecord|null>{
   if(!isSupabaseConfigured||!supabase)return readAssignments().find(a=>a.patientId==='ana-p'&&a.mode==='home'&&['assigned','started'].includes(a.status))??null
   const {data:auth}=await supabase.auth.getUser();if(!auth.user)return null

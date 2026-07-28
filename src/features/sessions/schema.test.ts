@@ -32,9 +32,14 @@ describe('validación de sesión',()=>{
     expect(validateSession(session([exercise], 'in_person'))).toEqual({})
   })
 
-  it('acepta una única exposición 360° presencial en Quest o Cardboard', () => {
+  it('acepta una o varias exposiciones 360° presenciales en Quest o Cardboard', () => {
     expect(validateSession(session([immersive()], 'in_person'))).toEqual({})
+    expect(validateSession(session([immersive({ name: 'Escenario 1' }), immersive({ name: 'Escenario 2' })], 'in_person'))).toEqual({})
     expect(validateSession(session([immersive({ displayMode: 'vr_box', cardboardEnabled: true })], 'in_person'))).toEqual({})
+    expect(validateSession(session([
+      immersive({ name: 'Escenario 1', displayMode: 'vr_box', cardboardEnabled: true }),
+      immersive({ name: 'Escenario 2', displayMode: 'vr_box', cardboardEnabled: true }),
+    ], 'in_person'))).toEqual({})
   })
 
   it('simula sesiones separadas y ejecutables para Galaxy S21+ y PC de consultorio', () => {
@@ -78,7 +83,7 @@ describe('validación de sesión',()=>{
 
   it('bloquea exposición 360° domiciliaria, mezclada o sin seguimiento Cardboard', () => {
     expect(validateSession(session([immersive()], 'home')).exercises).toContain('únicamente en clínica')
-    expect(validateSession(session([immersive(), optokinetic({ displayMode: 'quest_browser', supervision: 'direct_clinician', advanceMode: 'automatic' })], 'in_person')).exercises).toContain('único escenario')
+    expect(validateSession(session([immersive(), optokinetic({ displayMode: 'quest_browser', supervision: 'direct_clinician', advanceMode: 'automatic' })], 'in_person')).exercises).toContain('no se mezcla')
     expect(validateSession(session([immersive({ displayMode: 'vr_box', cardboardEnabled: false })], 'in_person')).exercises).toContain('Cardboard 3DoF')
   })
 

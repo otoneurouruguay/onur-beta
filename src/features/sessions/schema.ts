@@ -43,7 +43,7 @@ export function validateSession(values: SessionFormValues) {
 
   const immersiveExercises = values.exercises.filter((exercise) => exercise.purpose === 'immersive_context')
   if (values.mode === 'home' && immersiveExercises.length > 0) setExerciseError('Los escenarios 360° están habilitados únicamente en clínica con supervisión profesional directa.')
-  if (immersiveExercises.length > 0 && (immersiveExercises.length !== 1 || values.exercises.length !== 1)) setExerciseError('Una sesión contextual 360° inicial contiene un único escenario; no se mezcla con RVO, tareas físicas, cognitivas ni otra exposición.')
+  if (immersiveExercises.length > 0 && immersiveExercises.length !== values.exercises.length) setExerciseError('Una sesión contextual 360° puede incluir varios escenarios, pero no se mezcla con RVO, tareas físicas ni ejercicios cognitivos.')
   if (immersiveExercises.some((exercise) => exercise.displayMode === 'standard' || (exercise.displayMode === 'vr_box' && !exercise.cardboardEnabled))) setExerciseError('El escenario 360° requiere Quest WebXR o VR Box con Cardboard 3DoF activo.')
 
   const questExercises = values.exercises.filter((exercise) => exercise.displayMode === 'quest_browser')

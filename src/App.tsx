@@ -52,6 +52,7 @@ const router = createBrowserRouter([
   { path: '/ingresar', element: load(<LoginPage />) },
   { path: '/recuperar-clave', element: load(<ProfessionalPasswordRecoveryPage />) },
   { path: '/restablecer-clave', element: load(<ProfessionalPasswordUpdatePage />) },
+  { path: '/q', element: load(<QuestStationPage />) },
   { path: '/quest', element: load(<QuestStationPage />) },
   {
     path: '/app',
@@ -63,6 +64,7 @@ const router = createBrowserRouter([
       { path: 'pacientes/:patientId/editar', element: load(<PatientFormPage />) },
       { path: 'pacientes/:patientId/ciclos/nuevo', element: load(<TreatmentCycleFormPage />) },
       { path: 'pacientes/:patientId/sesiones/nueva', element: load(<SessionBuilderPage />) },
+      { path: 'pacientes/:patientId/sesiones/:assignmentId/editar', element: load(<SessionBuilderPage />) },
       { path: 'pacientes/:patientId/sesiones/:assignmentId/presencial', element: load(<InPersonSessionPage />) },
       { path: 'pacientes/:patientId/evaluaciones/nueva', element: load(<AssessmentFormPage />) },
       { path: 'pacientes/:patientId/informe', element: load(<TreatmentReportPage />) },

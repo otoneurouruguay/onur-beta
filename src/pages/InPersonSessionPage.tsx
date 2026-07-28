@@ -30,7 +30,7 @@ export function InPersonSessionPage() {
   const [questPairingCode, setQuestPairingCode] = useState('')
   const [questPairingExpiresAt, setQuestPairingExpiresAt] = useState('')
   const [error, setError] = useState('')
-  const questStationAddress = `${window.location.origin}${import.meta.env.BASE_URL}?station=quest`
+  const questStationAddress = `${window.location.origin}${import.meta.env.BASE_URL}q`
   const questPairing = useQuestSessionPairing(questPairingId, stage === 'quest_waiting')
   const recoverableQuestPairing = useQuestSessionPairingForAssignment(assignmentId, stage === 'review' && assignment?.status === 'started' && Boolean(assignment && isQuestClinicAssignment(assignment)))
 
@@ -159,7 +159,7 @@ export function InPersonSessionPage() {
       <p className="mt-3 text-sm leading-6 text-[#747474]">La ejecución quedó identificada como presencial, supervisada y operada por tu cuenta profesional.</p>
       <Link to={`/app/pacientes/${patient.id}`} className="mt-7 inline-flex rounded-2xl bg-[#E49A02] px-5 py-3 text-sm font-black text-white">Volver al perfil</Link>
     </article> : stage === 'quest_waiting' ? <article className="overflow-hidden rounded-2xl border border-[#E9E7E7] bg-white shadow-[0_20px_48px_rgba(18,50,56,0.08)]">
-      <div className="bg-[#171717] p-7 text-white"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.16em] text-[#EFB33A]">Estación Quest preparada</p><h1 className="mt-3 text-2xl font-black">{questPairingCode ? 'Ingresá este código en el visor' : 'La ejecución continúa en el visor'}</h1><p className="mt-2 break-all text-sm text-white/65">{questPairingCode ? <>Abrí {questStationAddress} en Meta Quest Browser.</> : 'Se recuperó el vínculo después de recargar esta pantalla.'}</p></div><Glasses className="shrink-0 text-[#EFB33A]" size={32}/></div></div>
+      <div className="bg-[#171717] p-7 text-white"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.16em] text-[#EFB33A]">Estación Quest preparada</p><h1 className="mt-3 text-2xl font-black">{questPairingCode ? 'Ingresá este código en el visor' : 'La ejecución continúa en el visor'}</h1><p className="mt-2 break-all text-sm text-white/65">{questPairingCode ? <>Abrí {questStationAddress} en Meta Quest Browser. Guardala como favorito la primera vez; después solo necesitás ingresar el código temporal.</> : 'Se recuperó el vínculo después de recargar esta pantalla.'}</p></div><Glasses className="shrink-0 text-[#EFB33A]" size={32}/></div></div>
       <div className="space-y-5 p-6 sm:p-8">
         {questPairingCode && <><div className="rounded-2xl bg-[#FFF7E8] p-6 text-center"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#8A5B00]">Código temporal</p><p className="mt-3 font-mono text-4xl font-black tracking-[.2em] text-[#171717]" aria-label={`Código Quest ${questPairingCode}`}>{questPairingCode}</p><p className="mt-3 text-[11px] font-bold text-[#8A5B00]">Vence a las {questPairingExpiresAt ? new Date(questPairingExpiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</p></div>
         <button type="button" onClick={() => void navigator.clipboard?.writeText(questStationAddress)} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#E9E7E7] px-4 py-3 text-xs font-black"><Copy size={16}/> Copiar dirección de la estación</button></>}
