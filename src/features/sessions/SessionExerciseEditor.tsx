@@ -20,7 +20,7 @@ interface SessionExerciseEditorProps {
   onChange: (config: ExerciseConfig) => void
 }
 
-const input = 'mt-2 h-11 w-full rounded-2xl border border-[#E9E7E7] bg-white px-3 text-sm'
+const input = 'mt-2 h-11 min-w-0 w-full rounded-2xl border border-[#E9E7E7] bg-white px-3 text-sm'
 const linearDirections: LinearMotionDirection[] = ['left', 'right', 'up', 'down', 'up_left', 'up_right', 'down_left', 'down_right']
 const directionLabels: Record<MotionDirection, string> = {
   left: 'Hacia la izquierda', right: 'Hacia la derecha', up: 'Hacia arriba', down: 'Hacia abajo',
@@ -139,8 +139,8 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[1fr_.9fr]">
-      <div className="space-y-5">
+    <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,.9fr)]">
+      <div className="min-w-0 space-y-5">
         <section className="rounded-2xl border border-[#E9E7E7] bg-white p-5">
           <h3 className="font-black text-[#171717]">Identificación</h3>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -317,7 +317,7 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
             <button type="button" onClick={() => set('doseMode', 'time')} aria-pressed={config.doseMode === 'time'} className={`h-10 rounded-lg text-xs font-black ${config.doseMode === 'time' ? 'bg-white text-[#E49A02] shadow-sm' : 'text-[#747474]'}`}>Por tiempo</button>
             <button type="button" disabled={config.displayMode === 'vr_box' || config.displayMode === 'quest_browser' || cognitive} onClick={() => onChange({ ...config, doseMode: 'repetitions', advanceMode: 'manual' })} aria-pressed={config.doseMode === 'repetitions'} className={`h-10 rounded-lg text-xs font-black disabled:cursor-not-allowed disabled:opacity-35 ${config.doseMode === 'repetitions' ? 'bg-white text-[#E49A02] shadow-sm' : 'text-[#747474]'}`}>Por repeticiones</button>
           </div>
-          <div className="mt-4 grid grid-cols-3 gap-3">
+          <div className="mt-4 grid grid-cols-1 gap-3 min-[360px]:grid-cols-3">
             {config.doseMode === 'time' ? <label className="text-xs font-black text-[#2F2F2F]">Ejercicio<span className="relative block"><input type="number" min="10" max={immersiveScenario?.maximumSeconds ?? 300} className={input} value={config.durationSeconds} onChange={(event) => set('durationSeconds', Number(event.target.value))} /><span className="absolute bottom-3 right-3 text-[10px] text-[#747474]">s</span></span></label> : <label className="text-xs font-black text-[#2F2F2F]">Objetivo<span className="relative block"><input type="number" min="1" max="100" className={input} value={config.targetRepetitions} onChange={(event) => set('targetRepetitions', Number(event.target.value))} /><span className="absolute bottom-3 right-3 text-[10px] text-[#747474]">rep.</span></span></label>}
             <label className="text-xs font-black text-[#2F2F2F]">Descanso<span className="relative block"><input type="number" min="0" max="180" className={input} value={config.restSeconds} onChange={(event) => set('restSeconds', Number(event.target.value))} /><span className="absolute bottom-3 right-3 text-[10px] text-[#747474]">s</span></span></label>
             <label className="text-xs font-black text-[#2F2F2F]">Vueltas<input type="number" min="1" max={isImmersive ? 1 : 10} disabled={isImmersive} className={`${input} disabled:bg-[#F7F6F4]`} value={config.rounds} onChange={(event) => set('rounds', Number(event.target.value))} /></label>
@@ -330,7 +330,7 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
         </section>
       </div>
 
-      <aside className="xl:sticky xl:top-24 xl:self-start">
+      <aside className="min-w-0 xl:sticky xl:top-24 xl:self-start">
         <div className="overflow-hidden rounded-2xl border border-[#E9E7E7] bg-white">
           <div className="flex items-center gap-2 p-4 text-sm font-black text-[#171717]"><Eye size={17} className="text-[#E49A02]" /> Vista previa</div>
           <div className="relative aspect-video bg-[#081113]">{isPhysical ? <div className="grid size-full place-items-center p-6 text-center text-white"><div><Accessibility className="mx-auto text-[#E49A02]" size={54}/><p className="mt-4 text-sm font-black">{config.patientInstruction || 'Instrucción física pendiente'}</p><p className="mt-3 text-xs text-white/55">{config.posture === 'seated' ? 'Sentado' : config.posture === 'standing' ? 'De pie' : 'Marcha'} · {config.surface === 'firm' ? 'Superficie firme' : 'Superficie inestable'}</p></div></div> : isImmersive && immersiveScenario ? <ImmersivePanorama scenario={immersiveScenario} spatialTarget={{ enabled: config.objectEnabled, color: config.objectColor, size: config.objectSize, shape: config.immersiveTargetShape, azimuthDegrees: config.immersiveTargetAzimuthDegrees, elevationDegrees: config.immersiveTargetElevationDegrees }} className="absolute inset-0"/> : config.displayMode === 'vr_box' ? <StereoscopicExerciseCanvas config={config} viewerProfile={viewerProfile}/> : <ExerciseCanvas config={config} className="size-full" />}</div>

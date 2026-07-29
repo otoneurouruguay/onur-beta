@@ -1,6 +1,7 @@
 import { CheckCircle2, ChevronLeft, ChevronRight, Clock3, Copy, Expand, Glasses, Pause, Play, RefreshCw, Volume2, XCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { statusLabel } from '../components/statusLabels'
 import { usePatient } from '../features/patients/hooks'
 import { useCompleteSupervisedInPersonSession, useCreateQuestSessionPairing, useQuestSessionPairing, useQuestSessionPairingForAssignment, useRevokeQuestSessionPairing, useSessionAssignments, useStartSupervisedInPersonSession } from '../features/sessions/hooks'
 import { ScaleQuestion } from '../features/sessions/ScaleQuestion'
@@ -79,7 +80,7 @@ export function InPersonSessionPage() {
   if (!['assigned', 'started'].includes(assignment.status) && stage !== 'finished') {
     return <section className="rounded-2xl border border-[#E9E7E7] bg-white p-7">
       <h1 className="text-xl font-black text-[#171717]">La sesión ya no está pendiente</h1>
-      <p className="mt-3 text-sm leading-6 text-[#747474]">Su estado actual es {assignment.status}. Consultá el resultado desde el perfil del paciente.</p>
+      <p className="mt-3 text-sm leading-6 text-[#747474]">Su estado actual es {statusLabel(assignment.status).toLocaleLowerCase('es')}. Consultá el resultado desde el perfil del paciente.</p>
       <Link to={`/app/pacientes/${patientId}`} className="mt-6 inline-flex items-center gap-2 text-sm font-black text-[#E49A02]"><ChevronLeft size={17}/> Volver al perfil</Link>
     </section>
   }
