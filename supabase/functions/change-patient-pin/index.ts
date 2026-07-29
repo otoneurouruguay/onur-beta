@@ -23,6 +23,7 @@ Deno.serve(async (request) => {
     }
 
     const url = Deno.env.get('SUPABASE_URL')!
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const pepper = Deno.env.get('PATIENT_AUTH_PEPPER')!
     const admin = createClient(url, serviceRoleKey, {
@@ -37,7 +38,7 @@ Deno.serve(async (request) => {
 
     const { data: account } = await admin
       .from('patient_portal_accounts')
-      .select('patient_id, auth_user_id, enabled')
+      .select('patient_id, auth_user_id, auth_login_email, enabled')
       .eq('auth_user_id', authUserId)
       .maybeSingle()
 
@@ -65,7 +66,24 @@ Deno.serve(async (request) => {
       entity_id: account.patient_id,
     })
 
-    return jsonResponse({ success: true })
+    const authClient = createClient(url, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const { data: renewed, error: renewError } = await authClient.auth.signInWithPassword({
+      email: account.auth_login_email,
+      password: derivedSecret,
+    })
+    if (renewError || !renewed.session) {
+      return jsonResponse({ error: 'El PIN se actualizó, pero es necesario volver a iniciar sesión.' }, 409)
+    }
+
+    return jsonResponse({
+      success: true,
+      session: {
+        access_token: renewed.session.access_token,
+        refresh_token: renewed.session.refresh_token,
+      },
+    })
   } catch {
     return jsonResponse({ error: 'No se pudo actualizar el PIN.' }, 400)
   }

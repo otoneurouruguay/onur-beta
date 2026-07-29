@@ -46,6 +46,16 @@ export async function listProfessionalAssessments(): Promise<AssessmentRecord[]>
   return (data ?? []).map(fromRow)
 }
 
+export async function listCurrentPatientAssessments(): Promise<AssessmentRecord[]> {
+  if (!isSupabaseConfigured || !supabase) return read().filter((item) => item.patientId === 'ana-p').sort((a, b) => b.assessmentDate.localeCompare(a.assessmentDate))
+  const { data: auth, error: authError } = await supabase.auth.getUser()
+  if (authError || !auth.user) throw authError ?? new Error('Sesión de paciente no disponible.')
+  const { data: patient, error: patientError } = await supabase.from('patients').select('id').eq('auth_user_id', auth.user.id).maybeSingle()
+  if (patientError) throw patientError
+  if (!patient) return []
+  return listPatientAssessments(patient.id)
+}
+
 export async function createAssessment(input: AssessmentInput): Promise<AssessmentRecord> {
   const values = input.responses.slice(0, 18)
   const applicable = values.filter((value): value is number => typeof value === 'number')

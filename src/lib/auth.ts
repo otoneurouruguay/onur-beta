@@ -9,6 +9,19 @@ const patientLoginResponseSchema = z.object({
   must_change_pin: z.boolean(),
 })
 
+const patientAccessStateSchema = z.object({
+  enabled: z.boolean(),
+  must_change_pin: z.boolean(),
+})
+
+const patientPinChangeResponseSchema = z.object({
+  success: z.literal(true),
+  session: z.object({
+    access_token: z.string(),
+    refresh_token: z.string(),
+  }),
+})
+
 export function validateProfessionalCredentials(email: string, password: string): string | null {
   const normalizedEmail = email.trim()
   if (!normalizedEmail || !password) return 'Ingresá el correo profesional y la contraseña.'
@@ -54,8 +67,24 @@ export async function signInPatient(username: string, secret: string): Promise<{
 
 export async function changePatientPin(pin: string): Promise<void> {
   if (!supabase) throw new Error('Supabase no está configurado.')
-  const { error } = await supabase.functions.invoke('change-patient-pin', { body: { pin } })
+  const { data, error } = await supabase.functions.invoke('change-patient-pin', { body: { pin } })
   if (error) throw new Error('No se pudo actualizar el PIN.')
+  const parsed = patientPinChangeResponseSchema.safeParse(data)
+  if (!parsed.success) throw new Error('El PIN se actualizó, pero la nueva sesión no es válida.')
+  const { error: sessionError } = await supabase.auth.setSession({
+    access_token: parsed.data.session.access_token,
+    refresh_token: parsed.data.session.refresh_token,
+  })
+  if (sessionError) throw new Error('El PIN se actualizó, pero no se pudo renovar la sesión.')
+}
+
+export async function getPatientAccessState(): Promise<{ enabled: boolean; mustChangePin: boolean }> {
+  if (!supabase) throw new Error('Supabase no está configurado.')
+  const { data, error } = await supabase.functions.invoke('patient-access-state')
+  if (error) throw new Error('No fue posible verificar el acceso del paciente.')
+  const parsed = patientAccessStateSchema.safeParse(data)
+  if (!parsed.success) throw new Error('La respuesta del servicio de acceso no es válida.')
+  return { enabled: parsed.data.enabled, mustChangePin: parsed.data.must_change_pin }
 }
 
 export async function requestProfessionalPasswordReset(email: string): Promise<void> {

@@ -8,7 +8,10 @@ import { usePatient } from '../features/patients/hooks'
 import { useDuplicateInPersonAssignment, useRevokeSessionAssignment, useSessionAssignments, useTreatmentCycles } from '../features/sessions/hooks'
 import { canManageSessionAssignment, canRevokeSessionAssignment, sessionDurationLabel, type SessionAssignmentRecord } from '../features/sessions/repository'
 import { PatientDocumentsPanel } from '../features/documents/PatientDocumentsPanel'
+import { usePatientDocuments } from '../features/documents/hooks'
 import { PatientAssessmentsPanel } from '../features/assessments/PatientAssessmentsPanel'
+import { usePatientAssessments } from '../features/assessments/hooks'
+import { assessmentPhaseLabels } from '../features/assessments/questions'
 
 export function PatientProfilePage() {
   const { patientId } = useParams()
@@ -16,6 +19,8 @@ export function PatientProfilePage() {
   const { data: patient, isPending } = usePatient(patientId ?? '')
   const { data: cycles = [] } = useTreatmentCycles(patientId ?? '')
   const { data: assignments = [] } = useSessionAssignments(patientId ?? '')
+  const { data: documents = [] } = usePatientDocuments(patientId ?? '')
+  const { data: assessments = [] } = usePatientAssessments(patientId ?? '')
   const duplicateAssignment = useDuplicateInPersonAssignment(patientId ?? '')
   const revokeAssignment = useRevokeSessionAssignment(patientId ?? '')
   const [actionNotice, setActionNotice] = useState('')
@@ -23,6 +28,7 @@ export function PatientProfilePage() {
   const [pendingRevocation, setPendingRevocation] = useState<SessionAssignmentRecord | null>(null)
   const activeCycle = cycles.find((cycle) => cycle.status === 'active')
   const activeAssignment = assignments.find((assignment) => assignment.status === 'assigned' || assignment.status === 'started')
+  const activePermissions = documents.filter((document) => document.sharedWithPatient).length
 
   if (isPending) return <p className="text-sm text-[#747474]">Cargando paciente…</p>
 
@@ -40,6 +46,30 @@ export function PatientProfilePage() {
       setActionError('No fue posible duplicar la asignación como domiciliaria.')
     }
   }
+
+  const timelineEvents = [
+    ...assignments.map((assignment) => ({
+      id: `session-${assignment.id}`,
+      date: assignment.completedAt || assignment.revokedAt || assignment.createdAt,
+      label: assignment.status === 'completed'
+        ? `Sesión completada: ${assignment.title}`
+        : assignment.status === 'partial'
+          ? `Sesión parcial: ${assignment.title}`
+          : assignment.status === 'revoked'
+            ? `Sesión anulada: ${assignment.title}`
+            : `Sesión asignada: ${assignment.title}`,
+    })),
+    ...documents.map((document) => ({
+      id: `document-${document.id}`,
+      date: document.createdAt || `${document.documentDate}T12:00:00`,
+      label: `Documento cargado: ${document.originalFilename}`,
+    })),
+    ...assessments.map((assessment) => ({
+      id: `assessment-${assessment.id}`,
+      date: `${assessment.assessmentDate}T12:00:00`,
+      label: `Evaluación ${assessmentPhaseLabels[assessment.phase].toLowerCase()} registrada`,
+    })),
+  ].filter((event) => Boolean(event.date)).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8)
 
   const revoke = async (assignment: (typeof assignments)[number], reason: string) => {
     try {
@@ -98,7 +128,7 @@ export function PatientProfilePage() {
             <div className="flex justify-between gap-4 border-b border-[#E9E7E7] pb-4"><dt className="inline-flex items-center gap-2 text-[#747474]"><IdCard size={15}/> Cédula</dt><dd className="font-black text-[#2F2F2F]">{patient.documentNumber || 'Sin registrar'}</dd></div>
             <div className="flex justify-between gap-4 border-b border-[#E9E7E7] pb-4"><dt className="text-[#747474]">Ciclo actual</dt><dd className="font-black text-[#2F2F2F]">{activeCycle?.label ?? 'Sin ciclo activo'}</dd></div>
             <div className="flex justify-between gap-4 border-b border-[#E9E7E7] pb-4"><dt className="text-[#747474]">Mutualista</dt><dd className="font-black text-[#2F2F2F]">{patient.insurer}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-[#747474]">Permisos activos</dt><dd className="font-black text-[#2F2F2F]">1 documento</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-[#747474]">Permisos activos</dt><dd className="font-black text-[#2F2F2F]">{activePermissions} {activePermissions === 1 ? 'documento' : 'documentos'}</dd></div>
           </dl>
           <Link to={`/app/pacientes/${patient.id}/acceso`} className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#E9E7E7] px-4 py-3 text-sm font-black text-[#2F2F2F]">
             <KeyRound size={17} /> {patient.portalAccess === 'enabled' ? 'Gestionar acceso domiciliario' : 'Habilitar acceso domiciliario'}
@@ -126,15 +156,15 @@ export function PatientProfilePage() {
           <PatientAssessmentsPanel patientId={patient.id} cycleId={activeCycle?.id??''}/>
           <article className="rounded-2xl border border-[#E9E7E7] bg-white p-6 sm:col-span-2">
             <h2 className="text-lg font-black text-[#171717]">Línea de tiempo</h2>
-            <div className="mt-5 space-y-4 border-l-2 border-[#cfe2df] pl-5">
-              {['Sesión domiciliaria completada', 'Posturografía cargada', 'Cuestionario inicial transcrito'].map((event, index) => (
-                <div key={event} className="relative">
+            {timelineEvents.length ? <div className="mt-5 space-y-4 border-l-2 border-[#E8CE99] pl-5">
+              {timelineEvents.map((event) => (
+                <div key={event.id} className="relative">
                   <span className="absolute -left-[27px] top-1 size-3 rounded-full border-2 border-white bg-[#E49A02]" />
-                  <p className="text-sm font-black text-[#2F2F2F]">{event}</p>
-                  <p className="mt-1 text-xs text-[#747474]">{index === 0 ? 'Hoy, 09:20' : index === 1 ? '15 jul 2026' : '02 jul 2026'}</p>
+                  <p className="text-sm font-black text-[#2F2F2F]">{event.label}</p>
+                  <p className="mt-1 text-xs text-[#747474]">{new Intl.DateTimeFormat('es-UY', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(event.date))}</p>
                 </div>
               ))}
-            </div>
+            </div> : <p className="mt-5 rounded-2xl bg-[#F7F6F4] p-4 text-sm text-[#747474]">Todavía no hay actividad clínica registrada para este paciente.</p>}
           </article>
         </div>
       </section>

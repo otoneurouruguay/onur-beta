@@ -9,12 +9,12 @@ import { SessionRunner } from './SessionRunner'
 const exercisePlayerMock = vi.hoisted(() => vi.fn())
 const trackingPermissionMock = vi.hoisted(() => vi.fn<() => Promise<CardboardTrackingActivation>>(async () => ({ permission: 'granted', signalSource: 'relative' })))
 
-afterEach(() => { cleanup(); vi.useRealTimers(); trackingPermissionMock.mockReset(); trackingPermissionMock.mockResolvedValue({ permission: 'granted', signalSource: 'relative' }) })
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); trackingPermissionMock.mockReset(); trackingPermissionMock.mockResolvedValue({ permission: 'granted', signalSource: 'relative' }) })
 
 vi.mock('../exercise/ExercisePlayer', () => ({
-  ExercisePlayer: (props: { config: ExerciseConfig; preparationSeconds?: number; onComplete?: (activeSeconds: number, report?: ExerciseCompletionReport) => void }) => {
+  ExercisePlayer: (props: { config: ExerciseConfig; preparationSeconds?: number; onComplete?: (activeSeconds: number, report?: ExerciseCompletionReport) => void; onExit?: (activeSeconds: number, report: ExerciseCompletionReport) => void }) => {
     exercisePlayerMock({ config: props.config, preparationSeconds: props.preparationSeconds })
-    return <button type="button" onClick={() => props.onComplete?.(1, {
+    return <><button type="button" onClick={() => props.onComplete?.(1, {
       doseMode: props.config.doseMode,
       completion: 'target_completed',
       targetRepetitions: props.config.doseMode === 'repetitions' ? props.config.targetRepetitions : undefined,
@@ -23,7 +23,7 @@ vi.mock('../exercise/ExercisePlayer', () => ({
         mode: 'orientation_3dof', spatialAnchor: 'calibrated_direction', recenterCount: 1, trackingLossCount: 0, finalStatus: 'tracking',
         opticalProfile: { name: 'VR Box clínica', imageSeparationPercent: 4, verticalOffsetPercent: -2, horizontalFovDegrees: 92, verticalFovDegrees: 78, lensDistortionPercent: 18 },
       } : undefined,
-    })}>Completar ejercicio</button>
+    })}>Completar ejercicio</button><button type="button" onClick={() => props.onExit?.(4, { doseMode: props.config.doseMode, completion: 'partial' })}>Salir ejercicio</button></>
   },
 }))
 
@@ -55,6 +55,22 @@ describe('SessionRunner', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Completar ejercicio' }))
 
     await waitFor(() => expect(exercisePlayerMock.mock.calls.at(-1)?.[0]).toMatchObject({ preparationSeconds: 10 }))
+  })
+
+  it('advierte antes de salir y entrega el avance parcial para guardarlo', () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const onExit = vi.fn()
+    render(<SessionRunner session={session} onFinish={vi.fn()} onExit={onExit}/>)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Salir ejercicio' }))
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(onExit).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Salir ejercicio' }))
+    expect(onExit).toHaveBeenCalledWith(4, 1, expect.arrayContaining([
+      expect.objectContaining({ type: 'exercise_partial', active_seconds: 4 }),
+      expect.objectContaining({ type: 'interrupted', skipped_exercises: 1 }),
+    ]))
   })
 
   it('deja una transición mínima antes del segundo escenario WebXR', async () => {

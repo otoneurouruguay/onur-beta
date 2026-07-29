@@ -2,6 +2,7 @@ import { CheckCircle2, KeyRound } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Brand } from '../components/Brand'
+import { useAuth } from '../features/auth/AuthProvider'
 import { changePatientPin } from '../lib/auth'
 import { isSupabaseConfigured } from '../lib/supabase'
 
@@ -11,6 +12,7 @@ export function PatientCreatePinPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const auth = useAuth()
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -26,7 +28,10 @@ export function PatientCreatePinPage() {
 
     setLoading(true)
     try {
-      if (isSupabaseConfigured) await changePatientPin(pin)
+      if (isSupabaseConfigured) {
+        await changePatientPin(pin)
+        await auth.refreshPatientAccess()
+      }
       navigate('/paciente/hoy')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No se pudo guardar el PIN.')

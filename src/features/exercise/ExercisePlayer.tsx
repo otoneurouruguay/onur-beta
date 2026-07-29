@@ -12,7 +12,7 @@ import { ImmersivePanorama } from '../immersive/ImmersivePanorama'
 
 interface ExercisePlayerProps {
   config: ExerciseConfig
-  onExit: () => void
+  onExit: (activeSeconds?: number, report?: ExerciseCompletionReport) => boolean | void
   onSkip?: (activeSeconds: number, report?: ExerciseCompletionReport) => void
   onComplete?: (activeSeconds: number, report?: ExerciseCompletionReport) => void
   preparationSeconds?: number
@@ -207,10 +207,19 @@ function CompatibleExercisePlayer({ config, onExit, onSkip, onComplete, preparat
 
   const exitPlayer = async () => {
     setPaused(true)
+    const exitAccepted = onExit(Math.max(0, Math.round(activeSeconds)), {
+      doseMode: config.doseMode,
+      completion: 'partial',
+      targetRepetitions: config.doseMode === 'repetitions' ? config.targetRepetitions : undefined,
+      cognitive: cognitiveReport(),
+    })
+    if (exitAccepted === false) {
+      setPaused(false)
+      return
+    }
     if (document.fullscreenElement) {
       try { await document.exitFullscreen() } catch { /* La salida de la sesión continúa aunque el navegador conserve pantalla completa. */ }
     }
-    onExit()
   }
 
   useEffect(() => {
@@ -254,7 +263,7 @@ function CompatibleExercisePlayer({ config, onExit, onSkip, onComplete, preparat
     {preparing && <PreparationOverlay remaining={preparationRemaining} vrBox={config.displayMode === 'vr_box'} config={config}/>}
     {!vrBox && !questImmersive && <div className={`absolute inset-x-0 top-0 z-30 flex items-start justify-between gap-3 bg-gradient-to-b from-black/72 to-transparent p-5 transition-opacity duration-300 sm:p-7 ${controlsVisible ? 'opacity-100' : 'pointer-events-none opacity-0'}`}><div className="max-w-[70vw] rounded-2xl bg-black/48 px-4 py-2 backdrop-blur"><p className="truncate text-xs font-black">{config.name}{config.displayMode === 'quest_browser' ? ' · Quest navegador BETA' : ''}</p><p className="mt-1 line-clamp-2 text-[10px] leading-4 text-white/70">{config.patientInstruction}</p></div><div className="flex shrink-0 items-center gap-2"><button type="button" onClick={requestFullscreen} className="grid size-10 place-items-center rounded-full bg-black/48 backdrop-blur" aria-label="Pantalla completa"><Expand size={17}/></button><span className="rounded-full bg-black/48 px-4 py-2 text-xs font-black tabular-nums backdrop-blur">{config.doseMode === 'time' ? formattedTime : `${config.targetRepetitions} rep.`}</span></div></div>}
     {config.cognitiveTaskMode !== 'none' && config.cognitiveResponseMode === 'screen_tap' && !inactive && <button type="button" onClick={registerCognitiveResponse} className="absolute right-5 top-1/2 z-40 h-20 -translate-y-1/2 rounded-2xl bg-[#E49A02] px-5 text-sm font-black text-white shadow-2xl sm:right-8">Responder</button>}
-    {!vrBox && !questImmersive && <div className={`absolute inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-center gap-3 bg-gradient-to-t from-black/78 to-transparent p-7 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'pointer-events-none opacity-0'}`}><button type="button" onClick={() => setPaused((value) => !value)} className="grid size-13 place-items-center rounded-full bg-white text-[#171717] shadow-lg" aria-label={paused ? 'Continuar' : 'Pausar'}>{paused ? <Play size={20}/> : <Pause size={20}/>}</button>{config.doseMode === 'repetitions' && !preparing && <button type="button" onClick={() => setCompletionOpen(true)} className="inline-flex h-12 items-center gap-2 rounded-full bg-[#E49A02] px-5 text-xs font-black shadow-lg"><Check size={17}/> Informar finalización</button>}{onSkip && <button type="button" onClick={() => finish({ doseMode: config.doseMode, completion: 'skipped', targetRepetitions: config.doseMode === 'repetitions' ? config.targetRepetitions : undefined, cognitive: cognitiveReport() })} className="inline-flex h-12 items-center gap-2 rounded-full bg-white/16 px-5 text-xs font-black backdrop-blur"><SkipForward size={17}/> Omitir</button>}<button type="button" onClick={onExit} className="inline-flex h-12 items-center gap-2 rounded-full bg-[#c74750] px-5 text-xs font-black shadow-lg"><LogOut size={17}/> Salir</button></div>}
+    {!vrBox && !questImmersive && <div className={`absolute inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-center gap-3 bg-gradient-to-t from-black/78 to-transparent p-7 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'pointer-events-none opacity-0'}`}><button type="button" onClick={() => setPaused((value) => !value)} className="grid size-13 place-items-center rounded-full bg-white text-[#171717] shadow-lg" aria-label={paused ? 'Continuar' : 'Pausar'}>{paused ? <Play size={20}/> : <Pause size={20}/>}</button>{config.doseMode === 'repetitions' && !preparing && <button type="button" onClick={() => setCompletionOpen(true)} className="inline-flex h-12 items-center gap-2 rounded-full bg-[#E49A02] px-5 text-xs font-black shadow-lg"><Check size={17}/> Informar finalización</button>}{onSkip && <button type="button" onClick={() => finish({ doseMode: config.doseMode, completion: 'skipped', targetRepetitions: config.doseMode === 'repetitions' ? config.targetRepetitions : undefined, cognitive: cognitiveReport() })} className="inline-flex h-12 items-center gap-2 rounded-full bg-white/16 px-5 text-xs font-black backdrop-blur"><SkipForward size={17}/> Omitir</button>}<button type="button" onClick={() => void exitPlayer()} className="inline-flex h-12 items-center gap-2 rounded-full bg-[#c74750] px-5 text-xs font-black shadow-lg"><LogOut size={17}/> Salir</button></div>}
     {cardboard && controlsVisible && <CardboardControlBar
       paused={paused}
       formattedTime={formattedTime}
@@ -294,7 +303,7 @@ export function ExercisePlayer(props: ExercisePlayerProps) {
       <h2 className="mt-3 text-2xl font-black">La configuración no representa la tarea indicada</h2>
       <p className="mt-4 text-sm leading-6 text-white/70">{compatibility.issues[0].message}</p>
       <p className="mt-2 text-sm font-bold leading-6 text-white/85">{compatibility.issues[0].correction}</p>
-      <button type="button" onClick={props.onExit} className="mt-7 h-13 w-full rounded-2xl bg-white px-5 text-sm font-black text-[#171717]">Salir y avisar al profesional</button>
+      <button type="button" onClick={() => { props.onExit() }} className="mt-7 h-13 w-full rounded-2xl bg-white px-5 text-sm font-black text-[#171717]">Salir y avisar al profesional</button>
     </div>
   </div>
 }

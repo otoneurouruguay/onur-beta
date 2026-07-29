@@ -179,7 +179,7 @@ function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, n
   return <div ref={containerRef} className="fixed inset-0 z-[120] grid grid-cols-2 divide-x divide-white/10 bg-[#171717] text-white" aria-live="polite">{content('izquierdo')}{content('derecho')}</div>
 }
 
-export function SessionRunner({ session, onFinish, onExit }: { session: SessionAssignmentRecord; onFinish: (activeSeconds: number, skippedExercises: number, eventLog: SessionEventLogEntry[]) => void; onExit: () => void }) {
+export function SessionRunner({ session, onFinish, onExit }: { session: SessionAssignmentRecord; onFinish: (activeSeconds: number, skippedExercises: number, eventLog: SessionEventLogEntry[]) => void; onExit: (activeSeconds: number, skippedExercises: number, eventLog: SessionEventLogEntry[]) => void }) {
   const units = useMemo(() => buildUnits(session.exercises), [session.exercises])
   const [index, setIndex] = useState(0)
   const skippedRef = useRef(0)
@@ -187,6 +187,38 @@ export function SessionRunner({ session, onFinish, onExit }: { session: SessionA
   const eventLogRef = useRef<SessionEventLogEntry[]>([])
   const finishingRef = useRef(false)
   const unit = units[index]
+
+  const requestExit = (currentActiveSeconds = 0, report?: ExerciseCompletionReport) => {
+    const confirmed = window.confirm('¿Salir de la sesión? El avance realizado se guardará como una sesión parcial y el profesional podrá revisarlo.')
+    if (!confirmed) return false
+    const roundedSeconds = Math.max(0, Math.round(currentActiveSeconds))
+    if (unit?.type === 'exercise') {
+      skippedRef.current += 1
+      eventLogRef.current.push({
+        type: 'exercise_partial',
+        at: new Date().toISOString(),
+        exercise_index: unit.exerciseIndex,
+        round: unit.round,
+        exercise_name: unit.config.name,
+        exercise_kind: unit.config.kind,
+        dose_mode: report?.doseMode ?? unit.config.doseMode,
+        display_mode: unit.config.displayMode,
+        active_seconds: roundedSeconds,
+        target_repetitions: report?.targetRepetitions,
+        reported_repetitions: report?.reportedRepetitions,
+        completion: 'partial',
+      })
+    }
+    activeSecondsRef.current += roundedSeconds
+    eventLogRef.current.push({
+      type: 'interrupted',
+      at: new Date().toISOString(),
+      active_seconds: activeSecondsRef.current,
+      skipped_exercises: Math.max(1, skippedRef.current),
+    })
+    onExit(activeSecondsRef.current, Math.max(1, skippedRef.current), eventLogRef.current)
+    return true
+  }
 
   useEffect(() => {
     document.body.dataset.onurSessionRunning = 'true'
@@ -252,8 +284,8 @@ export function SessionRunner({ session, onFinish, onExit }: { session: SessionA
   }, [onFinish, units.length])
 
   if (!unit) return null
-  if (unit.type === 'rest') return <RestScreen {...unit} onComplete={() => advance()} onExit={onExit}/>
-  if (unit.type === 'vr_box_transition') return <VrBoxTransitionScreen {...unit} onComplete={() => advance()} onExit={onExit}/>
+  if (unit.type === 'rest') return <RestScreen {...unit} onComplete={() => advance()} onExit={() => { requestExit() }}/>
+  if (unit.type === 'vr_box_transition') return <VrBoxTransitionScreen {...unit} onComplete={() => advance()} onExit={() => { requestExit() }}/>
 
   const progress = units.slice(0, index + 1).filter((item) => item.type === 'exercise').length
   const total = session.exercises.reduce((count, exercise) => count + exercise.rounds, 0)
@@ -266,6 +298,6 @@ export function SessionRunner({ session, onFinish, onExit }: { session: SessionA
     )
   return <>
     {unit.config.displayMode !== 'vr_box' && !(unit.config.displayMode === 'quest_browser' && unit.config.purpose === 'immersive_context') && <div className="fixed left-4 top-20 z-[110] rounded-full bg-black/55 px-3 py-2 text-[10px] font-black text-white backdrop-blur">{unit.label} · {progress}/{total}</div>}
-    <ExercisePlayer key={index} config={{ ...unit.config, rounds: 1 }} preparationSeconds={preparationSeconds} onComplete={(seconds, report) => advance(seconds, report)} onSkip={(seconds, report) => advance(seconds, report ?? { doseMode: unit.config.doseMode, completion: 'skipped' })} onExit={onExit}/>
+    <ExercisePlayer key={index} config={{ ...unit.config, rounds: 1 }} preparationSeconds={preparationSeconds} onComplete={(seconds, report) => advance(seconds, report)} onSkip={(seconds, report) => advance(seconds, report ?? { doseMode: unit.config.doseMode, completion: 'skipped' })} onExit={requestExit}/>
   </>
 }

@@ -77,12 +77,16 @@ try{
 
   const firstLogin=await patientLogin(temporaryCi);assert(firstLogin.must_change_pin===true,'El primer acceso no exige cambio de PIN.')
   const patientClient=client();assertNoError(await patientClient.auth.setSession({access_token:firstLogin.session.access_token,refresh_token:firstLogin.session.refresh_token}),'establecer sesión paciente')
-  const ownRows=assertNoError(await patientClient.from('patients').select('id'),'RLS pacientes')
-  assert(ownRows.length===1&&ownRows[0].id===created.patientId,'El paciente pudo ver un perfil ajeno.')
-  log('aislamiento RLS entre pacientes')
+  const temporaryRows=assertNoError(await patientClient.from('patients').select('id'),'RLS temporal pacientes')
+  assert(temporaryRows.length===0,'La sesión temporal pudo leer datos clínicos antes de cambiar el PIN.')
+  log('bloqueo clínico de la sesión temporal')
 
-  const pinChange=await patientClient.functions.invoke('change-patient-pin',{body:{pin}});assertNoError(pinChange,'cambiar PIN')
+  const pinChange=assertNoError(await patientClient.functions.invoke('change-patient-pin',{body:{pin}}),'cambiar PIN')
+  assertNoError(await patientClient.auth.setSession({access_token:pinChange.session.access_token,refresh_token:pinChange.session.refresh_token}),'renovar sesión después del PIN')
   const secondLogin=await patientLogin(pin);assert(secondLogin.must_change_pin===false,'El cambio de PIN no quedó confirmado.')
+  const ownRows=assertNoError(await patientClient.from('patients').select('id'),'RLS pacientes')
+  assert(ownRows.length===1&&ownRows[0].id===created.patientId,'El paciente pudo ver un perfil ajeno o no pudo ver su propio perfil.')
+  log('aislamiento RLS entre pacientes')
   log('primer acceso con cédula temporal y PIN de cuatro dígitos')
 
   created.storagePath=`${created.professionalUserId}/${created.patientId}/${crypto.randomUUID()}-staging.pdf`

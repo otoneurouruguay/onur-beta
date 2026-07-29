@@ -8,7 +8,7 @@ export type CycleStatus = 'active' | 'paused' | 'completed'
 export type AssignmentStatus = 'assigned' | 'started' | 'completed' | 'partial' | 'interrupted' | 'omitted' | 'revoked'
 
 export interface SessionEventLogEntry {
-  type: 'exercise_completed' | 'exercise_partial' | 'exercise_skipped' | 'vr_box_put_on' | 'vr_box_take_off' | 'finished'
+  type: 'exercise_completed' | 'exercise_partial' | 'exercise_skipped' | 'vr_box_put_on' | 'vr_box_take_off' | 'interrupted' | 'finished'
   at: string
   exercise_index?: number
   round?: number
@@ -77,6 +77,14 @@ export interface SessionCompletionInput {
   finalDiscomfort: number
   perceivedDifficulty: number
   patientComment: string
+  eventLog?: SessionEventLogEntry[]
+}
+
+export interface SessionInterruptionInput {
+  assignment: Pick<SessionAssignmentRecord, 'id' | 'patientId'>
+  activeSeconds: number
+  skippedExercises: number
+  initialDiscomfort: number
   eventLog?: SessionEventLogEntry[]
 }
 
@@ -222,6 +230,25 @@ export async function completeSessionAssignment(input:SessionCompletionInput){
   const finalStatus=skippedExercises>0?'partial' as const:'completed' as const
   if(!isSupabaseConfigured||!supabase){const finished={type:'finished' as const,skipped_exercises:skippedExercises,at:new Date().toISOString()};const all=readAssignments();write(ASSIGNMENTS_KEY,all.map(a=>a.id===assignment.id?{...a,status:finalStatus,activeSeconds:Math.round(activeSeconds),completedAt:finished.at,initialDiscomfort,finalDiscomfort,perceivedDifficulty,patientComment:patientComment.trim(),eventLog:[...eventLog,finished]}:a));return}
   const {error}=await supabase.rpc('complete_session_assignment_v2',{target_assignment_id:assignment.id,active_seconds_input:Math.max(0,Math.round(activeSeconds)),skipped_count_input:Math.max(0,skippedExercises),initial_discomfort_input:initialDiscomfort,final_discomfort_input:finalDiscomfort,perceived_difficulty_input:perceivedDifficulty,patient_comment_input:patientComment.trim()||null,event_log_input:[...eventLog,{type:'finished',skipped_exercises:skippedExercises,at:new Date().toISOString()}]});if(error)throw error
+}
+
+export async function interruptSessionAssignment(input:SessionInterruptionInput){
+  const {assignment,activeSeconds,skippedExercises,initialDiscomfort,eventLog=[]}=input
+  const interrupted={type:'interrupted' as const,skipped_exercises:Math.max(1,skippedExercises),at:new Date().toISOString()}
+  const finalEventLog=eventLog.some((event)=>event.type==='interrupted')?eventLog:[...eventLog,interrupted]
+  if(!isSupabaseConfigured||!supabase){
+    const all=readAssignments()
+    write(ASSIGNMENTS_KEY,all.map(item=>item.id===assignment.id?{...item,status:'partial' as const,activeSeconds:Math.max(0,Math.round(activeSeconds)),completedAt:interrupted.at,initialDiscomfort,eventLog:finalEventLog}:item))
+    return
+  }
+  const {error}=await supabase.rpc('interrupt_session_assignment',{
+    target_assignment_id:assignment.id,
+    active_seconds_input:Math.max(0,Math.round(activeSeconds)),
+    skipped_count_input:Math.max(1,skippedExercises),
+    initial_discomfort_input:initialDiscomfort,
+    event_log_input:finalEventLog,
+  })
+  if(error)throw error
 }
 
 export async function startSupervisedInPersonSession(assignment:SessionAssignmentRecord,initialDiscomfort:number){
