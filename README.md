@@ -146,7 +146,7 @@ La cuenta profesional se prepara después de desplegar Supabase con `npm run adm
 - Las sugerencias estadísticas no son visibles para el paciente sin revisión y publicación profesional.
 - Los archivos originales y los valores normalizados permanecen separados.
 
-Ver [arquitectura](docs/ARCHITECTURE.md), [importación estructurada](docs/STRUCTURED_STUDY_IMPORT.md), [despliegue de staging](docs/STAGING_DEPLOYMENT.md), [checklist de staging](docs/STAGING_CHECKLIST.md), [motor de ejercicios](docs/EXERCISE_ENGINE.md), [ciclos y sesiones](docs/SESSIONS.md), [generación clínicamente gobernada](docs/CLINICAL_EXERCISE_GENERATION.md), [documentos e informes](docs/DOCUMENTS_ASSESSMENTS_REPORTS.md) y [seguridad](docs/SECURITY.md).
+Ver [arquitectura](docs/ARCHITECTURE.md), [importación estructurada](docs/STRUCTURED_STUDY_IMPORT.md), [despliegue de staging](docs/STAGING_DEPLOYMENT.md), [checklist de staging](docs/STAGING_CHECKLIST.md), [checklist recurrente de release](docs/RECURRING_RELEASE_CHECKLIST.md), [motor de ejercicios](docs/EXERCISE_ENGINE.md), [ciclos y sesiones](docs/SESSIONS.md), [generación clínicamente gobernada](docs/CLINICAL_EXERCISE_GENERATION.md), [documentos e informes](docs/DOCUMENTS_ASSESSMENTS_REPORTS.md) y [seguridad](docs/SECURITY.md).
 
 ## Alcance clínico
 

@@ -1,22 +1,15 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './features/auth/AuthProvider.tsx'
+import { startDeferredServiceWorkerRegistration } from './pwa/registerDeferredServiceWorker.ts'
 
-registerSW({
-  // Buscamos la versión nueva al abrir, pero no recargamos automáticamente la
-  // página actual: una sesión clínica que ya está corriendo no se interrumpe.
-  immediate: true,
-  onRegisteredSW: (_serviceWorkerUrl, registration) => {
-    if (registration) {
-      void registration.update()
-      window.setInterval(() => void registration.update(), 60 * 60 * 1_000)
-    }
-  },
-})
+// La actualización se descarga en segundo plano y queda en espera. Se activa
+// cuando todas las pestañas de ONUr se cierran, nunca mientras alguien escribe
+// credenciales o completa una sesión clínica.
+startDeferredServiceWorkerRegistration()
 
 const queryClient = new QueryClient({
   defaultOptions: {
