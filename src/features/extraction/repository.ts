@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from '../../lib/supabase'
+import type { CycleStudyPhase } from '../documents/types'
 import type { ExtractedField, ExtractedPage, LocalExtractionDraft, PageClassification, PatientMatchStatus, PersistedExtractionDraft } from './types'
 
 const DEMO_KEY = 'onur-demo-extractions-v1'
@@ -11,6 +12,7 @@ export interface ExtractionReviewRecord extends PersistedExtractionDraft {
   sectionPageNumbers: number[]
   professionalConclusion: string
   rehabilitationSuggestion: string
+  cyclePhase?: CycleStudyPhase
 }
 
 function readDemo() {
@@ -31,19 +33,28 @@ export function extractionPayload(draft: LocalExtractionDraft) {
   return { intake_kind: draft.intakeKind, extractor_version: draft.extractorVersion, patient_match_status: draft.patientMatchStatus, mismatch_fields: draft.mismatchFields, pages: draft.pages.map(pagePayload), fields: draft.fields.map(fieldPayload) }
 }
 
-export async function createExtractionDraft(documentId: string, patientId: string, draft: LocalExtractionDraft, documentDate: string, treatmentCycleId: string, sourceFilename: string, mimeType: string) {
+export async function createExtractionDraft(documentId: string, patientId: string, draft: LocalExtractionDraft, documentDate: string, treatmentCycleId: string, sourceFilename: string, mimeType: string, cyclePhase: CycleStudyPhase = 'unspecified') {
   void patientId
   if (!isSupabaseConfigured || !supabase) {
     const jobId = crypto.randomUUID()
-    const types = [...new Set(draft.fields.map((field) => field.studyType))]
+    const hasPosturography = draft.pages.some((page) => page.classification === 'posturography') || draft.intakeKind === 'posturography_bap'
+    const hasVestibularReport = draft.pages.some((page) => page.classification !== 'posturography') || draft.intakeKind === 'vestibular_and_reports'
+    const types: ExtractedField['studyType'][] = [
+      ...(hasPosturography ? ['posturography' as const] : []),
+      ...(hasVestibularReport ? ['vhit' as const] : []),
+    ]
     const studyIds = types.map(() => crypto.randomUUID())
-    const records = types.map((type, index): ExtractionReviewRecord => ({ ...draft, pages: draft.pages.map((page) => ({ ...page, text: '', lines: [] })), fields: draft.fields.filter((field) => field.studyType === type), id: jobId, documentId, studyIds, status: 'review', sourceFilename, mimeType, documentUrl: '', sectionStudyId: studyIds[index], sectionPageNumbers: draft.pages.filter((page) => type === 'posturography' ? page.classification === 'posturography' : page.classification !== 'posturography').map((page) => page.pageNumber), professionalConclusion: '', rehabilitationSuggestion: '' }))
+    const records = types.map((type, index): ExtractionReviewRecord => ({ ...draft, pages: draft.pages.map((page) => ({ ...page, text: '', lines: [] })), fields: draft.fields.filter((field) => field.studyType === type), id: jobId, documentId, studyIds, status: 'review', sourceFilename, mimeType, documentUrl: '', sectionStudyId: studyIds[index], sectionPageNumbers: draft.pages.filter((page) => type === 'posturography' ? page.classification === 'posturography' : page.classification !== 'posturography').map((page) => page.pageNumber), professionalConclusion: '', rehabilitationSuggestion: '', cyclePhase }))
     writeDemo([...readDemo(), ...records])
     return { jobId, studyIds }
   }
   const { data, error } = await supabase.rpc('create_document_extraction_draft', { target_document_id: documentId, extraction_payload: extractionPayload(draft), study_date: documentDate, target_treatment_cycle_id: treatmentCycleId || null })
   if (error) throw error
   const result = data as { job_id: string; study_ids: string[] }
+  if (result.study_ids.length) {
+    const { error: phaseError } = await supabase.from('clinical_studies').update({ cycle_phase: cyclePhase }).in('id', result.study_ids)
+    if (phaseError) throw phaseError
+  }
   return { jobId: result.job_id, studyIds: result.study_ids }
 }
 
@@ -67,11 +78,11 @@ export async function getExtractionForStudy(studyId: string): Promise<Extraction
     supabase.from('study_extraction_sections').select('study_id').eq('job_id', section.job_id),
   ])
   if (jobError || pagesError || fieldsError || sectionsError) throw jobError ?? pagesError ?? fieldsError ?? sectionsError
-  const { data: source, error: sourceError } = await supabase.from('source_documents').select('original_filename,mime_type,storage_path').eq('id', job.source_document_id).single()
+  const { data: source, error: sourceError } = await supabase.from('source_documents').select('original_filename,mime_type,storage_path,cycle_phase').eq('id', job.source_document_id).single()
   if (sourceError) throw sourceError
   const { data: signed, error: signedError } = await supabase.storage.from('clinical-documents').createSignedUrl(source.storage_path, 900)
   if (signedError) throw signedError
-  return { id: job.id, documentId: job.source_document_id, studyIds: (sections ?? []).map((item) => String(item.study_id)), status: job.status, intakeKind: job.intake_kind, extractorVersion: job.extractor_version, patientMatchStatus: job.patient_match_status as PatientMatchStatus, mismatchFields: job.mismatch_field_codes ?? [], pages: (pages ?? []).map((row) => fromPage(row as Record<string, unknown>)), fields: (fields ?? []).map((row) => fromField(row as Record<string, unknown>)), sourceFilename: source.original_filename, mimeType: source.mime_type, documentUrl: signed.signedUrl, sectionStudyId: studyId, sectionPageNumbers: section.page_numbers, professionalConclusion: String(job.professional_conclusion ?? ''), rehabilitationSuggestion: String(job.rehabilitation_suggestion ?? '') }
+  return { id: job.id, documentId: job.source_document_id, studyIds: (sections ?? []).map((item) => String(item.study_id)), status: job.status, intakeKind: job.intake_kind, extractorVersion: job.extractor_version, patientMatchStatus: job.patient_match_status as PatientMatchStatus, mismatchFields: job.mismatch_field_codes ?? [], pages: (pages ?? []).map((row) => fromPage(row as Record<string, unknown>)), fields: (fields ?? []).map((row) => fromField(row as Record<string, unknown>)), sourceFilename: source.original_filename, mimeType: source.mime_type, documentUrl: signed.signedUrl, sectionStudyId: studyId, sectionPageNumbers: section.page_numbers, professionalConclusion: String(job.professional_conclusion ?? ''), rehabilitationSuggestion: String(job.rehabilitation_suggestion ?? ''), cyclePhase: String(source.cycle_phase ?? 'unspecified') as CycleStudyPhase }
 }
 
 function updateDemo(jobId: string, updater: (record: ExtractionReviewRecord) => ExtractionReviewRecord) {

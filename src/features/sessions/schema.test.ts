@@ -16,6 +16,12 @@ const cognitive = (overrides: Partial<ExerciseConfig> = {}): ExerciseConfig => (
 const immersive = (overrides: Partial<ExerciseConfig> = {}): ExerciseConfig => ({ ...applyExercisePurpose(defaultExerciseConfig, 'immersive_context'), ...overrides })
 
 describe('validación de sesión',()=>{
+  it('acepta una sesión presencial libre sin ejercicios y rechaza su uso domiciliario', () => {
+    const freeSession = { ...session([], 'in_person'), kind: 'free_note' as const }
+    expect(validateSession(freeSession)).toEqual({})
+    expect(validateSession({ ...freeSession, mode: 'home' }).kind).toContain('presencial')
+  })
+
   it.each([
     ['pantalla 2D por tiempo', config()],
     ['pantalla 2D por repeticiones', config({ doseMode: 'repetitions', advanceMode: 'manual' })],

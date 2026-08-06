@@ -1,4 +1,5 @@
 import type { QualityStatus, SuggestionStatus } from '../../types/domain'
+import type { CycleStudyPhase } from '../documents/types'
 
 export type StudyType = 'posturography' | 'vhit'
 export type MetricValueKind = 'numeric' | 'categorical' | 'boolean' | 'text'
@@ -49,6 +50,7 @@ export interface ClinicalStudyReview {
   sourceDocumentId: string
   sourceFilename: string
   studyType: StudyType
+  cyclePhase: CycleStudyPhase
   performedAt: string
   deviceName: string
   softwareVersion: string
@@ -67,6 +69,7 @@ export interface ClinicalStudySummary {
   patientName: string
   sourceFilename: string
   studyType: StudyType
+  cyclePhase: CycleStudyPhase
   performedAt: string
   deviceName: string
   protocolCode: string

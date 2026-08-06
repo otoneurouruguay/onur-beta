@@ -4,8 +4,8 @@ ONUr Beta utiliza OCR local para preparar un borrador de parámetros de posturog
 
 ## Flujo simplificado
 
-1. Abrir **Cargar estudio**, seleccionar el paciente, tipo, fecha y archivo PDF/JPG/JPEG/PNG/WEBP.
-2. El navegador procesa el archivo localmente. Para BAP se amplía la imagen, se prueba contraste y orientación, y se leen tanto rótulos como valores por posición en los gráficos.
+1. Abrir **Cargar estudio**, seleccionar el paciente, tipo, fecha y uno o varios archivos PDF/JPG/JPEG/PNG/WEBP.
+2. Si hay varios archivos, el navegador los reúne en un único PDF privado y conserva los nombres originales en la descripción. Luego procesa todas las páginas localmente. Para BAP se amplía la imagen, se prueba contraste y orientación, y se leen tanto rótulos como valores por posición en los gráficos.
 3. Revisar solamente los **parámetros obtenidos** y corregir los que estén marcados para revisar o faltantes.
 4. Revisar y editar el borrador automático de **conclusión** y **sugerencia de rehabilitación** según la valoración clínica.
 5. Confirmar y generar el informe, o guardar el borrador para continuar luego.
@@ -14,7 +14,7 @@ Las opciones técnicas y el descarte permanecen disponibles dentro de **Opciones
 
 ## BAP y reanálisis
 
-La versión `onur-local-ocr-1.3` usa varias lecturas complementarias: página completa, contraste general y regiones específicas del panel izquierdo, gráficos y pie. En los gráficos realiza dos binarizaciones para recuperar dígitos impresos sobre fondos celestes, verdes, grises o degradados. Los encabezados de condiciones y organización sensorial se usan como anclas; de ese modo, los porcentajes del gráfico circular o los números de los ejes no se confunden con C1-C6.
+La versión `onur-local-ocr-1.5` usa varias lecturas complementarias: página completa, contraste general y regiones específicas del panel izquierdo, gráficos y pie. En los gráficos realiza dos binarizaciones para recuperar dígitos impresos sobre fondos celestes, verdes, grises o degradados. Los encabezados de condiciones y organización sensorial se usan como anclas; de ese modo, los porcentajes del gráfico circular o los números de los ejes no se confunden con C1-C6.
 
 Al abrir un borrador creado con una versión anterior, ONUr vuelve a analizar el original privado en el navegador y conserva las correcciones profesionales que difieran de la lectura anterior. El reprocesamiento queda auditado sin almacenar el contenido clínico en el registro de auditoría.
 
@@ -29,6 +29,33 @@ Para posturografías BAP, ONUr compara los valores mostrados con referencias por
 La aplicación completa los dos textos cuando están vacíos. Si el profesional ya los editó, no los sobrescribe: el botón **Regenerar desde parámetros** solicita confirmación antes de reemplazarlos. La sección **Cómo se generó este borrador** muestra cada comparación, las advertencias por datos faltantes y las fuentes utilizadas.
 
 El motor usa únicamente los valores visibles en la pantalla de revisión. Los valores por debajo de la referencia inferior se describen como reducidos; los indicadores de patrón solo se señalan cuando superan el límite superior consignado. Sin edad válida no clasifica contra la norma. Un indicador afisiológico elevado prioriza el control de calidad y la repetición de condiciones antes de proponer objetivos.
+
+La posturografía se realiza fuera de ONUr. Cada documento se identifica como **inicial**, **final**, **control/seguimiento** o **sin especificar** dentro del ciclo. La inicial puede alimentar el borrador funcional; la final se usa para comparación longitudinal y no genera por sí sola una nueva prescripción.
+
+## Datos mínimos para una lectura interpretable
+
+Estos campos son un control de integridad del informe, no criterios diagnósticos aislados.
+
+### Posturografía
+
+- Identidad temporal: fecha y edad al momento del estudio.
+- Protocolo sensorial: C1-C6 con el puntaje de cada condición.
+- Resultado global: puntaje compuesto.
+- Organización sensorial: índices somatosensorial, visual, vestibular y preferencia visual.
+- Calidad: caídas o condiciones no completadas, patrón afisiológico/inconsistencia y observaciones técnicas.
+- Contexto recomendado: límites de estabilidad (direcciones y score), sway, superficie/calzado, ayudas y síntomas durante la prueba.
+
+### vHIT
+
+- Identidad temporal: fecha y tipo de documento.
+- Protocolo: HIMP/SHIMP, plano y canales realmente evaluados.
+- Resultado principal: ganancia por lado y canal, indicando método o ventana de cálculo cuando el equipo lo informa.
+- Respuesta correctiva: presencia/ausencia, overt/covert y repetibilidad de las sacadas.
+- Comparación: simetría o asimetría informada.
+- Calidad técnica: equipo/software, calibración, artefactos, cantidad y velocidad de impulsos e interpretabilidad.
+- Cierre: conclusión profesional correlacionada con síntomas, examen neurológico/vestibular y otros estudios.
+
+El OCR 1.5 reconoce además el formato narrativo `G. Regresión OD / OI`, la simetría, el número de impulsos y la velocidad cefálica cuando aparecen como texto. Las curvas aisladas siguen requiriendo revisión humana.
 
 ## Corpus y medición de precisión
 
@@ -45,9 +72,9 @@ Ejecutar `npm run ocr:benchmark` para medir el reconocimiento real con Tesseract
 - El paciente no participa de la carga ni recibe acceso al original durante la revisión.
 - Los documentos y valores clínicos no se imprimen en consola ni se usan como fixtures, logs o datos de staging.
 
-## Informes escaneados y OCR 1.4
+## Informes escaneados y OCR 1.5
 
-La version `onur-local-ocr-1.4` agrega una lectura de bloque en la zona inferior de los informes vestibulares escaneados. Esto permite recomponer `En suma` y `Conducta` cuando ocupan varios renglones y descartar fragmentos duplicados de la lectura de pagina completa. Si el tipo de documento no esta escrito literalmente, se propone desde la clasificacion de pagina y queda marcado para revision profesional.
+La versión 1.5 conserva la lectura de bloque de informes vestibulares, agrega formatos estructurados de vHIT y permite analizar un documento compuesto por varios archivos. Esto permite recomponer `En suma` y `Conducta` cuando ocupan varios renglones y descartar fragmentos duplicados de la lectura de página completa. Si el tipo de documento no está escrito literalmente, se propone desde la clasificación de página y queda marcado para revisión profesional.
 
 La regresion usa `vestibular_report_scanned_synthetic.jpg`, una imagen completamente ficticia con perspectiva, resumen multilinea y conducta. Ningun documento real se incorpora al corpus.
 

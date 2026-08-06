@@ -51,6 +51,15 @@ describe('extracción literal revisable', () => {
     expect(fields.find((field) => field.code === 'conclusion')).toMatchObject({ rawValue: '', required: true, status: 'unrecognized' })
   })
 
+  it('reconoce el formato clínico G. Regresión OD/OI usado en los informes locales', () => {
+    const fields = extractFields([page('vHIT HIMP: CULL: Curvas normales. Simetría: 3% G. Regresión OD: 0,97 OI: 1,02\nSacadas correctivas: ausentes\nImpulse Nr: 22 / 21', 'vhit_graph', .9)], 'vestibular_and_reports')
+    expect(fields.find((field) => field.code === 'gain_right')).toMatchObject({ rawValue: '0,97', normalizedValue: '0.97', required: true })
+    expect(fields.find((field) => field.code === 'gain_left')).toMatchObject({ rawValue: '1,02', normalizedValue: '1.02', required: true })
+    expect(fields.find((field) => field.code === 'symmetry')?.rawValue).toContain('3%')
+    expect(fields.find((field) => field.code === 'impulse_counts')?.rawValue).toContain('22 / 21')
+    expect(fields.find((field) => field.code === 'saccades')).toMatchObject({ rawValue: 'ausentes', required: true })
+  })
+
   it('recompone En suma y Conducta multilinea y propone el tipo documental sin inventar contenido', () => {
     const reportPage: ExtractedPage = {
       ...page('Informe vestibular sintetico\nFecha del estudio: 17/07/2026\nEn suma\nConducta', 'vestibular_report', .92),

@@ -1,4 +1,5 @@
 import type { ExtractedField } from './types'
+import type { CycleStudyPhase } from '../documents/types'
 import { BAP_AUTOMATIC_REPORT_SOURCES, bapReferenceForAge } from './bapReferenceData'
 
 export interface BapAutomaticReportDraft {
@@ -57,7 +58,7 @@ function comparison(label: string, observed: number, reference: number, relation
   return `${label}: ${percent(observed)} (${relation === 'below' ? 'referencia mínima' : 'límite superior'} ${percent(reference)})`
 }
 
-export function buildBapAutomaticReport(fields: ExtractedField[]): BapAutomaticReportDraft | null {
+export function buildBapAutomaticReport(fields: ExtractedField[], cyclePhase: CycleStudyPhase = 'unspecified'): BapAutomaticReportDraft | null {
   if (!fields.some((field) => field.studyType === 'posturography')) return null
   const values = readValues(fields)
   const populatedConditions = values.conditions.filter((value) => value !== null).length
@@ -139,7 +140,10 @@ export function buildBapAutomaticReport(fields: ExtractedField[]): BapAutomaticR
   conclusion.push('Este borrador describe el perfil funcional y no establece un diagnóstico; debe correlacionarse con anamnesis, examen neurológico y vestibular, marcha, Romberg y estudios asociados.')
 
   const rehabilitation: string[] = ['Borrador para revisión profesional.']
-  if (!reference) {
+  if (cyclePhase === 'final') {
+    rehabilitation.push('Esta posturografía está registrada como evaluación final. Comparar con la inicial del mismo ciclo, la evolución sintomática, la función y los objetivos antes de decidir alta, continuidad o un nuevo plan.')
+    rehabilitation.push('No se genera una nueva prescripción automática a partir del estudio final aislado.')
+  } else if (!reference) {
     rehabilitation.push('Verificar la edad y completar la comparación normativa antes de definir objetivos específicos desde esta posturografía.')
   } else if (hasAphysiologicalFinding) {
     rehabilitation.push('Priorizar el control de calidad del estudio y repetir las condiciones incongruentes antes de orientar la rehabilitación con estos resultados.')

@@ -1,7 +1,7 @@
 {
   "name": "onur-beta",
   "private": true,
-  "version": "0.1.0-beta.50",
+  "version": "0.1.0-beta.51",
   "type": "module",
   "scripts": {
     "prepare:ocr": "node scripts/sync_ocr_assets.mjs",
@@ -33,6 +33,7 @@
     "@tesseract.js-data/eng": "^1.0.0",
     "@tesseract.js-data/spa": "^1.0.0",
     "lucide-react": "^1.24.0",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.1.200",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

@@ -1,15 +1,53 @@
-import { CheckCircle2, ChevronLeft, ChevronRight, Clock3, Copy, Expand, Glasses, Pause, Play, RefreshCw, Volume2, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, Clock3, Copy, Expand, FilePenLine, Glasses, Pause, Play, RefreshCw, Volume2, XCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { statusLabel } from '../components/statusLabels'
 import { usePatient } from '../features/patients/hooks'
-import { useCompleteSupervisedInPersonSession, useCreateQuestSessionPairing, useQuestSessionPairing, useQuestSessionPairingForAssignment, useRevokeQuestSessionPairing, useSessionAssignments, useStartSupervisedInPersonSession } from '../features/sessions/hooks'
+import { useCompleteSupervisedInPersonSession, useCreateQuestSessionPairing, useQuestSessionPairing, useQuestSessionPairingForAssignment, useRecordFreeInPersonSession, useRevokeQuestSessionPairing, useSessionAssignments, useStartSupervisedInPersonSession } from '../features/sessions/hooks'
 import { ScaleQuestion } from '../features/sessions/ScaleQuestion'
-import { sessionDurationLabel, type SessionEventLogEntry } from '../features/sessions/repository'
+import { sessionDurationLabel, type SessionAssignmentRecord, type SessionEventLogEntry } from '../features/sessions/repository'
 import { SessionRunner } from '../features/sessions/SessionRunner'
 import { isQuestClinicAssignment } from '../features/sessions/questRepository'
 
 type RunnerResult = { activeSeconds: number; skippedExercises: number; eventLog: SessionEventLogEntry[] }
+
+function FreeInPersonSessionRecorder({ patientId, patientName, assignment }: { patientId: string; patientName: string; assignment: SessionAssignmentRecord }) {
+  const record = useRecordFreeInPersonSession(patientId)
+  const [outcome, setOutcome] = useState<'completed' | 'cancelled'>('completed')
+  const [professionalNote, setProfessionalNote] = useState('')
+  const [patientComment, setPatientComment] = useState('')
+  const [finished, setFinished] = useState(false)
+  const [error, setError] = useState('')
+
+  if (finished) return <div className="mx-auto max-w-3xl space-y-6"><article className="rounded-2xl border border-[#E8CE99] bg-white p-8 text-center"><CheckCircle2 className="mx-auto text-[#E49A02]" size={52}/><h1 className="mt-5 text-2xl font-black text-[#171717]">{outcome === 'cancelled' ? 'Cancelación registrada' : 'Sesión libre registrada'}</h1><p className="mt-3 text-sm leading-6 text-[#747474]">La nota quedó asociada al ciclo y disponible en el historial clínico del paciente.</p><Link to={`/app/pacientes/${patientId}`} className="mt-7 inline-flex rounded-2xl bg-[#E49A02] px-5 py-3 text-sm font-black text-white">Volver al perfil</Link></article></div>
+
+  if (!['assigned', 'started'].includes(assignment.status)) return <section className="rounded-2xl border border-[#E9E7E7] bg-white p-7"><h1 className="text-xl font-black text-[#171717]">La sesión ya no está pendiente</h1><p className="mt-3 text-sm leading-6 text-[#747474]">Su estado actual es {statusLabel(assignment.status).toLocaleLowerCase('es')}. El detalle se conserva en el perfil del paciente.</p><Link to={`/app/pacientes/${patientId}`} className="mt-6 inline-flex items-center gap-2 text-sm font-black text-[#E49A02]"><ChevronLeft size={17}/> Volver al perfil</Link></section>
+
+  const save = async () => {
+    if (professionalNote.trim().length < 3) { setError(outcome === 'cancelled' ? 'Escribí el motivo o contexto de la cancelación.' : 'Describí lo realizado durante la sesión.'); return }
+    try {
+      setError('')
+      await record.mutateAsync({ assignment, outcome, professionalNote, patientComment })
+      setFinished(true)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No fue posible guardar el registro de la sesión.')
+    }
+  }
+
+  return <div className="mx-auto max-w-3xl space-y-6">
+    <Link to={`/app/pacientes/${patientId}`} className="inline-flex items-center gap-2 text-xs font-black text-[#E49A02]"><ChevronLeft size={16}/> Volver al perfil de {patientName}</Link>
+    <article className="overflow-hidden rounded-2xl border border-[#E9E7E7] bg-white shadow-[0_20px_48px_rgba(18,50,56,0.08)]">
+      <div className="bg-[#171717] p-6 text-white sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.15em] text-[#E49A02]">{assignment.title}</p><h1 className="mt-3 text-2xl font-black">Registro presencial libre</h1><p className="mt-2 text-sm text-white/65">Paciente: {patientName}</p></div><FilePenLine className="shrink-0 text-[#E49A02]" size={30}/></div>{assignment.instructions && <p className="mt-5 rounded-2xl bg-white/[0.07] p-4 text-xs leading-5 text-white/70">{assignment.instructions}</p>}</div>
+      <div className="space-y-5 p-6 sm:p-8">
+        <fieldset><legend className="text-sm font-black text-[#2F2F2F]">Resultado de la consulta</legend><div className="mt-3 grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => setOutcome('completed')} className={`rounded-2xl border p-4 text-left ${outcome === 'completed' ? 'border-[#E49A02] bg-[#FFF7E8]' : 'border-[#E9E7E7]'}`}><strong className="text-sm text-[#171717]">Realizada</strong><span className="mt-1 block text-xs text-[#747474]">Registrar trabajo físico, maniobras, educación u otra intervención.</span></button><button type="button" onClick={() => setOutcome('cancelled')} className={`rounded-2xl border p-4 text-left ${outcome === 'cancelled' ? 'border-[#E49A02] bg-[#FFF7E8]' : 'border-[#E9E7E7]'}`}><strong className="text-sm text-[#171717]">Cancelada</strong><span className="mt-1 block text-xs text-[#747474]">Conservar que no se realizó y el motivo o contexto correspondiente.</span></button></div></fieldset>
+        <label className="block text-sm font-black text-[#2F2F2F]">{outcome === 'cancelled' ? 'Motivo o registro de cancelación *' : 'Qué se hizo en la sesión *'}<textarea autoFocus maxLength={4000} rows={8} value={professionalNote} onChange={(event) => setProfessionalNote(event.target.value)} className="mt-3 w-full resize-y rounded-2xl border border-[#E9E7E7] p-4 text-base font-normal leading-6" placeholder={outcome === 'cancelled' ? 'Ej.: paciente avisó que no concurriría; se coordinó nueva fecha…' : 'Describí el trabajo realizado, respuesta observada, progresiones, precauciones y próximos pasos.'}/><span className="mt-2 block text-right text-[11px] font-bold text-[#747474]">{professionalNote.length}/4000</span></label>
+        <label className="block text-sm font-black text-[#2F2F2F]">Comentario del paciente <span className="font-normal text-[#747474]">(opcional)</span><textarea maxLength={500} rows={3} value={patientComment} onChange={(event) => setPatientComment(event.target.value)} className="mt-3 w-full resize-none rounded-2xl border border-[#E9E7E7] p-4 text-base font-normal" placeholder="Transcribí lo declarado por el paciente si aporta al registro."/><span className="mt-2 block text-right text-[11px] font-bold text-[#747474]">{patientComment.length}/500</span></label>
+        {error && <p role="alert" className="rounded-2xl bg-[#fceced] p-4 text-sm font-bold text-[#a94952]">{error}</p>}
+        <button type="button" disabled={record.isPending} onClick={() => void save()} className="flex h-14 w-full items-center justify-center rounded-2xl bg-[#E49A02] text-sm font-black text-white disabled:opacity-60">{record.isPending ? 'Guardando…' : outcome === 'cancelled' ? 'Registrar cancelación' : 'Guardar sesión en el historial'}</button>
+      </div>
+    </article>
+  </div>
+}
 
 export function InPersonSessionPage() {
   const { patientId = '', assignmentId = '' } = useParams()
@@ -99,6 +137,8 @@ export function InPersonSessionPage() {
       setError('No fue posible iniciar la sesión presencial. Verificá los permisos y volvé a intentar.')
     }
   }
+
+  if (assignment.kind === 'free_note') return <FreeInPersonSessionRecorder patientId={patient.id} patientName={patient.fullName} assignment={assignment}/>
 
   const prepareQuest = async () => {
     if (!assignment || initialDiscomfort === null) {

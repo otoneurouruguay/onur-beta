@@ -2,7 +2,7 @@ import { parseLocaleNumber } from '../studies/normalization'
 import { posturographyFieldDefinitions, vestibularFieldDefinitions } from './catalog'
 import type { ExtractedField, ExtractedPage, ExtractionFieldDefinition, IntakeKind, PageClassification, PatientMatchStatus, SourceRegion } from './types'
 
-export const EXTRACTOR_VERSION = 'onur-local-ocr-1.4'
+export const EXTRACTOR_VERSION = 'onur-local-ocr-1.5'
 
 function fold(value: string) {
   return value.toLocaleLowerCase('es-UY').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -45,7 +45,7 @@ const compactValueCodes = new Set([
   'study_date', 'study_time', 'duration', 'reported_age', 'los_forward', 'los_backward', 'los_left', 'los_right',
   'los_area', 'sway_per_second_x', 'sway_per_second_y', 'sway_per_minute_x', 'sway_per_minute_y', 'afis_pattern', 'los_score', 'mix_ve_som', 'mix_ve_vi', 'pppd_index',
   'composite_score', 'sensory_somatosensory', 'sensory_visual', 'sensory_vestibular',
-  'visual_preference', 'gain_right', 'gain_left', 'symmetry', 'saccadic_velocity',
+  'visual_preference', 'gain_right', 'gain_left', 'symmetry', 'saccadic_velocity', 'impulse_counts', 'head_velocity',
 ])
 
 function compactCandidate(definition: ExtractionFieldDefinition, value: string) {
@@ -153,6 +153,27 @@ function inferredDocumentType(definition: ExtractionFieldDefinition, page: Extra
   }
   const value = labels[page.classification]
   return value ? { value, confidence: Math.min(.79, page.classificationConfidence), region: null } : null
+}
+
+function structuredVhitValue(definition: ExtractionFieldDefinition, page: ExtractedPage): LocatedValue | null {
+  if (!['vestibular_report', 'vhit_graph'].includes(page.classification)) return null
+  const source = fold(page.text).replace(/\s+/g, ' ')
+  const numeric = '[0-2](?:[.,][0-9]{1,3})?'
+  const patterns: Partial<Record<string, RegExp>> = {
+    gain_right: new RegExp(`(?:ganancia|gain|regresion)\\s*(?:derecha|right|od)\\s*[:=]?\\s*(${numeric})`, 'i'),
+    gain_left: new RegExp(`(?:ganancia|gain|regresion)?\\s*(?:izquierda|left|oi)\\s*[:=]\\s*(${numeric})`, 'i'),
+    symmetry: /(?:simetria|asimetria)\s*[:=]?\s*([0-9]+(?:[.,][0-9]+)?\s*%?(?:\s*[a-z]{1,12})?)/i,
+    impulse_counts: /(?:impulse\s*(?:nr|number)|numero\s+de\s+impulsos|cantidad\s+de\s+impulsos)\s*[:=]?\s*([0-9]+(?:\s*[/|-]\s*[0-9]+|\s+[0-9]+)?)/i,
+    head_velocity: /(?:head\s+velocity|velocidad\s+(?:cefalica|de\s+cabeza))\s*[:=]?\s*([^.;]{1,45})/i,
+  }
+  const match = patterns[definition.code]?.exec(source)
+  if (match?.[1]) return { value: match[1].trim(), confidence: Math.min(.84, Math.max(.7, page.classificationConfidence)), region: null }
+  if (definition.code === 'gain_method') {
+    if (/regresion/.test(source)) return { value: 'Regresión', confidence: .76, region: null }
+    const windows = [...source.matchAll(/\b(?:40|60|80)\s*ms\b/g)].map((item) => item[0])
+    if (windows.length) return { value: [...new Set(windows)].join(' · '), confidence: .72, region: null }
+  }
+  return null
 }
 
 function numericFragments(page: ExtractedPage) {
@@ -284,6 +305,8 @@ function findDefinitionValue(definition: ExtractionFieldDefinition, page: Extrac
     const positional = positionalBapValue(definition, page)
     if (positional) return positional
   }
+  const vhit = structuredVhitValue(definition, page)
+  if (vhit) return vhit
   const block = multilineValue(definition, page)
   if (block) return block
   for (const line of page.lines) {

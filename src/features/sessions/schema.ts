@@ -14,6 +14,7 @@ export const cycleFormSchema = z.object({
 export type CycleFormValues = z.infer<typeof cycleFormSchema>
 
 export interface SessionFormValues {
+  kind?: 'exercise' | 'free_note'
   title: string
   instructions: string
   mode: 'home' | 'in_person'
@@ -30,6 +31,10 @@ export function validateSession(values: SessionFormValues) {
   if (!values.treatmentCycleId) errors.treatmentCycleId = 'Seleccioná un ciclo activo.'
   if (!values.availableFrom) errors.availableFrom = 'Elegí desde cuándo estará disponible.'
   if (values.availableUntil && values.availableUntil < values.availableFrom) errors.availableUntil = 'La fecha final no puede ser anterior.'
+  if (values.kind === 'free_note') {
+    if (values.mode !== 'in_person') errors.kind = 'La sesión libre debe ser presencial.'
+    return errors
+  }
   if (values.exercises.length === 0) setExerciseError('Agregá al menos un ejercicio.')
   if (values.exercises.some((exercise) => !exercise.name.trim())) setExerciseError('Todos los ejercicios necesitan un nombre.')
   if (values.exercises.some((exercise) => !exercise.patientInstruction.trim())) setExerciseError('Todos los ejercicios necesitan una instrucción breve para el paciente.')

@@ -8,7 +8,7 @@ export type CycleStatus = 'active' | 'paused' | 'completed'
 export type AssignmentStatus = 'assigned' | 'started' | 'completed' | 'partial' | 'interrupted' | 'omitted' | 'revoked'
 
 export interface SessionEventLogEntry {
-  type: 'exercise_completed' | 'exercise_partial' | 'exercise_skipped' | 'vr_box_put_on' | 'vr_box_take_off' | 'interrupted' | 'finished'
+  type: 'exercise_completed' | 'exercise_partial' | 'exercise_skipped' | 'vr_box_put_on' | 'vr_box_take_off' | 'interrupted' | 'finished' | 'free_session_recorded' | 'free_session_cancelled'
   at: string
   exercise_index?: number
   round?: number
@@ -57,7 +57,7 @@ export interface TreatmentCycleRecord {
 export interface SessionAssignmentRecord {
   id: string; patientId: string; treatmentCycleId: string; sessionPlanId: string
   patientName: string
-  title: string; instructions: string; mode: 'home' | 'in_person'; exercises: ExerciseConfig[]
+  title: string; instructions: string; kind?: 'exercise' | 'free_note'; mode: 'home' | 'in_person'; exercises: ExerciseConfig[]
   availableFrom: string; availableUntil: string; status: AssignmentStatus; createdAt: string
   activeSeconds: number; completedAt: string
   initialDiscomfort: number | null; finalDiscomfort: number | null
@@ -99,6 +99,13 @@ export interface SupervisedSessionCompletionInput {
   eventLog?: SessionEventLogEntry[]
 }
 
+export interface FreeInPersonSessionInput {
+  assignment: Pick<SessionAssignmentRecord, 'id' | 'patientId'>
+  outcome: 'completed' | 'cancelled'
+  professionalNote: string
+  patientComment: string
+}
+
 const CYCLES_KEY = 'onur-demo-cycles-v1'
 const ASSIGNMENTS_KEY = 'onur-demo-assignments-v1'
 const demoSmoothConfig: ExerciseConfig = {...defaultExerciseConfig,name:'Seguimiento ocular suave',purpose:'smooth_pursuit',patientInstruction:'Mantené la cabeza quieta y seguí el blanco únicamente con los ojos.',objectMode:'tracking'}
@@ -120,7 +127,7 @@ const demoAssignments: SessionAssignmentRecord[] = [
 
 function read<T>(key:string, seed:T[]):T[]{const raw=localStorage.getItem(key);if(!raw)return seed;try{return JSON.parse(raw) as T[]}catch{return seed}}
 function write<T>(key:string,values:T[]){localStorage.setItem(key,JSON.stringify(values))}
-function readAssignments(){return read(ASSIGNMENTS_KEY,demoAssignments).map(assignment=>({...assignment,exercises:assignment.exercises.map(exercise=>normalizeExerciseConfig(exercise,0))}))}
+function readAssignments(){return read(ASSIGNMENTS_KEY,demoAssignments).map(assignment=>({...assignment,kind:assignment.kind??'exercise',exercises:(assignment.exercises??[]).map(exercise=>normalizeExerciseConfig(exercise,0))}))}
 
 function cycleFromRow(row:Record<string,unknown>):TreatmentCycleRecord{return{id:String(row.id),patientId:String(row.patient_id),label:String(row.label),reason:String(row.reason??''),objectives:String(row.objectives??''),status:row.status as CycleStatus,startedOn:String(row.started_on),endedOn:String(row.ended_on??'')}}
 
@@ -129,8 +136,8 @@ function assignmentFromRow(row:Record<string,unknown>):SessionAssignmentRecord {
   const patient=(row.patients??{}) as Record<string,unknown>
   const executions=(row.session_executions??[]) as Record<string,unknown>[]
   const execution=[...executions].sort((a,b)=>String(b.created_at??b.started_at??'').localeCompare(String(a.created_at??a.started_at??'')))[0]
-  const definition=(plan.plan_definition??{}) as {mode?:'home'|'in_person';exercises?:ExerciseConfig[]}
-  return {id:String(row.id),patientId:String(row.patient_id),patientName:String(patient.full_name??''),treatmentCycleId:String(row.treatment_cycle_id??''),sessionPlanId:String(row.session_plan_id),title:String(plan.title??'Sesión'),instructions:String(plan.instructions??''),mode:definition.mode??'home',exercises:(definition.exercises??[]).map(exercise=>normalizeExerciseConfig(exercise,0)),availableFrom:String(row.available_from),availableUntil:String(row.available_until??''),status:row.status as AssignmentStatus,createdAt:String(row.created_at),activeSeconds:Number(execution?.active_seconds??0),completedAt:String(execution?.finished_at??''),initialDiscomfort:execution?.initial_discomfort==null?null:Number(execution.initial_discomfort),finalDiscomfort:execution?.final_discomfort==null?null:Number(execution.final_discomfort),perceivedDifficulty:execution?.perceived_difficulty==null?null:Number(execution.perceived_difficulty),patientComment:String(execution?.patient_comment??''),professionalObservation:String(execution?.professional_observation??''),supervised:Boolean(execution?.supervised),operatedBy:String(execution?.operated_by??''),eventLog:Array.isArray(execution?.event_log)?execution.event_log as SessionEventLogEntry[]:[],revokedAt:String(row.revoked_at??''),revokedBy:String(row.revoked_by??''),revokedReason:String(row.revoked_reason??'')}
+  const definition=(plan.plan_definition??{}) as {kind?:'exercise'|'free_note';mode?:'home'|'in_person';exercises?:ExerciseConfig[]}
+  return {id:String(row.id),patientId:String(row.patient_id),patientName:String(patient.full_name??''),treatmentCycleId:String(row.treatment_cycle_id??''),sessionPlanId:String(row.session_plan_id),title:String(plan.title??'Sesión'),instructions:String(plan.instructions??''),kind:definition.kind??'exercise',mode:definition.mode??'home',exercises:(definition.exercises??[]).map(exercise=>normalizeExerciseConfig(exercise,0)),availableFrom:String(row.available_from),availableUntil:String(row.available_until??''),status:row.status as AssignmentStatus,createdAt:String(row.created_at),activeSeconds:Number(execution?.active_seconds??0),completedAt:String(execution?.finished_at??''),initialDiscomfort:execution?.initial_discomfort==null?null:Number(execution.initial_discomfort),finalDiscomfort:execution?.final_discomfort==null?null:Number(execution.final_discomfort),perceivedDifficulty:execution?.perceived_difficulty==null?null:Number(execution.perceived_difficulty),patientComment:String(execution?.patient_comment??''),professionalObservation:String(execution?.professional_observation??''),supervised:Boolean(execution?.supervised),operatedBy:String(execution?.operated_by??''),eventLog:Array.isArray(execution?.event_log)?execution.event_log as SessionEventLogEntry[]:[],revokedAt:String(row.revoked_at??''),revokedBy:String(row.revoked_by??''),revokedReason:String(row.revoked_reason??'')}
 }
 
 export async function listTreatmentCycles(patientId:string):Promise<TreatmentCycleRecord[]> {
@@ -150,9 +157,9 @@ export async function listSessionAssignments(patientId:string):Promise<SessionAs
 }
 
 export async function createSessionAssignment(patientId:string,values:SessionFormValues):Promise<SessionAssignmentRecord>{
-  if(!isSupabaseConfigured||!supabase){const patient=await getPatient(patientId);const record:SessionAssignmentRecord={id:crypto.randomUUID(),patientId,patientName:patient?.fullName??'Paciente',treatmentCycleId:values.treatmentCycleId,sessionPlanId:crypto.randomUUID(),title:values.title.trim(),instructions:values.instructions.trim(),mode:values.mode,exercises:values.exercises,availableFrom:new Date(`${values.availableFrom}T00:00:00`).toISOString(),availableUntil:values.availableUntil?new Date(`${values.availableUntil}T23:59:59`).toISOString():'',status:'assigned',createdAt:new Date().toISOString(),activeSeconds:0,completedAt:'',initialDiscomfort:null,finalDiscomfort:null,perceivedDifficulty:null,patientComment:''};write(ASSIGNMENTS_KEY,[...readAssignments(),record]);return record}
+  if(!isSupabaseConfigured||!supabase){const patient=await getPatient(patientId);const record:SessionAssignmentRecord={id:crypto.randomUUID(),patientId,patientName:patient?.fullName??'Paciente',treatmentCycleId:values.treatmentCycleId,sessionPlanId:crypto.randomUUID(),title:values.title.trim(),instructions:values.instructions.trim(),kind:values.kind??'exercise',mode:values.mode,exercises:values.exercises,availableFrom:new Date(`${values.availableFrom}T00:00:00`).toISOString(),availableUntil:values.availableUntil?new Date(`${values.availableUntil}T23:59:59`).toISOString():'',status:'assigned',createdAt:new Date().toISOString(),activeSeconds:0,completedAt:'',initialDiscomfort:null,finalDiscomfort:null,perceivedDifficulty:null,patientComment:''};write(ASSIGNMENTS_KEY,[...readAssignments(),record]);return record}
   const {data:auth,error:authError}=await supabase.auth.getUser();if(authError||!auth.user)throw authError??new Error('Sesión profesional no disponible.')
-  const {data:plan,error:planError}=await supabase.from('session_plans').insert({professional_id:auth.user.id,title:values.title.trim(),instructions:values.instructions.trim()||null,plan_definition:{mode:values.mode,exercises:values.exercises}}).select().single();if(planError)throw planError
+  const {data:plan,error:planError}=await supabase.from('session_plans').insert({professional_id:auth.user.id,title:values.title.trim(),instructions:values.instructions.trim()||null,plan_definition:{kind:values.kind??'exercise',mode:values.mode,exercises:values.exercises}}).select().single();if(planError)throw planError
   const {data,error}=await supabase.from('session_assignments').insert({patient_id:patientId,treatment_cycle_id:values.treatmentCycleId,session_plan_id:plan.id,available_from:new Date(`${values.availableFrom}T00:00:00`).toISOString(),available_until:values.availableUntil?new Date(`${values.availableUntil}T23:59:59`).toISOString():null,max_completions:1,status:'assigned',assigned_by:auth.user.id}).select('*, session_plans(title, instructions, plan_definition)').single()
   if(error){await supabase.from('session_plans').delete().eq('id',plan.id);throw error}return assignmentFromRow(data)
 }
@@ -172,7 +179,7 @@ export async function updateSessionAssignment(assignment:SessionAssignmentRecord
     const current=all.find(item=>item.id===assignment.id&&item.patientId===assignment.patientId)
     if(!current)throw new Error('Sesión no encontrada.')
     if(!canManageSessionAssignment(current))throw new Error('La sesión ya tiene actividad registrada y su historial no puede modificarse.')
-    const updated:SessionAssignmentRecord={...current,treatmentCycleId:values.treatmentCycleId,title:values.title.trim(),instructions:values.instructions.trim(),mode:values.mode,exercises:values.exercises,availableFrom:new Date(`${values.availableFrom}T00:00:00`).toISOString(),availableUntil:values.availableUntil?new Date(`${values.availableUntil}T23:59:59`).toISOString():''}
+    const updated:SessionAssignmentRecord={...current,treatmentCycleId:values.treatmentCycleId,title:values.title.trim(),instructions:values.instructions.trim(),kind:values.kind??'exercise',mode:values.mode,exercises:values.exercises,availableFrom:new Date(`${values.availableFrom}T00:00:00`).toISOString(),availableUntil:values.availableUntil?new Date(`${values.availableUntil}T23:59:59`).toISOString():''}
     write(ASSIGNMENTS_KEY,all.map(item=>item.id===updated.id?updated:item))
     return updated
   }
@@ -182,12 +189,12 @@ export async function updateSessionAssignment(assignment:SessionAssignmentRecord
   const {data:updatedAssignment,error:assignmentError}=await supabase.from('session_assignments').update({treatment_cycle_id:values.treatmentCycleId,available_from:new Date(`${values.availableFrom}T00:00:00`).toISOString(),available_until:values.availableUntil?new Date(`${values.availableUntil}T23:59:59`).toISOString():null}).eq('id',assignment.id).eq('status','assigned').select('id').maybeSingle()
   if(assignmentError)throw assignmentError
   if(!updatedAssignment)throw new Error('La sesión comenzó mientras se estaba editando y no fue modificada.')
-  const {data,error}=await supabase.from('session_plans').update({title:values.title.trim(),instructions:values.instructions.trim()||null,plan_definition:{mode:values.mode,exercises:values.exercises}}).eq('id',current.session_plan_id).select().single()
+  const {data,error}=await supabase.from('session_plans').update({title:values.title.trim(),instructions:values.instructions.trim()||null,plan_definition:{kind:values.kind??'exercise',mode:values.mode,exercises:values.exercises}}).eq('id',current.session_plan_id).select().single()
   if(error){
     await supabase.from('session_assignments').update({treatment_cycle_id:current.treatment_cycle_id,available_from:current.available_from,available_until:current.available_until}).eq('id',assignment.id).eq('status','assigned')
     throw error
   }
-  return {...assignment,treatmentCycleId:values.treatmentCycleId,title:String(data.title),instructions:String(data.instructions??''),mode:values.mode,exercises:values.exercises,availableFrom:new Date(`${values.availableFrom}T00:00:00`).toISOString(),availableUntil:values.availableUntil?new Date(`${values.availableUntil}T23:59:59`).toISOString():''}
+  return {...assignment,treatmentCycleId:values.treatmentCycleId,title:String(data.title),instructions:String(data.instructions??''),kind:values.kind??'exercise',mode:values.mode,exercises:values.exercises,availableFrom:new Date(`${values.availableFrom}T00:00:00`).toISOString(),availableUntil:values.availableUntil?new Date(`${values.availableUntil}T23:59:59`).toISOString():''}
 }
 
 export async function revokeSessionAssignment(assignment:SessionAssignmentRecord,reason:string):Promise<void>{
@@ -264,11 +271,23 @@ export async function completeSupervisedInPersonSession(input:SupervisedSessionC
   const {data,error}=await supabase.rpc('complete_supervised_in_person_session',{target_assignment_id:assignment.id,active_seconds_input:Math.max(0,Math.round(activeSeconds)),skipped_count_input:Math.max(0,skippedExercises),final_discomfort_input:finalDiscomfort,perceived_difficulty_input:perceivedDifficulty,patient_comment_input:patientComment.trim()||null,professional_observation_input:professionalObservation.trim()||null,event_log_input:[...eventLog,{type:'finished',skipped_exercises:skippedExercises,at:new Date().toISOString()}]});if(error)throw error;return String(data)
 }
 
+export async function recordFreeInPersonSession(input:FreeInPersonSessionInput){
+  const professionalNote=input.professionalNote.trim()
+  if(professionalNote.length<3||professionalNote.length>4000)throw new Error('El registro profesional debe tener entre 3 y 4000 caracteres.')
+  if(input.patientComment.trim().length>500)throw new Error('El comentario del paciente no puede superar 500 caracteres.')
+  const finalStatus=input.outcome==='cancelled'?'omitted' as const:'completed' as const
+  const at=new Date().toISOString()
+  const event={type:input.outcome==='cancelled'?'free_session_cancelled' as const:'free_session_recorded' as const,at}
+  if(!isSupabaseConfigured||!supabase){const all=readAssignments();write(ASSIGNMENTS_KEY,all.map(item=>item.id===input.assignment.id?{...item,status:finalStatus,completedAt:at,activeSeconds:0,patientComment:input.patientComment.trim(),professionalObservation:professionalNote,supervised:true,operatedBy:'demo-professional',eventLog:[...(item.eventLog??[]),event]}:item));return input.assignment.id}
+  const{data,error}=await supabase.rpc('record_free_in_person_session',{target_assignment_id:input.assignment.id,outcome_input:input.outcome,professional_note_input:professionalNote,patient_comment_input:input.patientComment.trim()||null});if(error)throw error;return String(data)
+}
+
 export async function duplicateInPersonAssignmentAsHome(assignment:SessionAssignmentRecord){
   if(assignment.mode!=='in_person')throw new Error('Solo se pueden duplicar asignaciones presenciales.')
+  if(assignment.kind==='free_note')throw new Error('Una sesión libre presencial no se duplica como domiciliaria.')
   if(!isSupabaseConfigured||!supabase){const duplicated:SessionAssignmentRecord={...assignment,id:crypto.randomUUID(),sessionPlanId:crypto.randomUUID(),title:`${assignment.title} (domiciliaria)`,mode:'home',availableFrom:new Date().toISOString(),availableUntil:'',status:'assigned',createdAt:new Date().toISOString(),activeSeconds:0,completedAt:'',initialDiscomfort:null,finalDiscomfort:null,perceivedDifficulty:null,patientComment:'',professionalObservation:'',supervised:false,operatedBy:''};write(ASSIGNMENTS_KEY,[duplicated,...readAssignments()]);return duplicated.id}
   const {data,error}=await supabase.rpc('duplicate_in_person_assignment_as_home',{target_assignment_id:assignment.id});if(error)throw error;return String(data)
 }
 
-export function sessionDurationSeconds(session:SessionAssignmentRecord){const phases=session.exercises.flatMap(exercise=>Array.from({length:exercise.rounds},()=>exercise));const exerciseAndRest=phases.reduce((total,exercise,index)=>total+(exercise.doseMode==='time'?exercise.durationSeconds:0)+(index<phases.length-1?exercise.restSeconds:0),0);return exerciseAndRest+analyzeSessionSequence(session.exercises).visorChanges*VR_BOX_TRANSITION_SECONDS}
-export function sessionDurationLabel(session:SessionAssignmentRecord){const timedSeconds=sessionDurationSeconds(session);const hasRepetitions=session.exercises.some(exercise=>exercise.doseMode==='repetitions');if(!hasRepetitions)return`${Math.ceil(timedSeconds/60)} min`;if(timedSeconds===0)return'Tiempo variable';return`~${Math.ceil(timedSeconds/60)} min + rep.`}
+export function sessionDurationSeconds(session:SessionAssignmentRecord){if(session.kind==='free_note')return 0;const phases=session.exercises.flatMap(exercise=>Array.from({length:exercise.rounds},()=>exercise));const exerciseAndRest=phases.reduce((total,exercise,index)=>total+(exercise.doseMode==='time'?exercise.durationSeconds:0)+(index<phases.length-1?exercise.restSeconds:0),0);return exerciseAndRest+analyzeSessionSequence(session.exercises).visorChanges*VR_BOX_TRANSITION_SECONDS}
+export function sessionDurationLabel(session:SessionAssignmentRecord){if(session.kind==='free_note')return'Registro libre';const timedSeconds=sessionDurationSeconds(session);const hasRepetitions=session.exercises.some(exercise=>exercise.doseMode==='repetitions');if(!hasRepetitions)return`${Math.ceil(timedSeconds/60)} min`;if(timedSeconds===0)return'Tiempo variable';return`~${Math.ceil(timedSeconds/60)} min + rep.`}

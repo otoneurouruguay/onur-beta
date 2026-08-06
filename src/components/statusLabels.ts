@@ -11,6 +11,7 @@ const labels: Record<string, string> = {
   completed: 'Completada',
   partial: 'Parcial',
   interrupted: 'Interrumpida',
+  omitted: 'Cancelada',
   accepted: 'Aceptada',
   edited: 'Editada',
   discarded: 'Descartada',
