@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 
 const publicUrl = process.env.ONUR_PUBLIC_URL || 'https://onur-beta-clinica.fedeshin.chatgpt.site/'
@@ -39,6 +39,22 @@ requireCheck(
 )
 requireCheck(/\bclientsClaim\s*\(/.test(serviceWorker), 'El service worker nuevo no toma control de las pestañas abiertas.')
 
+const compiledJavaScript = readdirSync(`${clientPath}/assets`)
+  .filter((filename) => filename.endsWith('.js'))
+  .map((filename) => readFileSync(`${clientPath}/assets/${filename}`, 'utf8'))
+  .join('\n')
+for (const marker of [
+  'Patología o condición clínica',
+  'Borrador recuperado automáticamente',
+  'Estroboscópicos · experimental',
+  'Imágenes rápidas · cognitivo-visual',
+  'Velocidad de seguimiento ocular',
+  'Grave · 220 Hz',
+  'Muy agudo · 1320 Hz',
+]) {
+  requireCheck(compiledJavaScript.includes(marker), `La compilación no contiene el control obligatorio: ${marker}.`)
+}
+
 const manifest = JSON.parse(readFileSync(`${clientPath}/manifest.webmanifest`, 'utf8'))
 const requiredIcons = new Map([
   ['otoneuro-app-192.png', '192x192:any'],
@@ -77,4 +93,19 @@ requireCheck(response.status === 200, `El sitio público respondió HTTP ${respo
 const html = await response.text()
 requireCheck(html.includes('id="root"'), 'La URL pública no entregó la aplicación ONUr.')
 
-console.log('\nChecklist técnico aprobado: acceso, borradores protegidos, caché autoactivable, identidad PWA, pruebas y compilación.')
+const exerciseResponse = await fetch(new URL('/app/ejercicios', publicUrl), {
+  redirect: 'follow',
+  headers: {
+    accept: 'text/html,application/xhtml+xml',
+    'cache-control': 'no-cache',
+  },
+})
+requireCheck(exerciseResponse.status === 200, `La ruta profesional respondió HTTP ${exerciseResponse.status}.`)
+requireCheck(
+  new URL(exerciseResponse.url).origin === new URL(publicUrl).origin,
+  'La ruta profesional redirigió fuera del sitio público.',
+)
+const exerciseHtml = await exerciseResponse.text()
+requireCheck(exerciseHtml.includes('id="root"'), 'La ruta profesional no entregó la aplicación ONUr.')
+
+console.log('\nChecklist técnico aprobado: acceso público y profundo, controles clínicos, borradores protegidos, caché autoactivable, identidad PWA, pruebas y compilación.')

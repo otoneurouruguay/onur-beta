@@ -23,6 +23,7 @@
     "staging:auth-smoke": "node scripts/verify_auth.mjs",
     "staging:smoke": "node scripts/staging_smoke.mjs",
     "release:check": "node scripts/release_check.mjs",
+    "release:verify-published": "node scripts/verify_published_release.mjs",
     "admin:create": "node scripts/create_professional.mjs",
     "github:publish": "bash scripts/publish_github.sh",
     "staging:bootstrap": "bash scripts/bootstrap_staging.sh"
