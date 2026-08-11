@@ -2,13 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { PWA_UPDATE_CHECK_INTERVAL_MS, PWA_UPDATE_POLICY } from './policy'
 import { registerDeferredServiceWorker } from './registerDeferredServiceWorker'
 
-describe('actualización diferida de la PWA', () => {
-  it('mantiene desactivadas las causas de recarga automática', () => {
+describe('actualización de la PWA', () => {
+  it('activa el caché nuevo sin esperar que se cierren todas las pestañas', () => {
     expect(PWA_UPDATE_POLICY).toEqual({
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
       injectRegister: false,
-      skipWaiting: false,
-      clientsClaim: false,
+      skipWaiting: true,
+      clientsClaim: true,
     })
   })
 

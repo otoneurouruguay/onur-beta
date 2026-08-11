@@ -6,9 +6,9 @@ import App from './App.tsx'
 import { AuthProvider } from './features/auth/AuthProvider.tsx'
 import { startDeferredServiceWorkerRegistration } from './pwa/registerDeferredServiceWorker.ts'
 
-// La actualización se descarga en segundo plano y queda en espera. Se activa
-// cuando todas las pestañas de ONUr se cierran, nunca mientras alguien escribe
-// credenciales o completa una sesión clínica.
+// La actualización se busca al cargar y se activa de inmediato para evitar que
+// una pestaña quede vinculada a archivos antiguos. El cambio de controlador no
+// recarga la pantalla; los constructores además conservan sus borradores.
 startDeferredServiceWorkerRegistration()
 
 const queryClient = new QueryClient({

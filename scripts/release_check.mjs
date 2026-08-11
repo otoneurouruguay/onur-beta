@@ -34,12 +34,10 @@ const expectedCacheId = `onur-beta-${packageJson.version}`
 requireCheck(serviceWorker.includes(expectedCacheId), `El caché publicado no coincide con ${packageJson.version}.`)
 const skipWaitingCalls = [...serviceWorker.matchAll(/self\.skipWaiting\s*\(\)/g)]
 requireCheck(
-  skipWaitingCalls.length === 0
-    || (skipWaitingCalls.length === 1
-      && serviceWorker.slice(Math.max(0, skipWaitingCalls[0].index - 160), skipWaitingCalls[0].index).includes('SKIP_WAITING')),
-  'El service worker todavía activa versiones nuevas sin una orden explícita.',
+  skipWaitingCalls.length >= 1,
+  'El service worker no activa inmediatamente el caché nuevo.',
 )
-requireCheck(!/\bclientsClaim\s*\(/.test(serviceWorker), 'El service worker todavía toma control de una pantalla abierta.')
+requireCheck(/\bclientsClaim\s*\(/.test(serviceWorker), 'El service worker nuevo no toma control de las pestañas abiertas.')
 
 const manifest = JSON.parse(readFileSync(`${clientPath}/manifest.webmanifest`, 'utf8'))
 const requiredIcons = new Map([
@@ -79,4 +77,4 @@ requireCheck(response.status === 200, `El sitio público respondió HTTP ${respo
 const html = await response.text()
 requireCheck(html.includes('id="root"'), 'La URL pública no entregó la aplicación ONUr.')
 
-console.log('\nChecklist técnico aprobado: login sin recarga automática, identidad PWA, caché versionado, pruebas, compilación y acceso público.')
+console.log('\nChecklist técnico aprobado: acceso, borradores protegidos, caché autoactivable, identidad PWA, pruebas y compilación.')
