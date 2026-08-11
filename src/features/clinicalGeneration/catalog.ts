@@ -49,6 +49,8 @@ export const clinicalSources: readonly ClinicalSource[] = [
   { id: 'SRC-034', priority: 'treatment_modality', year: 2025, title: 'Virtual reality-based vestibular rehabilitation therapy in patients with acute unilateral vestibulopathy: a randomized controlled trial', url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC11810741/' },
   { id: 'SRC-035', priority: 'treatment_modality', year: 2022, title: 'Effectiveness of conventional versus virtual reality-based vestibular rehabilitation exercises in elderly patients with dizziness: a randomized controlled study with 6-month follow-up', url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC9760985/' },
   { id: 'SRC-036', priority: 'treatment_modality', year: 2023, title: 'Fully Immersive Virtual Reality Using 360° Videos to Manage Well-Being in Older Adults: A Scoping Review', doi: '10.1016/j.jamda.2022.12.026', pmid: '36758621', url: 'https://pubmed.ncbi.nlm.nih.gov/36758621/' },
+  { id: 'SRC-037', priority: 'treatment_modality', year: 2026, title: 'Effect of balance training exercises with stroboscopic glasses on postural control, gait, and physical performance in the elderly population: study protocol for a randomized controlled trial', pmid: '42174703', url: 'https://pubmed.ncbi.nlm.nih.gov/42174703/' },
+  { id: 'SRC-038', priority: 'safety', year: 2025, title: 'Understanding Success Criterion 2.3.2: Three Flashes', url: 'https://www.w3.org/WAI/WCAG21/Understanding/three-flashes' },
 ]
 
 export const clinicalSourceIds = new Set(clinicalSources.map((source) => source.id))

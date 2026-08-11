@@ -233,9 +233,9 @@ function CompatibleExercisePlayer({ config, onExit, onSkip, onComplete, preparat
   useEffect(() => {
     if (!config.metronomeEnabled || inactive) return
     let context: AudioContext | null = null
-    const tick = () => { try { context ??= new AudioContext(); void context.resume(); const oscillator = context.createOscillator(); const gain = context.createGain(); oscillator.frequency.value = 880; gain.gain.setValueAtTime(0.0001, context.currentTime); gain.gain.exponentialRampToValueAtTime(0.16, context.currentTime + 0.005); gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.065); oscillator.connect(gain).connect(context.destination); oscillator.start(); oscillator.stop(context.currentTime + 0.07) } catch { /* El ejercicio continúa si el navegador bloquea audio automático. */ } }
-    tick(); const interval = window.setInterval(tick, 1000 / Math.max(0.2, config.metronomeHz)); return () => { window.clearInterval(interval); if (context) void context.close() }
-  }, [config.metronomeEnabled, config.metronomeHz, inactive])
+    const tick = () => { try { context ??= new AudioContext(); void context.resume(); const oscillator = context.createOscillator(); const gain = context.createGain(); oscillator.frequency.value = config.metronomeToneHz; gain.gain.setValueAtTime(0.0001, context.currentTime); gain.gain.exponentialRampToValueAtTime(0.16, context.currentTime + 0.005); gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.065); oscillator.connect(gain).connect(context.destination); oscillator.start(); oscillator.stop(context.currentTime + 0.07) } catch { /* El ejercicio continúa si el navegador bloquea audio automático. */ } }
+    tick(); const interval = window.setInterval(tick, 1000 / Math.max(0.1, config.metronomeHz)); return () => { window.clearInterval(interval); if (context) void context.close() }
+  }, [config.metronomeEnabled, config.metronomeHz, config.metronomeToneHz, inactive])
 
   useEffect(() => { if (paused || completionOpen) { setControlsVisible(true); return }; const timeout = window.setTimeout(() => setControlsVisible(false), 3000); return () => window.clearTimeout(timeout) }, [paused, completionOpen, activityVersion])
   const showControls = () => { setControlsVisible(true); setActivityVersion((version) => version + 1) }

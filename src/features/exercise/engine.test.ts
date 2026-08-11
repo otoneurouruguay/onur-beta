@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateSaccadePosition, calculateTrackingPosition, clampObjectPosition } from './engine'
+import { calculateSaccadePosition, calculateTrackingPosition, clampObjectPosition, strobeOcclusionAlphaAt } from './engine'
 import { cognitiveInstruction, cognitiveStepAt, cognitiveSymbolAtStep, isCognitiveTargetStep } from './cognitive'
 import { applyExercisePurpose } from './compatibility'
 import { defaultExerciseConfig } from './types'
@@ -36,6 +36,13 @@ describe('motor de posiciones del ejercicio', () => {
   it('mantiene el blanco completo dentro de cada mitad del visor', () => {
     expect(clampObjectPosition({ x: -20, y: 500 }, 320, 180, 90)).toEqual({ x: 47, y: 133 })
     expect(clampObjectPosition({ x: 160, y: 90 }, 320, 180, 90)).toEqual({ x: 160, y: 90 })
+  })
+
+  it('aplica la intermitencia solo durante la fase de oclusión configurada', () => {
+    const config = { ...defaultExerciseConfig, strobeEnabled: true, strobeFrequencyHz: 1, strobeDutyCyclePercent: 70, strobeContrastPercent: 20 }
+    expect(strobeOcclusionAlphaAt(config, 0.5)).toBe(0)
+    expect(strobeOcclusionAlphaAt(config, 0.8)).toBe(0.2)
+    expect(strobeOcclusionAlphaAt({ ...config, strobeEnabled: false }, 0.8)).toBe(0)
   })
 
   it.each([

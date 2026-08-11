@@ -38,6 +38,12 @@ describe('validación de sesión',()=>{
     expect(validateSession(session([exercise], 'in_person'))).toEqual({})
   })
 
+  it('acepta estroboscópico solo en sesión presencial supervisada', () => {
+    const strobe = { ...applyExercisePurpose(defaultExerciseConfig, 'visual_habituation'), strobeEnabled: true, supervision: 'direct_clinician' as const, advanceMode: 'manual' as const, durationSeconds: 20, rounds: 1 }
+    expect(validateSession(session([strobe], 'in_person'))).toEqual({})
+    expect(validateSession(session([strobe], 'home')).exercises).toContain('solo puede asignarse')
+  })
+
   it('acepta una o varias exposiciones 360° presenciales en Quest o Cardboard', () => {
     expect(validateSession(session([immersive()], 'in_person'))).toEqual({})
     expect(validateSession(session([immersive({ name: 'Escenario 1' }), immersive({ name: 'Escenario 2' })], 'in_person'))).toEqual({})

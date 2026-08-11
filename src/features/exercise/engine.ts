@@ -207,6 +207,30 @@ export function renderExerciseBackground(
   if (config.backgroundType === 'spiral') drawSpiral(context, config, elapsedSeconds, width, height)
 }
 
+export function strobeOcclusionAlphaAt(config: ExerciseConfig, elapsedSeconds: number) {
+  if (!config.strobeEnabled) return 0
+  const frequencyHz = Math.max(0.5, Math.min(2.5, config.strobeFrequencyHz))
+  const dutyCycle = Math.max(50, Math.min(80, config.strobeDutyCyclePercent)) / 100
+  const phase = positiveModulo(elapsedSeconds * frequencyHz, 1)
+  return phase < dutyCycle ? 0 : Math.max(5, Math.min(35, config.strobeContrastPercent)) / 100
+}
+
+function renderStrobeOcclusion(
+  context: CanvasRenderingContext2D,
+  config: ExerciseConfig,
+  elapsedSeconds: number,
+  width: number,
+  height: number,
+) {
+  const alpha = strobeOcclusionAlphaAt(config, elapsedSeconds)
+  if (alpha <= 0) return
+  context.save()
+  context.globalAlpha = alpha
+  context.fillStyle = config.backgroundColor
+  context.fillRect(0, 0, width, height)
+  context.restore()
+}
+
 export function renderExerciseObject(
   context: CanvasRenderingContext2D,
   config: ExerciseConfig,
@@ -260,6 +284,7 @@ export function renderExerciseFrame(
 ) {
   renderExerciseBackground(context, config, elapsedSeconds, width, height)
   renderExerciseObject(context, config, elapsedSeconds, width, height)
+  renderStrobeOcclusion(context, config, elapsedSeconds, width, height)
 }
 
 function drawObjectShape(context: CanvasRenderingContext2D, symbol: CognitiveSymbol, position: Point, size: number) {

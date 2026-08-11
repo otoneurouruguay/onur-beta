@@ -1,5 +1,5 @@
 /* oxlint-disable react/only-export-components -- el hook y el proveedor comparten el mismo contexto */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 import { getPatientAccessState } from '../../lib/auth'
@@ -24,6 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [displayName, setDisplayName] = useState('')
   const [mustChangePatientPin, setMustChangePatientPin] = useState(false)
+  const verifiedUserIdRef = useRef('')
 
   const refreshPatientAccess = useCallback(async () => {
     const state = await getPatientAccessState()
@@ -42,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRole(null)
       setDisplayName('')
       setMustChangePatientPin(false)
+      verifiedUserIdRef.current = ''
       setReady(true)
     }
 
@@ -57,6 +59,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (!active) return
+      if (verifiedUserIdRef.current === next.id) {
+        setUser(next)
+        return
+      }
       setReady(false)
       setUser(next)
       const { data, error } = await client.from('profiles').select('role, display_name').eq('id', next.id).maybeSingle()
@@ -67,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setRole(data.role)
+      verifiedUserIdRef.current = next.id
       setDisplayName(String(data.display_name ?? (data.role === 'professional' ? 'Profesional' : 'Paciente')))
       if (data.role === 'patient') {
         try {

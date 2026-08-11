@@ -8,6 +8,8 @@
 4. Para cada ejercicio declara su finalidad y define dosis por tiempo o repeticiones, descanso, vueltas, dispositivo, postura, superficie, supervisión y modo de avance.
 5. Revisa las reglas de seguridad y asigna la sesión.
 
+Mientras se crea una sesión, el navegador conserva un borrador temporal de todos los ejercicios y del ejercicio seleccionado. Cambiar de pantalla, renovar la sesión de acceso o recargar la pestaña no elimina el trabajo; el borrador se borra al guardar correctamente. La renovación de credenciales de un mismo usuario no desmonta la aplicación.
+
 El `plan_definition` se guarda como JSON versionado dentro de `session_plans`. La asignación referencia esa versión, por lo que cambios futuros no alteran una sesión ya entregada.
 
 ## Flujo del paciente

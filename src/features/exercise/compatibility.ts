@@ -75,7 +75,13 @@ const purposeInstructions: Record<ExercisePurpose, string> = {
 }
 
 export function applyExercisePurpose(config: ExerciseConfig, purpose: ExercisePurpose): ExerciseConfig {
-  const common = { ...config, purpose, name: exercisePurposeDefaultNames[purpose], patientInstruction: purposeInstructions[purpose] }
+  const common = {
+    ...config,
+    purpose,
+    name: exercisePurposeDefaultNames[purpose],
+    patientInstruction: purposeInstructions[purpose],
+    strobeEnabled: (purpose === 'visual_habituation' || purpose === 'custom_free') && config.strobeEnabled,
+  }
   if (purpose === 'guided_functional') {
     return {
       ...common,
@@ -222,6 +228,21 @@ export function analyzeExerciseCompatibility(config: ExerciseConfig): ExerciseCo
   if (!free && config.backgroundType !== 'solid' && config.backgroundType !== 'spiral' && rotationalDirection) {
     issues.push(issue('linear-pattern-direction', 'Barras, damero y puntos se desplazan linealmente y no admiten sentido horario o antihorario.', 'Elegí una dirección horizontal, vertical o diagonal.'))
   }
+  if (config.objectEnabled && config.objectMode === 'tracking' && (config.objectSpeedHz < 0.05 || config.objectSpeedHz > 2)) issues.push(issue('tracking-speed', 'La velocidad de seguimiento está fuera del rango implementado.', 'Elegí una frecuencia entre 0,05 y 2 Hz.'))
+  if (config.metronomeEnabled && (config.metronomeHz < 0.1 || config.metronomeHz > 4)) issues.push(issue('metronome-rate', 'El ritmo del metrónomo está fuera del rango implementado.', 'Elegí entre 0,1 y 4 señales por segundo.'))
+  if (config.metronomeEnabled && (config.metronomeToneHz < 220 || config.metronomeToneHz > 1760)) issues.push(issue('metronome-tone', 'El tono del metrónomo está fuera del rango audible configurado.', 'Elegí un tono entre 220 y 1760 Hz.'))
+
+  if (config.strobeEnabled) {
+    if (!free && config.purpose !== 'visual_habituation') issues.push(issue('strobe-purpose', 'La intermitencia visual experimental solo está habilitada como habituación visual.', 'Elegí Habituación a movimiento visual o desactivá la intermitencia.'))
+    if (config.displayMode !== 'standard') issues.push(issue('strobe-headset', 'La intermitencia visual no se habilita dentro de visores por el campo visual amplio y la dificultad para retirar el estímulo con rapidez.', 'Usá Pantalla 2D.'))
+    if (config.posture !== 'seated' || config.surface !== 'firm') issues.push(issue('strobe-position', 'La intermitencia visual experimental se limita a posición sentada y superficie firme.', 'Elegí postura sentada y superficie firme.'))
+    if (config.supervision !== 'direct_clinician') issues.push(issue('strobe-supervision', 'La intermitencia visual experimental requiere supervisión profesional directa.', 'Elegí supervisión profesional directa y modalidad presencial.'))
+    if (config.doseMode !== 'time' || config.advanceMode !== 'manual') issues.push(issue('strobe-dose', 'La intermitencia visual debe realizarse por tiempo y finalizar con confirmación manual.', 'Elegí Por tiempo y Confirmación manual.'))
+    if (config.strobeFrequencyHz < 0.5 || config.strobeFrequencyHz > 2.5) issues.push(issue('strobe-frequency', 'La frecuencia supera el rango conservador implementado.', 'Elegí entre 0,5 y 2,5 Hz; la aplicación no permite más de 3 destellos por segundo.'))
+    if (config.strobeDutyCyclePercent < 50 || config.strobeDutyCyclePercent > 80) issues.push(issue('strobe-duty', 'El porcentaje de imagen visible está fuera del rango implementado.', 'Elegí entre 50% y 80% de imagen visible.'))
+    if (config.strobeContrastPercent < 5 || config.strobeContrastPercent > 35) issues.push(issue('strobe-contrast', 'El contraste de la interrupción está fuera del rango conservador implementado.', 'Elegí entre 5% y 35%.'))
+    if (config.durationSeconds > 30 || config.rounds !== 1) issues.push(issue('strobe-duration', 'La variante experimental inicial se limita a una exposición de hasta 30 segundos y una sola vuelta.', 'Usá hasta 30 segundos y una vuelta.'))
+  }
 
   if (free) {
     if (config.kind !== 'visual_stimulus') issues.push(issue('free-kind', 'El modo Libre de este constructor reproduce un estímulo visual.', 'Elegí estímulo visual o usá la finalidad funcional para una tarea física.'))
@@ -328,6 +349,7 @@ export function analyzeExerciseCompatibility(config: ExerciseConfig): ExerciseCo
   if (config.purpose === 'gaze_substitution_remembered' && config.displayMode === 'standard') explanation = 'El blanco estable permite mirar, cerrar los ojos, girar la cabeza y comprobar la precisión al reabrirlos.'
   if ((config.purpose === 'smooth_pursuit' || config.purpose === 'saccades') && headset) explanation = `El blanco se mueve respecto de los ojos dentro de ${deviceName}; el paciente debe mantener la cabeza quieta.`
   if ((config.purpose === 'optokinetic' || config.purpose === 'visual_habituation') && headset) explanation = `El patrón se mueve respecto de los ojos dentro de ${deviceName}; no necesita estar anclado al ambiente y se realiza sentado, con la cabeza quieta.`
+  if (config.strobeEnabled && issues.length === 0) explanation = 'La intermitencia reduce parcialmente la información visual en una pantalla 2D, dentro de límites conservadores y con supervisión profesional directa.'
   if (config.purpose === 'cognitive_visual' && config.displayMode === 'standard') explanation = 'Las figuras se presentan en una pantalla inmóvil, sentado, con una consigna y una respuesta definidas antes de comenzar.'
   if (config.purpose === 'guided_functional' && config.displayMode === 'standard') explanation = 'La tarea se realiza fuera del visor, con el entorno visible y confirmación manual cuando corresponde.'
   if (config.purpose === 'immersive_context' && config.displayMode === 'quest_browser') explanation = `Quest inicia una sesión WebXR inmersiva: la esfera permanece en el espacio virtual y la vista cambia con el seguimiento 6DoF del visor.${config.objectEnabled ? ' La referencia opcional queda anclada a una dirección del escenario; no es un ejercicio de RVO.' : ''}`
@@ -336,7 +358,9 @@ export function analyzeExerciseCompatibility(config: ExerciseConfig): ExerciseCo
     ? 'Modo Libre: la configuración puede guardarse y ejecutarse, pero la plataforma no valida su equivalencia con un protocolo clínico.'
     : 'El modo Libre permite guardar cualquier combinación; esta combinación no puede ejecutarse con seguridad técnica en el dispositivo seleccionado.'
 
-  const clinicalNote = config.purpose === 'gaze_stabilization' && config.displayMode === 'vr_box' && config.cardboardEnabled
+  const clinicalNote = config.strobeEnabled
+    ? 'Modalidad experimental con evidencia vestibular no establecida. Excluir antecedentes de epilepsia fotosensible, respuesta adversa a destellos, aura o fotofobia activa; detener ante cefalea, náusea marcada, síntomas visuales o neurológicos nuevos. No usar durante una crisis de migraña vestibular.'
+    : config.purpose === 'gaze_stabilization' && config.displayMode === 'vr_box' && config.cardboardEnabled
     ? 'Implementación experimental y presencial: el anclaje es angular 3DoF, no posición 6DoF. Antes de indicar dosis, el profesional debe seleccionar el perfil teléfono–visor y comprobar fusión, centro óptico, permiso de sensores, latencia, deriva, recentrado y pérdida de seguimiento.'
     : free
     ? 'Revisión profesional obligatoria. “Libre” no convierte la combinación en RVO x1, RVO x2, sustitución, habituación ni estimulación optocinética.'

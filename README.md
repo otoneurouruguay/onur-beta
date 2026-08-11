@@ -69,7 +69,7 @@ Decimotercer incremento técnico ejecutable:
 - VR Box 2D temporizado sin seguimiento ni controles, y Cardboard opcional con giroscopio, calibración frontal, perfil óptico transportable y controles duplicados;
 - advertencia y reordenamiento recomendado cuando una sesión mezcla cualquier tarea sin visor con un bloque VR Box;
 - controles de postura, superficie y supervisión, con bloqueos domiciliarios para tareas de mayor riesgo;
-- catálogo de 33 fuentes y compuerta validada para futuros borradores clínicamente gobernados;
+- catálogo de 38 fuentes, orientación por patologías frecuentes y compuerta validada para futuros borradores clínicamente gobernados;
 - sesión domiciliaria de demostración;
 - PWA instalable;
 - esquema PostgreSQL/Supabase con RLS;

@@ -4,7 +4,7 @@
 
 La plataforma incorpora la base segura para un generador de borradores, no una prescripción automática:
 
-- catálogo versionado de 33 fuentes en `src/features/clinicalGeneration/catalog.ts`;
+- catálogo versionado de 38 fuentes en `src/features/clinicalGeneration/catalog.ts`;
 - taxonomía cerrada de 14 categorías;
 - compuerta previa de autorización, datos clínicos y alertas;
 - rechazo recursivo de valores `COMPLETAR_*`, `PENDIENTE` o `TBD`;
@@ -53,5 +53,11 @@ El ejemplo con `clinician_authorized=false` y campos `COMPLETAR_*` debe quedar b
 - `SRC-031`: ensayo piloto multicéntrico 2026 que describe RVO x1/x2 horizontal, vertical y diagonal; DOI `10.3389/fneur.2025.1687181`, PMID `41561330`.
 - `SRC-032`: revisión sistemática sobre doble tarea cognitivo-motora en personas con trastornos vestibulares; identifica el interés clínico y también la falta de un protocolo uniforme, PMID `31283530`.
 - `SRC-033`: revisión sistemática y metaanálisis sobre doble tarea y equilibrio en adultos mayores; evidencia indirecta para el módulo cognitivo de la plataforma, PMID `38364709`.
+- `SRC-037`: protocolo de ensayo sobre entrenamiento con visión estroboscópica en adultos mayores, PMID `42174703`; describe una hipótesis y un diseño, no demuestra eficacia clínica.
+- `SRC-038`: criterio W3C de seguridad frente a destellos; el constructor limita la intermitencia a 2,5 Hz, por debajo de tres destellos por segundo.
+
+## Orientación por patologías
+
+El constructor permite elegir entre hipofunción vestibular unilateral o bilateral, VPPB, migraña vestibular, PPPD, mareo inducido visualmente, cinetosis, Ménière, presbivestibulopatía, traumatismo craneoencefálico leve y schwannoma vestibular. Cada opción muestra únicamente componentes de rehabilitación, precauciones, fuentes aplicables y plantillas existentes. La cinetosis se marca como extrapolación indirecta; el VPPB prioriza la maniobra correspondiente al canal y lado confirmados y no se trata con un estímulo visual automático.
 
 La biblioteca debe revisarse como mínimo una vez al año y cuando aparezca una guía relevante nueva.

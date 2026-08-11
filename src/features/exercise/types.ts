@@ -64,7 +64,7 @@ export interface ExerciseCompletionReport {
 
 export interface ExerciseConfig {
   name: string
-  clinicalProtocol?: 'pppd'
+  clinicalProtocol?: 'pppd' | 'stroboscopic_experimental'
   progressionLevel?: 1 | 2 | 3
   progressionCriteria?: string
   stopCriteria?: string
@@ -86,6 +86,10 @@ export interface ExerciseConfig {
   stripeWidth: number
   foregroundColor: string
   backgroundColor: string
+  strobeEnabled: boolean
+  strobeFrequencyHz: number
+  strobeDutyCyclePercent: number
+  strobeContrastPercent: number
   objectEnabled: boolean
   objectMode: ObjectMode
   objectColor: string
@@ -101,6 +105,7 @@ export interface ExerciseConfig {
   rounds: number
   metronomeEnabled: boolean
   metronomeHz: number
+  metronomeToneHz: number
   cognitiveTaskMode: CognitiveTaskMode
   cognitiveTargetSymbol: CognitiveSymbol
   cognitiveResponseMode: CognitiveResponseMode
@@ -133,6 +138,10 @@ export const defaultExerciseConfig: ExerciseConfig = {
   stripeWidth: 54,
   foregroundColor: '#0a1214',
   backgroundColor: '#F7F6F4',
+  strobeEnabled: false,
+  strobeFrequencyHz: 1,
+  strobeDutyCyclePercent: 70,
+  strobeContrastPercent: 20,
   objectEnabled: true,
   objectMode: 'fixed',
   objectColor: '#ef3e45',
@@ -148,6 +157,7 @@ export const defaultExerciseConfig: ExerciseConfig = {
   rounds: 3,
   metronomeEnabled: false,
   metronomeHz: 1,
+  metronomeToneHz: 660,
   cognitiveTaskMode: 'none',
   cognitiveTargetSymbol: 'diamond',
   cognitiveResponseMode: 'count_at_end',
@@ -178,6 +188,15 @@ export function normalizeExerciseConfig(config: Partial<ExerciseConfig>, legacyP
     ...config,
     purpose: inferExercisePurpose(config),
     cardboardEnabled: config.cardboardEnabled === true,
+    strobeEnabled: config.strobeEnabled === true,
+    strobeFrequencyHz: Math.max(0.5, Math.min(2.5, Number(config.strobeFrequencyHz ?? 1))),
+    strobeDutyCyclePercent: Math.max(50, Math.min(80, Number(config.strobeDutyCyclePercent ?? 70))),
+    strobeContrastPercent: Math.max(5, Math.min(35, Number(config.strobeContrastPercent ?? 20))),
+    objectSpeedHz: Math.max(0.05, Math.min(2, Number(config.objectSpeedHz ?? 0.5))),
+    saccadeFrequencyHz: Math.max(0.2, Math.min(2, Number(config.saccadeFrequencyHz ?? 0.8))),
+    metronomeHz: Math.max(0.1, Math.min(4, Number(config.metronomeHz ?? 1))),
+    metronomeToneHz: Math.max(220, Math.min(1760, Number(config.metronomeToneHz ?? 660))),
+    cognitiveStimulusSeconds: Math.max(0.75, Math.min(6, Number(config.cognitiveStimulusSeconds ?? 2.5))),
     immersiveAudioEnabled: config.immersiveAudioEnabled === true,
     immersiveAudioVolume: Math.max(0, Math.min(50, Number(config.immersiveAudioVolume ?? 20))),
     immersiveTargetAzimuthDegrees: Math.max(-120, Math.min(120, Number(config.immersiveTargetAzimuthDegrees ?? 0))),

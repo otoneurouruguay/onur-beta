@@ -102,6 +102,24 @@ describe('coherencia clínica y espacial de ejercicios', () => {
     expect(analysis.issues.some((item) => item.code === 'visual-motion')).toBe(true)
   })
 
+  it('limita la intermitencia visual a una exposición presencial conservadora', () => {
+    const strobe = exercise('visual_habituation', {
+      strobeEnabled: true, displayMode: 'standard', posture: 'seated', surface: 'firm', supervision: 'direct_clinician',
+      doseMode: 'time', advanceMode: 'manual', durationSeconds: 20, rounds: 1,
+    })
+    expect(analyzeExerciseCompatibility(strobe).valid).toBe(true)
+    expect(analyzeExerciseCompatibility({ ...strobe, strobeFrequencyHz: 4 }).issues.some((item) => item.code === 'strobe-frequency')).toBe(true)
+    expect(analyzeExerciseCompatibility({ ...strobe, displayMode: 'vr_box', advanceMode: 'automatic' }).issues.some((item) => item.code === 'strobe-headset')).toBe(true)
+    expect(analyzeExerciseCompatibility({ ...strobe, supervision: 'independent_after_approval' }).issues.some((item) => item.code === 'strobe-supervision')).toBe(true)
+  })
+
+  it('admite seguimiento ocular muy lento y metrónomo de ritmo y tono configurables', () => {
+    expect(analyzeExerciseCompatibility(exercise('smooth_pursuit', { objectSpeedHz: 0.1 })).valid).toBe(true)
+    expect(analyzeExerciseCompatibility(exercise('smooth_pursuit', { objectSpeedHz: 0.01 })).issues.some((item) => item.code === 'tracking-speed')).toBe(true)
+    expect(analyzeExerciseCompatibility(exercise('gaze_stabilization', { metronomeEnabled: true, metronomeHz: 0.1, metronomeToneHz: 220 })).valid).toBe(true)
+    expect(analyzeExerciseCompatibility(exercise('gaze_stabilization', { metronomeEnabled: true, metronomeHz: 5 })).issues.some((item) => item.code === 'metronome-rate')).toBe(true)
+  })
+
   it('configura cada propósito con parámetros coherentes', () => {
     expect(applyExercisePurpose(defaultExerciseConfig, 'gaze_stabilization_x2')).toMatchObject({ kind: 'visual_stimulus', displayMode: 'standard', objectEnabled: true, objectMode: 'tracking', backgroundSpeed: 0 })
     expect(applyExercisePurpose(defaultExerciseConfig, 'gaze_substitution_remembered')).toMatchObject({ kind: 'visual_stimulus', displayMode: 'standard', doseMode: 'repetitions', advanceMode: 'manual', objectMode: 'fixed' })

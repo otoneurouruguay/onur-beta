@@ -58,6 +58,7 @@ export function validateSession(values: SessionFormValues) {
   if (vrBoxProfiles.size > 1) setExerciseError('Una misma sesión no debe alternar entre VR Box y Cardboard. Elegí un único perfil de visor para todo el bloque binocular.')
   if (values.exercises.some((exercise) => (exercise.kind === 'guided_physical' || exercise.purpose === 'custom_free') && exercise.surface === 'unstable' && exercise.supervision === 'independent_after_approval')) setExerciseError('Las superficies inestables requieren un ayudante entrenado o supervisión profesional.')
   if (values.mode === 'home' && values.exercises.some((exercise) => (exercise.kind === 'guided_physical' || exercise.purpose === 'custom_free') && exercise.posture === 'walking' && exercise.supervision === 'independent_after_approval')) setExerciseError('La marcha domiciliaria requiere un ayudante entrenado.')
+  if (values.mode === 'home' && values.exercises.some((exercise) => exercise.strobeEnabled)) setExerciseError('La intermitencia visual estroboscópica experimental solo puede asignarse en modalidad presencial con supervisión profesional directa.')
 
   const immersiveExercises = values.exercises.filter((exercise) => exercise.purpose === 'immersive_context')
   if (values.mode === 'home' && immersiveExercises.length > 0) setExerciseError('Los escenarios 360° están habilitados únicamente en clínica con supervisión profesional directa.')

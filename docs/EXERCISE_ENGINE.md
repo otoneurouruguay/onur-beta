@@ -35,6 +35,10 @@ Las tareas cognitivas son una capa opcional de los estímulos visuales:
 
 La consigna completa aparece antes del ejercicio y el temporizador no comienza hasta que la persona confirma que la comprendió. Las secuencias de figuras son deterministas. En respuesta táctil se registran aciertos y respuestas fuera del objetivo; en conteo se conserva el total informado y la cantidad real de eventos presentados. Estos registros describen la ejecución de la tarea y no constituyen una evaluación diagnóstica.
 
+La biblioteca incorpora secuencias de imágenes geométricas a 2, 1,25 y 0,75 segundos por imagen. El seguimiento ocular continuo permite velocidades desde 0,05 hasta 2 Hz, con accesos directos desde muy lento hasta muy rápido. El metrónomo admite ritmos de 0,1 a 4 señales por segundo y tonos graves, medios o agudos entre 220 y 1320 Hz en la interfaz.
+
+Las variantes estroboscópicas son experimentales: reducen parcialmente la información visual en pantalla 2D entre 0,5 y 2,5 Hz, con contraste limitado, una sola vuelta de hasta 30 segundos, posición sentada y supervisión profesional directa. La vista previa permanece inmóvil hasta que el profesional inicia la prueba. No se habilitan en visor ni se presentan como tratamiento demostrado; se excluyen ante fotosensibilidad, aura, fotofobia activa o crisis de migraña vestibular.
+
 La configuración inicial es pantalla 2D, sentado, superficie firme, ritmo lento, una sola tarea y memoria de una posición. Las tareas cognitivas se bloquean en VR Box y Quest en esta versión porque no existe un flujo fiable para leer la consigna y confirmar la respuesta. También se bloquea tocar la pantalla durante RVO x1, RVO x2 u objetivo recordado, porque altera la posición de ejecución. La combinación con una tarea vestibular u oculomotora se identifica como doble tarea y exige comprobar previamente la tarea aislada.
 
 Fondo y objeto usan parámetros independientes. Los movimientos se calculan como funciones continuas del tiempo o pasos por Hz, de modo que el patrón no termina antes de la fase.

@@ -30,7 +30,7 @@ describe('creación de ejercicios', () => {
     expect(screen.getByText(/No usa botones, mirada ni controles externos/)).toBeInTheDocument()
     expect(screen.getByText('Configuración coherente')).toBeInTheDocument()
     expect(screen.getByText('Vista binocular VR')).toBeInTheDocument()
-    expect(screen.getByRole('checkbox', { name: 'Metrónomo' })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: 'Metrónomo con sonido' })).toBeDisabled()
     const cardboard = screen.getByRole('checkbox', { name: 'Habilitar perfil Cardboard' })
     expect(cardboard).not.toBeChecked()
     fireEvent.click(cardboard)
@@ -166,6 +166,40 @@ describe('creación de ejercicios', () => {
     render(<EditorHarness/>)
     fireEvent.change(screen.getByLabelText('Fondo'), { target: { value: backgroundType } })
     expect(screen.getByLabelText('Fondo')).toHaveValue(backgroundType)
+  })
+
+  it('ofrece seguimiento ocular muy lento, lento, medio y rápido', () => {
+    render(<EditorHarness/>)
+    fireEvent.change(screen.getByLabelText('Objetivo del ejercicio'), { target: { value: 'smooth_pursuit' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Muy lento' }))
+    expect(screen.getByLabelText('Velocidad de seguimiento ocular')).toHaveValue('0.1')
+    fireEvent.click(screen.getByRole('button', { name: 'Rápido' }))
+    expect(screen.getByLabelText('Velocidad de seguimiento ocular')).toHaveValue('1')
+  })
+
+  it('configura metrónomo desde ritmos muy bajos a muy altos y tonos graves o agudos', () => {
+    render(<EditorHarness/>)
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Metrónomo con sonido' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Muy bajo' }))
+    expect(screen.getByLabelText('Ritmo del metrónomo')).toHaveValue('0.25')
+    fireEvent.change(screen.getByLabelText('Tono del metrónomo'), { target: { value: '1320' } })
+    expect(screen.getByLabelText('Tono del metrónomo')).toHaveValue('1320')
+  })
+
+  it('habilita intermitencia estroboscópica con límites visibles y visor bloqueado', () => {
+    render(<EditorHarness setting="in_person"/>)
+    fireEvent.click(screen.getByRole('checkbox', { name: /Intermitencia visual estroboscópica/ }))
+    expect(screen.getByLabelText('Frecuencia estroboscópica')).toHaveValue('1')
+    expect(screen.getByText('Intermitencia pausada en la vista previa')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /VR Box/ })).toBeDisabled()
+    expect(screen.getByText('Configuración coherente')).toBeInTheDocument()
+  })
+
+  it('permite secuencias de imágenes rápidas hasta 0,75 segundos', () => {
+    render(<EditorHarness/>)
+    fireEvent.change(screen.getByLabelText('Objetivo del ejercicio'), { target: { value: 'cognitive_visual' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Imágenes rápida' }))
+    expect(screen.getByLabelText('Velocidad de imágenes')).toHaveValue('0.75')
   })
 
   it.each([

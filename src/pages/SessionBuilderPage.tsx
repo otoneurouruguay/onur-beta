@@ -8,6 +8,7 @@ import { usePatient } from '../features/patients/hooks'
 import { useCreateSessionAssignment, useSessionAssignments, useTreatmentCycles, useUpdateSessionAssignment } from '../features/sessions/hooks'
 import { canManageSessionAssignment } from '../features/sessions/repository'
 import { appendExerciseTemplate, DEFAULT_SESSION_TITLE } from '../features/sessions/builder'
+import { clearSessionBuilderDraft, readSessionBuilderDraft, sessionBuilderDraftKey, writeSessionBuilderDraft } from '../features/sessions/builderDraft'
 import { SessionExerciseEditor } from '../features/sessions/SessionExerciseEditor'
 import { SessionSequenceWarning } from '../features/sessions/SessionSequenceWarning'
 import { validateSession, type SessionFormValues } from '../features/sessions/schema'
@@ -24,22 +25,33 @@ export function SessionBuilderPage() {
   const { data: assignments = [], isPending: assignmentsPending } = useSessionAssignments(patientId)
   const create = useCreateSessionAssignment(patientId)
   const update = useUpdateSessionAssignment(patientId)
-  const [selected, setSelected] = useState(0)
+  const draftKey = sessionBuilderDraftKey(patientId, assignmentId)
+  const [recoveredDraft] = useState(() => readSessionBuilderDraft(draftKey))
+  const [selected, setSelected] = useState(recoveredDraft?.selectedExerciseIndex ?? 0)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const assignment = assignmentId ? assignments.find((item) => item.id === assignmentId) : undefined
   const isEditing = Boolean(assignmentId)
   const initializedAssignmentId = useRef('')
   const { data: templates = [] } = useExerciseTemplates()
   const templateGroups = groupExerciseTemplates(templates)
-  const [values, setValues] = useState<SessionFormValues>({ kind: 'exercise', title: DEFAULT_SESSION_TITLE, instructions: 'Realizar según las indicaciones brindadas por el profesional.', mode: 'home', treatmentCycleId: '', availableFrom: new Date().toISOString().slice(0, 10), availableUntil: '', exercises: [{ ...defaultExerciseConfig }] })
+  const [values, setValues] = useState<SessionFormValues>(recoveredDraft?.values ?? { kind: 'exercise', title: DEFAULT_SESSION_TITLE, instructions: 'Realizar según las indicaciones brindadas por el profesional.', mode: 'home', treatmentCycleId: '', availableFrom: new Date().toISOString().slice(0, 10), availableUntil: '', exercises: [{ ...defaultExerciseConfig }] })
 
   useEffect(() => {
     if (!assignmentId || !assignment || initializedAssignmentId.current === assignmentId) return
     initializedAssignmentId.current = assignmentId
+    if (recoveredDraft) {
+      setValues(recoveredDraft.values)
+      setSelected(recoveredDraft.selectedExerciseIndex)
+      return
+    }
     setValues({ kind: assignment.kind ?? 'exercise', title: assignment.title, instructions: assignment.instructions, mode: assignment.mode, treatmentCycleId: assignment.treatmentCycleId, availableFrom: assignment.availableFrom.slice(0, 10), availableUntil: assignment.availableUntil.slice(0, 10), exercises: assignment.exercises.map((exercise) => ({ ...exercise })) })
     setSelected(0)
-  }, [assignment, assignmentId])
+  }, [assignment, assignmentId, recoveredDraft])
   useEffect(() => { if (isEditing) return; const active = cycles.find((cycle) => cycle.status === 'active'); if (active && !values.treatmentCycleId) setValues((current) => ({ ...current, treatmentCycleId: active.id })) }, [cycles, isEditing, values.treatmentCycleId])
+  useEffect(() => {
+    if (isEditing && initializedAssignmentId.current !== assignmentId) return
+    writeSessionBuilderDraft(draftKey, { values, selectedExerciseIndex: selected })
+  }, [assignmentId, draftKey, isEditing, selected, values])
 
   const clearExerciseError = () => setErrors((current) => { if (!current.exercises) return current; const next = { ...current }; delete next.exercises; return next })
   const updateExercise = (config: ExerciseConfig) => { setValues((current) => ({ ...current, exercises: current.exercises.map((exercise, index) => index === selected ? config : exercise) })); clearExerciseError() }
@@ -65,9 +77,11 @@ export function SessionBuilderPage() {
     try {
       if (isEditing && assignment) {
         await update.mutateAsync({ assignment, values })
+        clearSessionBuilderDraft(draftKey)
         navigate(`/app/pacientes/${patientId}`, { state: { notice: 'Sesión actualizada correctamente.' } })
       } else {
         await create.mutateAsync(values)
+        clearSessionBuilderDraft(draftKey)
         navigate(`/app/pacientes/${patientId}`, { state: { notice: values.kind === 'free_note' ? 'Sesión presencial libre creada.' : 'Sesión creada y asignada correctamente.' } })
       }
     } catch (caught) {
@@ -83,6 +97,7 @@ export function SessionBuilderPage() {
   return <div className="space-y-7">
     <Link to={`/app/pacientes/${patientId}`} className="inline-flex items-center gap-2 text-xs font-black text-[#E49A02]"><ChevronLeft size={16}/> Volver al perfil</Link>
     <PageHeader eyebrow="Planificación" title={isEditing ? 'Editar sesión' : 'Crear y asignar sesión'} description={patient ? `Configuración para ${patient.fullName}. El ciclo puede combinar sesiones guiadas y registros presenciales libres.` : 'Prepará una sesión.'}/>
+    {recoveredDraft && <p className="rounded-2xl border border-[#B9D9C5] bg-[#F0F8F3] px-4 py-3 text-sm font-bold text-[#28613D]">Borrador recuperado automáticamente. Los ejercicios y la dosis se conservaron al cambiar de pantalla.</p>}
     {cycles.length === 0 ? <section className="rounded-2xl border border-[#E8CE99] bg-[#FFF7E8] p-6"><h2 className="font-black text-[#8A5B00]">Primero necesitás un ciclo activo</h2><p className="mt-2 text-sm text-[#8A5B00]">Las sesiones quedan asociadas al ciclo para conservar el historial y preparar el informe final.</p><Link to={`/app/pacientes/${patientId}/ciclos/nuevo`} className="mt-4 inline-flex rounded-2xl bg-[#8A5B00] px-4 py-3 text-sm font-black text-white">Iniciar ciclo</Link></section> : <form onSubmit={submit} className="min-w-0 space-y-7 pb-20 sm:pb-0">
       <section className="grid gap-3 rounded-2xl border border-[#E9E7E7] bg-white p-5 sm:grid-cols-2">
         <button type="button" onClick={() => chooseKind('exercise')} className={`flex min-h-24 items-start gap-3 rounded-2xl border p-4 text-left ${values.kind !== 'free_note' ? 'border-[#E49A02] bg-[#FFF7E8]' : 'border-[#E9E7E7]'}`}><ListChecks className="mt-0.5 shrink-0 text-[#E49A02]" size={21}/><span><strong className="block text-sm text-[#171717]">Sesión con ejercicios</strong><span className="mt-1 block text-xs leading-5 text-[#747474]">Plan estructurado para domicilio o presencial, con reproductor y seguimiento.</span></span></button>
