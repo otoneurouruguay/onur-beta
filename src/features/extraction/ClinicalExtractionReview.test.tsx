@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExtractedField } from './types'
 import type { ExtractionReviewRecord } from './repository'
 import { ClinicalExtractionReview } from './ClinicalExtractionReview'
@@ -45,6 +45,8 @@ function record(): ExtractionReviewRecord {
 }
 
 describe('ClinicalExtractionReview automatic report draft', () => {
+  afterEach(cleanup)
+
   beforeEach(() => {
     mocks.record = record()
     mocks.save.mockReset().mockResolvedValue(undefined)
@@ -68,5 +70,24 @@ describe('ClinicalExtractionReview automatic report draft', () => {
     expect(window.confirm).toHaveBeenCalled()
     expect((conclusion as HTMLTextAreaElement).value).toContain('70 a 79 años')
     expect(screen.getByText(/09_TABLA_VALORES_NORMALES_BAP.xlsx/)).toBeInTheDocument()
+  })
+
+  it('aplica solo las correcciones editadas y actualiza su estado sin repetir el OCR', async () => {
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    const refresh = screen.getByRole('button', { name: 'Aplicar correcciones' })
+    expect(refresh).toBeDisabled()
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'condition 1' }), { target: { value: '97' } })
+    expect(screen.getByRole('button', { name: 'Aplicar correcciones (1)' })).toBeEnabled()
+    expect(screen.getByText('Editado')).toBeInTheDocument()
+    expect(screen.getByText(/1 para revisar/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar correcciones (1)' }))
+
+    expect(screen.getByRole('button', { name: 'Aplicar correcciones' })).toBeDisabled()
+    expect(screen.getByText('Corregido')).toBeInTheDocument()
+    expect(screen.getByText(/0 para revisar/)).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('1 corrección aplicada')
   })
 })

@@ -36,11 +36,13 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [reprocessStatus, setReprocessStatus] = useState('')
+  const [editedFieldIds, setEditedFieldIds] = useState<Set<string>>(() => new Set())
 
   useEffect(() => {
     if (query.data) {
       setDraft(query.data)
       setPageNumber(query.data.sectionPageNumbers[0] ?? 1)
+      setEditedFieldIds(new Set())
     }
   }, [query.data])
 
@@ -76,12 +78,16 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
   const missing = useMemo(() => parameters.filter((field) => field.required && !field.professionalValue.trim()), [parameters])
   const studyType = draft?.fields.find((field) => field.studyType === 'posturography') ? 'posturography' : 'vhit'
   const automaticReport = useMemo(() => draft ? buildBapAutomaticReport(draft.fields, draft.cyclePhase ?? 'unspecified') : null, [draft])
-  const reviewCount = parameters.filter((field) => field.professionalValue.trim() && (field.status !== 'read' || field.confidence < .82)).length
+  const reviewCount = parameters.filter((field) => field.professionalValue.trim() && !field.confirmed && (field.status !== 'read' || field.confidence < .82)).length
   const activeField = draft?.fields.find((field) => field.clientId === selectedField)
   const blocking = missing.length > 0 || !draft?.professionalConclusion.trim() || !draft.rehabilitationSuggestion.trim() || draft.patientMatchStatus === 'mismatch' || draft.pages.some((item) => item.classification === 'unrecognized')
 
   const updateField = (clientId: string, updater: (field: ExtractedField) => ExtractedField) => setDraft((current) => current ? { ...current, fields: current.fields.map((field) => field.clientId === clientId ? updater(field) : field) } : current)
-  const updateValue = (field: ExtractedField, value: string) => updateField(field.clientId, (current) => ({ ...current, professionalValue: value, normalizedValue: normalizedField(current, value), status: value ? 'review' : 'unrecognized', confirmed: false }))
+  const updateValue = (field: ExtractedField, value: string) => {
+    updateField(field.clientId, (current) => ({ ...current, professionalValue: value, normalizedValue: normalizedField(current, value), status: value.trim() ? 'review' : 'unrecognized', confirmed: false }))
+    setEditedFieldIds((current) => new Set(current).add(field.clientId))
+    setNotice('')
+  }
   const updateClassification = (targetPage: number, classification: PageClassification) => setDraft((current) => current ? { ...current, pages: current.pages.map((item) => item.pageNumber === targetPage ? { ...item, classification } : item) } : current)
   const updateMatch = (status: PatientMatchStatus) => setDraft((current) => current ? { ...current, patientMatchStatus: status } : current)
 
@@ -111,6 +117,30 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
     setDraft({ ...draft, professionalConclusion: automaticReport.conclusion, rehabilitationSuggestion: automaticReport.rehabilitationSuggestion })
     setError('')
     setNotice('Borrador automático actualizado. Podés editar ambos textos antes de confirmar.')
+  }
+
+  const applyParameterCorrections = () => {
+    if (!draft || editedFieldIds.size === 0) return
+    const correctedCount = draft.fields.filter((field) => editedFieldIds.has(field.clientId) && field.professionalValue.trim()).length
+    setDraft({
+      ...draft,
+      fields: draft.fields.map((field) => {
+        if (!editedFieldIds.has(field.clientId)) return field
+        const value = field.professionalValue.trim()
+        return {
+          ...field,
+          professionalValue: value,
+          normalizedValue: normalizedField(field, value),
+          status: value ? 'read' : 'unrecognized',
+          confirmed: Boolean(value),
+        }
+      }),
+    })
+    setEditedFieldIds(new Set())
+    setError('')
+    setNotice(correctedCount > 0
+      ? `${correctedCount} ${correctedCount === 1 ? 'corrección aplicada' : 'correcciones aplicadas'}. Se actualizaron los estados y los datos faltantes sin volver a procesar el documento.`
+      : 'Se actualizaron los datos faltantes sin volver a procesar el documento.')
   }
 
   const saveDraft = async () => {
@@ -166,11 +196,11 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-[#E9E7E7] bg-white">
-        <div className="border-b border-[#E9E7E7] p-5"><h2 className="font-black text-[#171717]">Parámetros obtenidos</h2><p className="mt-1 text-xs text-[#747474]">{parameters.filter((field) => field.professionalValue.trim()).length} detectados · {reviewCount} para revisar · {missing.length} faltantes</p></div>
+        <div className="flex flex-col gap-3 border-b border-[#E9E7E7] p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-black text-[#171717]">Parámetros obtenidos</h2><p className="mt-1 text-xs text-[#747474]">{parameters.filter((field) => field.professionalValue.trim()).length} detectados · {reviewCount} para revisar · {missing.length} faltantes</p></div>{!locked && <button type="button" onClick={applyParameterCorrections} disabled={editedFieldIds.size === 0} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#E8CE99] bg-[#FFF7E8] px-3 py-2 text-xs font-black text-[#A36B00] disabled:cursor-not-allowed disabled:opacity-45"><RefreshCw size={14}/> Aplicar correcciones{editedFieldIds.size > 0 ? ` (${editedFieldIds.size})` : ''}</button>}</div>
         {missing.length > 0 && <p className="border-b border-[#efc3c7] bg-[#fff7f7] px-5 py-3 text-xs font-bold text-[#a94952]">Falta completar o consignar como “no informado”: {missing.map((field) => field.label).join(' · ')}</p>}
         <p className="border-b border-[#E9E7E7] bg-[#F7F6F4] px-5 py-3 text-xs leading-5 text-[#747474]">{studyType === 'posturography' ? 'Núcleo para el borrador funcional: edad, seis condiciones, puntaje compuesto, índices somatosensorial/visual/vestibular, preferencia visual y control de calidad. LOS, sway, caídas y observaciones agregan seguridad y contexto.' : 'Núcleo vHIT: protocolo HIMP, plano/canales, ganancia por lado, simetría, sacadas correctivas y conclusión. Equipo, método de ganancia, número/velocidad de impulsos, calibración y artefactos son controles técnicos importantes.'}</p>
         <div className="max-h-[660px] divide-y divide-[#E9E7E7] overflow-y-auto">{parameters.map((field) => <label key={field.clientId} onClick={() => { setSelectedField(field.clientId); setPageNumber(field.pageNumber) }} className={`grid cursor-pointer gap-2 p-4 sm:grid-cols-[1fr_170px] sm:items-center ${selectedField === field.clientId ? 'bg-[#FFF7E8]' : ''}`}>
-          <span><span className="flex items-center gap-2 text-sm font-black text-[#2F2F2F]">{field.label}{field.required ? ' *' : ''}<span className={`rounded-full px-2 py-0.5 text-[9px] uppercase ${field.status === 'read' && field.confidence >= .82 ? 'bg-[#FFF7E8] text-[#A36B00]' : field.professionalValue ? 'bg-[#FFF7E8] text-[#8A5B00]' : 'bg-[#fceced] text-[#a94952]'}`}>{field.status === 'read' && field.confidence >= .82 ? 'Leído' : field.professionalValue ? 'Revisar' : 'Falta'}</span></span>{field.rawValue && <small className="mt-1 block text-[10px] text-[#747474]">Detectado: {field.rawValue} · pág. {field.pageNumber}</small>}</span>
+          <span><span className="flex flex-wrap items-center gap-2 text-sm font-black text-[#2F2F2F]">{field.label}{field.required ? ' *' : ''}<span className={`rounded-full px-2 py-0.5 text-[9px] uppercase ${field.confirmed ? 'bg-[#EEF5F0] text-[#496451]' : field.status === 'read' && field.confidence >= .82 ? 'bg-[#FFF7E8] text-[#A36B00]' : field.professionalValue ? 'bg-[#FFF7E8] text-[#8A5B00]' : 'bg-[#fceced] text-[#a94952]'}`}>{field.confirmed ? 'Corregido' : editedFieldIds.has(field.clientId) ? 'Editado' : field.status === 'read' && field.confidence >= .82 ? 'Leído' : field.professionalValue ? 'Revisar' : 'Falta'}</span></span>{field.rawValue && <small className="mt-1 block text-[10px] text-[#747474]">Detectado: {field.rawValue} · pág. {field.pageNumber}</small>}</span>
           <input disabled={locked} aria-label={field.label} value={field.professionalValue} onChange={(event) => updateValue(field, event.target.value)} className={`${control} w-full ${!field.professionalValue ? 'border-[#df9fa5]' : ''}`}/>
         </label>)}</div>
         {parameters.length === 0 && <p className="p-6 text-sm text-[#747474]">No se reconocieron parámetros. El original puede pasarse a carga manual.</p>}
