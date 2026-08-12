@@ -1,9 +1,16 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { loadEnvFile } from 'node:process'
 
 const publicUrl = process.env.ONUR_PUBLIC_URL || 'https://onur-beta-clinica.fedeshin.chatgpt.site/'
 const npmCommand = process.env.npm_execpath ? process.execPath : (process.platform === 'win32' ? 'npm.cmd' : 'npm')
 const reuseBuild = process.argv.includes('--reuse-build')
+
+if ((!process.env.VITE_SUPABASE_URL || !process.env.VITE_SUPABASE_ANON_KEY) && existsSync('.env.staging.local')) {
+  loadEnvFile('.env.staging.local')
+}
+const publicSupabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+const publicSupabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
 
 function runNpmScript(name) {
   const argumentsList = process.env.npm_execpath
@@ -43,6 +50,11 @@ const compiledJavaScript = readdirSync(`${clientPath}/assets`)
   .filter((filename) => filename.endsWith('.js'))
   .map((filename) => readFileSync(`${clientPath}/assets/${filename}`, 'utf8'))
   .join('\n')
+requireCheck(Boolean(publicSupabaseUrl && publicSupabaseAnonKey), 'Falta la configuración pública de autenticación para verificar la publicación.')
+requireCheck(
+  compiledJavaScript.includes(publicSupabaseUrl) && compiledJavaScript.includes(publicSupabaseAnonKey),
+  'La compilación no contiene la conexión de autenticación. Usá npm run build:authenticated antes de publicar.',
+)
 for (const marker of [
   'Patología o condición clínica',
   'Borrador recuperado automáticamente',
