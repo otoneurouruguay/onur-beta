@@ -41,4 +41,18 @@ describe('constructor de sesiones', () => {
     const result = appendExerciseTemplate(values, immersive('Farmacia'))
     expect(result.values.exercises.map((exercise) => exercise.name)).toEqual(['RVO personalizado', 'Farmacia'])
   })
+
+  it('conserva una secuencia mixta al agregar varias plantillas consecutivas', () => {
+    const values = baseValues()
+    values.exercises[0] = { ...defaultExerciseConfig, name: 'RVO x1 horizontal' }
+    const second = appendExerciseTemplate(values, { ...defaultExerciseConfig, name: 'RVO x2 vertical' })
+    const third = appendExerciseTemplate(second.values, immersive('Supermercado caminando'))
+
+    expect(third.values.exercises.map((exercise) => exercise.name)).toEqual([
+      'RVO x1 horizontal',
+      'RVO x2 vertical',
+      'Supermercado caminando',
+    ])
+    expect(third.selectedIndex).toBe(2)
+  })
 })

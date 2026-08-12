@@ -1,4 +1,4 @@
-export const PWA_CACHE_ID = 'onur-beta-0.1.0-beta.57'
+export const PWA_CACHE_ID = 'onur-beta-0.1.0-beta.58'
 
 export const PWA_UPDATE_POLICY = {
   registerType: 'autoUpdate',
