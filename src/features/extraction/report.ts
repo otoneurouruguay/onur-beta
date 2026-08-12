@@ -1,5 +1,6 @@
 import type { StudyType } from '../studies/types'
 import type { ExtractionReviewRecord } from './repository'
+import { isReportRelevantField } from './reportFields'
 
 export interface ConfirmedExtractionParameter {
   code: string
@@ -30,7 +31,7 @@ export function buildStudyExtractionReport(
 
   return {
     parameters: extraction.fields
-      .filter((field) => field.studyType === studyType && field.confirmed && Boolean(field.professionalValue.trim()))
+      .filter((field) => field.studyType === studyType && isReportRelevantField(field) && field.confirmed && Boolean(field.professionalValue.trim()))
       .map((field) => ({ code: field.code, label: field.label, value: field.professionalValue.trim() })),
     conclusion: extraction.professionalConclusion.trim(),
     rehabilitationSuggestion: extraction.rehabilitationSuggestion.trim(),

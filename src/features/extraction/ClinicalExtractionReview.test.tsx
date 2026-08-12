@@ -39,7 +39,7 @@ function record(): ExtractionReviewRecord {
   return {
     id: 'synthetic-job', documentId: 'synthetic-document', studyIds: ['synthetic-study'], status: 'review', intakeKind: 'posturography_bap', extractorVersion: 'onur-local-ocr-1.3',
     patientMatchStatus: 'match', mismatchFields: [], pages: [{ pageNumber: 1, proposedClassification: 'posturography', classification: 'posturography', classificationConfidence: 1, rotationDegrees: 0, width: 1000, height: 700, previewUrl: '', text: '', lines: [] }],
-    fields: Object.entries(values).map(([code, value]) => field(code, value)), sourceFilename: 'bap-synthetic.png', mimeType: 'image/png', documentUrl: '', sectionStudyId: 'synthetic-study', sectionPageNumbers: [1],
+    fields: [...Object.entries(values).map(([code, value]) => field(code, value)), field('software_version', 'Posturo 9.1'), field('los_forward', '7.5')], sourceFilename: 'bap-synthetic.png', mimeType: 'image/png', documentUrl: '', sectionStudyId: 'synthetic-study', sectionPageNumbers: [1],
     professionalConclusion: '', rehabilitationSuggestion: '',
   }
 }
@@ -89,5 +89,13 @@ describe('ClinicalExtractionReview automatic report draft', () => {
     expect(screen.getByText('Corregido')).toBeInTheDocument()
     expect(screen.getByText(/0 para revisar/)).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('1 corrección aplicada')
+  })
+
+  it('no solicita transcribir parámetros que no alimentan el informe ni la sugerencia', () => {
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    expect(screen.getByRole('textbox', { name: 'condition 1' })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'software version' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'los forward' })).not.toBeInTheDocument()
   })
 })
