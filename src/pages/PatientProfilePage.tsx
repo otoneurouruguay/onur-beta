@@ -1,18 +1,22 @@
-import { CalendarDays, ChevronLeft, Copy, FileImage, FileText, IdCard, KeyRound, Pencil, PlayCircle, Plus, Trash2 } from 'lucide-react'
+import { CalendarDays, CalendarX2, ChevronLeft, ClipboardCheck, Copy, FileImage, FileText, IdCard, KeyRound, Pencil, PlayCircle, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { RevokeSessionDialog } from '../components/RevokeSessionDialog'
+import { CancelSessionDialog } from '../components/CancelSessionDialog'
+import { RetrospectiveSessionDialog } from '../components/RetrospectiveSessionDialog'
 import { StatusBadge } from '../components/StatusBadge'
 import { usePatient } from '../features/patients/hooks'
-import { useDuplicateInPersonAssignment, useRevokeSessionAssignment, useSessionAssignments, useTreatmentCycles } from '../features/sessions/hooks'
-import { canManageSessionAssignment, canRevokeSessionAssignment, sessionDurationLabel, type SessionAssignmentRecord } from '../features/sessions/repository'
+import { useCancelSessionAssignment, useDuplicateInPersonAssignment, useRecordRetrospectiveSession, useRevokeSessionAssignment, useSessionAssignments, useTreatmentCycles } from '../features/sessions/hooks'
+import { canCancelSessionAssignment, canManageSessionAssignment, canRevokeSessionAssignment, sessionDurationLabel, type SessionAssignmentRecord } from '../features/sessions/repository'
 import { PatientDocumentsPanel } from '../features/documents/PatientDocumentsPanel'
 import { usePatientDocuments } from '../features/documents/hooks'
 import { cycleStudyPhaseLabels } from '../features/documents/types'
 import { PatientAssessmentsPanel } from '../features/assessments/PatientAssessmentsPanel'
 import { usePatientAssessments } from '../features/assessments/hooks'
 import { assessmentPhaseLabels } from '../features/assessments/questions'
+import { useClinicalEpisodes } from '../features/clinicalEpisodes/hooks'
+import { pathologyLabel } from '../features/clinicalEpisodes/catalog'
 
 export function PatientProfilePage() {
   const { patientId } = useParams()
@@ -22,12 +26,18 @@ export function PatientProfilePage() {
   const { data: assignments = [] } = useSessionAssignments(patientId ?? '')
   const { data: documents = [] } = usePatientDocuments(patientId ?? '')
   const { data: assessments = [] } = usePatientAssessments(patientId ?? '')
+  const { data: clinicalEpisodes = [] } = useClinicalEpisodes(patientId ?? '')
   const duplicateAssignment = useDuplicateInPersonAssignment(patientId ?? '')
   const revokeAssignment = useRevokeSessionAssignment(patientId ?? '')
+  const retrospectiveCompletion = useRecordRetrospectiveSession(patientId ?? '')
+  const cancelAssignment = useCancelSessionAssignment(patientId ?? '')
   const [actionNotice, setActionNotice] = useState('')
   const [actionError, setActionError] = useState('')
   const [pendingRevocation, setPendingRevocation] = useState<SessionAssignmentRecord | null>(null)
+  const [pendingRetrospective, setPendingRetrospective] = useState<SessionAssignmentRecord | null>(null)
+  const [pendingCancellation, setPendingCancellation] = useState<SessionAssignmentRecord | null>(null)
   const activeCycle = cycles.find((cycle) => cycle.status === 'active')
+  const activeEpisode = clinicalEpisodes.find((episode) => episode.treatmentCycleId === activeCycle?.id)
   const activeAssignment = assignments.find((assignment) => assignment.status === 'assigned' || assignment.status === 'started')
   const activePermissions = documents.filter((document) => document.sharedWithPatient).length
 
@@ -45,6 +55,30 @@ export function PatientProfilePage() {
     } catch {
       setActionNotice('')
       setActionError('No fue posible duplicar la asignación como domiciliaria.')
+    }
+  }
+
+  const completeRetrospectively = async (assignment: SessionAssignmentRecord, details: Parameters<typeof retrospectiveCompletion.mutateAsync>[0]['details']) => {
+    try {
+      setActionError('')
+      await retrospectiveCompletion.mutateAsync({ assignment, details })
+      setPendingRetrospective(null)
+      setActionNotice('La sesión quedó finalizada y etiquetada como registrada retrospectivamente.')
+    } catch (error) {
+      setActionNotice('')
+      setActionError(error instanceof Error ? error.message : 'No fue posible finalizar la sesión retrospectivamente.')
+    }
+  }
+
+  const cancelPlannedSession = async (assignment: SessionAssignmentRecord, reason: string) => {
+    try {
+      setActionError('')
+      await cancelAssignment.mutateAsync({ assignment, reason })
+      setPendingCancellation(null)
+      setActionNotice('La sesión quedó registrada como no realizada/cancelada.')
+    } catch (error) {
+      setActionNotice('')
+      setActionError(error instanceof Error ? error.message : 'No fue posible cancelar la sesión.')
     }
   }
 
@@ -107,7 +141,8 @@ export function PatientProfilePage() {
             <Link to={`/app/pacientes/${patient.id}/sesiones/nueva`} className="inline-flex items-center gap-2 rounded-2xl bg-[#E49A02] px-4 py-3 text-sm font-black text-white">
               <Plus size={17} /> Crear sesión
             </Link>
-            <Link to={`/app/pacientes/${patient.id}/informe`} className="inline-flex items-center gap-2 rounded-2xl border border-[#E9E7E7] bg-white px-4 py-3 text-sm font-black text-[#2F2F2F]"><FileText size={17}/> Informe</Link>
+            <Link to={`/app/pacientes/${patient.id}/episodio${activeCycle ? `?cycle=${activeCycle.id}` : ''}`} className="inline-flex items-center gap-2 rounded-2xl border border-[#D9E7DF] bg-[#F0F8F3] px-4 py-3 text-sm font-black text-[#28613D]"><ClipboardCheck size={17}/> Episodio clínico</Link>
+            <Link to={`/app/pacientes/${patient.id}/informe`} className="inline-flex items-center gap-2 rounded-2xl border border-[#E9E7E7] bg-white px-4 py-3 text-sm font-black text-[#2F2F2F]"><FileText size={17}/> Realizar informe</Link>
           </>
         }
       />
@@ -144,6 +179,7 @@ export function PatientProfilePage() {
             <h2 className="mt-5 text-lg font-black text-[#171717]">Ciclo de tratamiento</h2>
             <p className="mt-2 text-sm leading-6 text-[#747474]">{activeCycle?.objectives || 'Ingreso, evaluación, sesiones e informe final se conservan dentro del mismo ciclo.'}</p>
             {activeCycle?<div className="mt-6 rounded-2xl bg-[#F7F6F4] p-4 text-xs text-[#747474]">{activeCycle.label} · Inicio: {activeCycle.startedOn} · {assignments.filter(item=>item.treatmentCycleId===activeCycle.id).length} sesiones</div>:<Link to={`/app/pacientes/${patient.id}/ciclos/nuevo`} className="mt-6 inline-flex rounded-2xl border border-[#E9E7E7] px-4 py-3 text-xs font-black text-[#E49A02]">Iniciar primer ciclo</Link>}
+            {activeCycle && <Link to={`/app/pacientes/${patient.id}/episodio?cycle=${activeCycle.id}`} className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-[#D9E7DF] bg-[#F0F8F3] p-4 text-xs text-[#28613D]"><span><strong className="block">{activeEpisode ? pathologyLabel(activeEpisode.diagnosisCode) : 'Completar episodio clínico'}</strong><span className="mt-1 block">{activeEpisode ? activeEpisode.status === 'reviewed' ? 'Confirmado y disponible para planificar' : 'Borrador pendiente de revisión' : 'Anamnesis, déficits y metas del ciclo'}</span></span><ClipboardCheck className="shrink-0" size={18}/></Link>}
           </article>
           <article className="rounded-2xl border border-[#E9E7E7] bg-white p-6">
             <PlayCircle className="text-[#E49A02]" size={22} />
@@ -153,7 +189,19 @@ export function PatientProfilePage() {
           </article>
           <article className="rounded-2xl border border-[#E9E7E7] bg-white p-6 sm:col-span-2">
             <div className="flex items-center justify-between gap-4"><h2 className="text-lg font-black text-[#171717]">Sesiones asignadas</h2><Link to={`/app/pacientes/${patient.id}/sesiones/nueva`} className="text-xs font-black text-[#E49A02]">Nueva sesión</Link></div>
-            <div className="mt-5 divide-y divide-[#E9E7E7]">{assignments.length===0?<p className="py-4 text-sm text-[#747474]">Todavía no hay sesiones.</p>:assignments.map(assignment=><div key={assignment.id} className={`flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between ${assignment.status==='revoked'?'opacity-60 grayscale':''}`}><div className="min-w-0"><p className="text-sm font-black text-[#2F2F2F]">{assignment.title}</p><p className="mt-1 text-xs text-[#747474]">{assignment.mode==='home'?'Domiciliaria':assignment.kind==='free_note'?'Presencial libre':'Presencial'} · {assignment.kind==='free_note'?'sin ejercicios predefinidos':`${assignment.exercises.length} ejercicios`} · {assignment.availableFrom.slice(0,10)}</p>{assignment.professionalObservation&&<p className="mt-2 max-w-2xl whitespace-pre-wrap rounded-xl bg-[#F7F6F4] px-3 py-2 text-xs leading-5 text-[#5E5E5E]"><strong>Registro profesional:</strong> {assignment.professionalObservation}</p>}{assignment.patientComment&&<p className="mt-2 text-xs leading-5 text-[#747474]"><strong>Comentario del paciente:</strong> {assignment.patientComment}</p>}{assignment.status==='revoked'?<p className="mt-2 rounded-xl bg-[#F1EFEC] px-3 py-2 text-[11px] font-bold leading-5 text-[#5E5E5E]">Motivo de anulación: {assignment.revokedReason || 'Sin motivo disponible en el registro anterior.'}{assignment.revokedAt?` · ${new Date(assignment.revokedAt).toLocaleString('es-UY')}`:''}</p>:!canManageSessionAssignment(assignment)&&<p className="mt-1 text-[11px] font-bold text-[#8A5B00]">Historial protegido: la sesión ya registra actividad.</p>}</div><div className="flex flex-wrap items-center gap-2"><StatusBadge status={assignment.status}/>{canManageSessionAssignment(assignment)&&<Link to={`/app/pacientes/${patient.id}/sesiones/${assignment.id}/editar`} className="inline-flex items-center gap-2 rounded-xl border border-[#E9E7E7] bg-white px-3 py-2 text-xs font-black text-[#2F2F2F]"><Pencil size={14}/> Editar</Link>}{canRevokeSessionAssignment(assignment)&&<button type="button" onClick={()=>{setActionError('');setPendingRevocation(assignment)}} className="inline-flex items-center gap-2 rounded-xl border border-[#DEDCD9] bg-white px-3 py-2 text-xs font-black text-[#696969]"><Trash2 size={14}/> Anular</button>}{assignment.mode==='in_person'&&['assigned','started'].includes(assignment.status)&&<Link to={`/app/pacientes/${patient.id}/sesiones/${assignment.id}/presencial`} className="inline-flex items-center gap-2 rounded-xl bg-[#E49A02] px-3 py-2 text-xs font-black text-white"><PlayCircle size={15}/>{assignment.kind==='free_note'?'Registrar sesión':assignment.status==='started'?'Reanudar desde el principio':'Comenzar sesión presencial'}</Link>}{assignment.mode==='in_person'&&assignment.kind!=='free_note'&&assignment.status!=='revoked'&&<button type="button" disabled={duplicateAssignment.isPending} onClick={()=>void duplicateAsHome(assignment)} className="inline-flex items-center gap-2 rounded-xl border border-[#E9E7E7] bg-white px-3 py-2 text-xs font-black text-[#2F2F2F] disabled:opacity-60"><Copy size={14}/> {duplicateAssignment.isPending?'Duplicando…':'Duplicar como domiciliaria'}</button>}</div></div>)}</div>
+            <div className="mt-5 divide-y divide-[#E9E7E7]">{assignments.length===0?<p className="py-4 text-sm text-[#747474]">Todavía no hay sesiones.</p>:assignments.map((assignment) => {
+              const canFinishPast = ['assigned', 'started'].includes(assignment.status) && assignment.availableFrom.slice(0, 10) < new Date().toISOString().slice(0, 10)
+              return <div key={assignment.id} className={`flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between ${assignment.status==='revoked'?'opacity-60 grayscale':''}`}>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-black text-[#2F2F2F]">{assignment.title}</p>{assignment.registeredRetrospectively&&<span className="rounded-full bg-[#E7F3EB] px-2 py-1 text-[9px] font-black uppercase text-[#28613D]">Registrada retrospectivamente</span>}{assignment.retrospectiveWithoutMetrics&&<span className="rounded-full bg-[#F1EFEC] px-2 py-1 text-[9px] font-black uppercase text-[#5E5E5E]">Sin métricas retrospectivas</span>}</div>
+                  <p className="mt-1 text-xs text-[#747474]">{assignment.mode==='home'?'Domiciliaria':assignment.kind==='free_note'?'Presencial libre':'Presencial'} · {assignment.kind==='free_note'?'sin ejercicios predefinidos':`${assignment.exercises.length} ejercicios`} · {(assignment.actualPerformedAt || assignment.availableFrom).slice(0,10)}{assignment.retrospectiveDevice?` · ${assignment.retrospectiveDevice}`:''}</p>
+                  {assignment.professionalObservation&&<p className="mt-2 max-w-2xl whitespace-pre-wrap rounded-xl bg-[#F7F6F4] px-3 py-2 text-xs leading-5 text-[#5E5E5E]"><strong>Registro profesional:</strong> {assignment.professionalObservation}</p>}
+                  {assignment.patientComment&&<p className="mt-2 text-xs leading-5 text-[#747474]"><strong>Comentario del paciente:</strong> {assignment.patientComment}</p>}
+                  {assignment.status==='revoked'?<p className="mt-2 rounded-xl bg-[#F1EFEC] px-3 py-2 text-[11px] font-bold leading-5 text-[#5E5E5E]">Motivo de anulación: {assignment.revokedReason || 'Sin motivo disponible en el registro anterior.'}{assignment.revokedAt?` · ${new Date(assignment.revokedAt).toLocaleString('es-UY')}`:''}</p>:assignment.status==='omitted'?<p className="mt-2 rounded-xl bg-[#FFF7E8] px-3 py-2 text-[11px] font-bold leading-5 text-[#8A5B00]">Motivo de cancelación: {assignment.cancellationReason || 'Sin motivo estructurado en el registro anterior.'}</p>:!canManageSessionAssignment(assignment)&&<p className="mt-1 text-[11px] font-bold text-[#8A5B00]">Historial protegido: la sesión ya registra actividad.</p>}
+                </div>
+                <div className="flex flex-wrap items-center gap-2"><StatusBadge status={assignment.status}/>{canFinishPast&&<button type="button" onClick={()=>{setActionError('');setPendingRetrospective(assignment)}} className="inline-flex items-center gap-2 rounded-xl border border-[#B9D9C5] bg-[#F0F8F3] px-3 py-2 text-xs font-black text-[#28613D]"><ClipboardCheck size={14}/> Marcar como finalizada</button>}{canManageSessionAssignment(assignment)&&<Link to={`/app/pacientes/${patient.id}/sesiones/${assignment.id}/editar`} className="inline-flex items-center gap-2 rounded-xl border border-[#E9E7E7] bg-white px-3 py-2 text-xs font-black text-[#2F2F2F]"><Pencil size={14}/> Editar</Link>}{canCancelSessionAssignment(assignment)&&<button type="button" onClick={()=>{setActionError('');setPendingCancellation(assignment)}} className="inline-flex items-center gap-2 rounded-xl border border-[#E8CE99] bg-white px-3 py-2 text-xs font-black text-[#8A5B00]"><CalendarX2 size={14}/> No realizada</button>}{canRevokeSessionAssignment(assignment)&&<button type="button" onClick={()=>{setActionError('');setPendingRevocation(assignment)}} className="inline-flex items-center gap-2 rounded-xl border border-[#DEDCD9] bg-white px-3 py-2 text-xs font-black text-[#696969]"><Trash2 size={14}/> Anular</button>}{assignment.mode==='in_person'&&['assigned','started'].includes(assignment.status)&&<Link to={`/app/pacientes/${patient.id}/sesiones/${assignment.id}/presencial`} className="inline-flex items-center gap-2 rounded-xl bg-[#E49A02] px-3 py-2 text-xs font-black text-white"><PlayCircle size={15}/>{assignment.kind==='free_note'?'Registrar sesión':assignment.status==='started'?'Reanudar desde el principio':'Comenzar sesión presencial'}</Link>}{assignment.mode==='in_person'&&assignment.kind!=='free_note'&&assignment.status!=='revoked'&&<button type="button" disabled={duplicateAssignment.isPending} onClick={()=>void duplicateAsHome(assignment)} className="inline-flex items-center gap-2 rounded-xl border border-[#E9E7E7] bg-white px-3 py-2 text-xs font-black text-[#2F2F2F] disabled:opacity-60"><Copy size={14}/> {duplicateAssignment.isPending?'Duplicando…':'Duplicar como domiciliaria'}</button>}</div>
+              </div>
+            })}</div>
           </article>
           <PatientDocumentsPanel patientId={patient.id}/>
           <PatientAssessmentsPanel patientId={patient.id} cycleId={activeCycle?.id??''}/>
@@ -172,6 +220,8 @@ export function PatientProfilePage() {
         </div>
       </section>
       {pendingRevocation && <RevokeSessionDialog sessionTitle={pendingRevocation.title} isPending={revokeAssignment.isPending} error={actionError} onCancel={()=>{if(!revokeAssignment.isPending){setPendingRevocation(null);setActionError('')}}} onConfirm={(reason)=>void revoke(pendingRevocation,reason)}/>}
+      {pendingRetrospective && <RetrospectiveSessionDialog assignment={pendingRetrospective} isPending={retrospectiveCompletion.isPending} error={actionError} onCancel={()=>{if(!retrospectiveCompletion.isPending){setPendingRetrospective(null);setActionError('')}}} onConfirm={(details)=>void completeRetrospectively(pendingRetrospective,details)}/>}
+      {pendingCancellation && <CancelSessionDialog sessionTitle={pendingCancellation.title} isPending={cancelAssignment.isPending} error={actionError} onClose={()=>{if(!cancelAssignment.isPending){setPendingCancellation(null);setActionError('')}}} onConfirm={(reason)=>void cancelPlannedSession(pendingCancellation,reason)}/>}
     </div>
   )
 }

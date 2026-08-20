@@ -1,0 +1,25 @@
+import { AlertTriangle, ClipboardList, EyeOff, Plus, RotateCcw } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import type { ExerciseConfig } from '../exercise/types'
+import type { ExerciseTemplateRecord } from '../templates/repository'
+import { buildEpisodeClinicalSummary, pathologyLabel } from './catalog'
+import { exerciseFromClinicalSuggestion } from './suggestionExercise'
+import type { ClinicalEpisodeRecord } from './types'
+
+export function ClinicalSuggestionsPanel({ patientId, episode, templates, onAdd }: { patientId: string; episode: ClinicalEpisodeRecord | null | undefined; templates: ExerciseTemplateRecord[]; onAdd: (exercise: ExerciseConfig, title: string) => void }) {
+  const [dismissed, setDismissed] = useState<string[]>([])
+  const summary = useMemo(() => episode ? buildEpisodeClinicalSummary(episode) : null, [episode])
+
+  if (!episode) return <section className="rounded-2xl border border-[#E8CE99] bg-[#FFF7E8] p-5"><div className="flex items-start gap-3"><ClipboardList className="mt-0.5 shrink-0 text-[#A36B00]" size={20}/><div><h2 className="text-sm font-black text-[#7A5100]">Planificación clínica todavía no vinculada</h2><p className="mt-1 text-xs leading-5 text-[#8A5B00]">Podés armar la sesión manualmente. Si completás el episodio clínico, acá aparecerá una batería orientativa basada en déficits y metas.</p><Link to={`/app/pacientes/${patientId}/episodio`} className="mt-3 inline-flex rounded-xl bg-[#8A5B00] px-3 py-2 text-xs font-black text-white">Completar episodio clínico</Link></div></div></section>
+
+  const visible = summary?.suggestions.filter((suggestion) => !dismissed.includes(suggestion.id)) ?? []
+  return <section className="overflow-hidden rounded-2xl border border-[#D9E7DF] bg-white">
+    <div className="border-b border-[#D9E7DF] bg-[#F0F8F3] p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex items-center gap-2"><h2 className="text-sm font-black text-[#173A26]">Batería orientativa · {pathologyLabel(episode.diagnosisCode)}</h2><span className={`rounded-full px-2.5 py-1 text-[9px] font-black uppercase ${episode.status === 'reviewed' ? 'bg-[#28613D] text-white' : 'bg-[#FFF1D5] text-[#8A5B00]'}`}>{episode.status === 'reviewed' ? 'episodio confirmado' : 'borrador'}</span></div><p className="mt-1 max-w-3xl text-xs leading-5 text-[#47705A]">Ninguna opción se agrega sola. Podés ignorarlas, incorporar algunas y después editar o eliminar cada ejercicio.</p></div><Link to={`/app/pacientes/${patientId}/episodio?cycle=${episode.treatmentCycleId}`} className="rounded-xl border border-[#B9D9C5] bg-white px-3 py-2 text-[10px] font-black text-[#28613D]">Revisar episodio</Link></div></div>
+    {summary && summary.warnings.length > 0 && <div className="border-b border-[#E8CE99] bg-[#FFF7E8] p-4"><div className="flex items-start gap-2 text-xs font-bold leading-5 text-[#8A5B00]"><AlertTriangle size={16} className="mt-0.5 shrink-0"/><ul className="space-y-1">{summary.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div></div>}
+    <div className="grid gap-3 p-5 lg:grid-cols-2">{visible.map((suggestion) => {
+      const exercise = exerciseFromClinicalSuggestion(suggestion, episode, templates)
+      return <article key={suggestion.id} className="rounded-2xl border border-[#E9E7E7] p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><span className="rounded-full bg-[#F7F6F4] px-2.5 py-1 text-[9px] font-black uppercase text-[#5E5E5E]">{suggestion.kind === 'platform' ? 'plataforma' : 'fuera de plataforma'}</span><h3 className="mt-3 text-sm font-black text-[#2F2F2F]">{suggestion.title}</h3><p className="mt-1 text-[11px] font-bold text-[#47705A]">Objetivo: {suggestion.targetImpairment}</p></div><button type="button" aria-label={`Ignorar ${suggestion.title}`} title="Ignorar sugerencia" onClick={() => setDismissed((current) => [...current, suggestion.id])} className="shrink-0 rounded-xl border border-[#E9E7E7] p-2 text-[#747474]"><EyeOff size={15}/></button></div><p className="mt-3 text-xs leading-5 text-[#747474]">{suggestion.rationale}</p><p className="mt-2 text-[11px] leading-5 text-[#5E5E5E]"><strong>Dosis:</strong> {suggestion.dose}</p><button type="button" disabled={!exercise} onClick={() => exercise && onAdd(exercise, suggestion.title)} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#28613D] px-3 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"><Plus size={14}/>{exercise ? 'Agregar a la sesión' : 'Plantilla no disponible'}</button></article>
+    })}{visible.length === 0 && <div className="lg:col-span-2 rounded-2xl bg-[#F7F6F4] p-5 text-center"><p className="text-xs text-[#747474]">Ignoraste todas las sugerencias. Podés seguir armando la sesión manualmente.</p><button type="button" onClick={() => setDismissed([])} className="mt-3 inline-flex items-center gap-2 text-xs font-black text-[#28613D]"><RotateCcw size={14}/> Volver a mostrarlas</button></div>}</div>
+  </section>
+}

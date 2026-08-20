@@ -8,8 +8,8 @@ describe('StatusBadge', () => {
     expect(screen.getByText('Cuarentena')).toBeInTheDocument()
   })
 
-  it('muestra en español el estado de una sesión iniciada', () => {
+  it('muestra como en curso una sesión iniciada', () => {
     render(<StatusBadge status="started" />)
-    expect(screen.getByText('Iniciada')).toBeInTheDocument()
+    expect(screen.getByText('En curso')).toBeInTheDocument()
   })
 })

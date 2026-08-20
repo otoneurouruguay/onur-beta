@@ -1,10 +1,13 @@
 import { defineConfig } from 'vite'
+import { readFileSync } from 'node:fs'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
-import { PWA_CACHE_ID, PWA_UPDATE_POLICY } from './src/pwa/policy.js'
+import { PWA_UPDATE_POLICY } from './src/pwa/policy.js'
 
 const base = process.env.VITE_BASE_PATH || '/'
+const packageVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version as string
+const pwaCacheId = `onur-beta-${packageVersion}`
 
 export default defineConfig({
   base,
@@ -15,7 +18,7 @@ export default defineConfig({
       registerType: PWA_UPDATE_POLICY.registerType,
       injectRegister: PWA_UPDATE_POLICY.injectRegister,
       workbox: {
-        cacheId: PWA_CACHE_ID,
+        cacheId: pwaCacheId,
         globIgnores: ['**/ocr/**', '**/three.module-*.js'],
         cleanupOutdatedCaches: true,
         skipWaiting: PWA_UPDATE_POLICY.skipWaiting,

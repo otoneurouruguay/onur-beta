@@ -67,6 +67,7 @@ export interface ClinicalStudySummary {
   id: string
   patientId: string
   patientName: string
+  treatmentCycleId: string
   sourceFilename: string
   studyType: StudyType
   cyclePhase: CycleStudyPhase

@@ -1,7 +1,7 @@
 {
   "name": "onur-beta",
   "private": true,
-  "version": "0.1.0-beta.59",
+  "version": "0.1.0-beta.60",
   "type": "module",
   "scripts": {
     "prepare:ocr": "node scripts/sync_ocr_assets.mjs",

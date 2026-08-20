@@ -22,6 +22,44 @@ export interface SessionFormValues {
   availableFrom: string
   availableUntil: string
   exercises: ExerciseConfig[]
+  registerAsCompleted?: boolean
+  retrospective?: RetrospectiveSessionValues
+}
+
+export interface RetrospectiveSessionValues {
+  performedAt: string
+  performedExerciseIndexes: number[]
+  omittedExerciseReasons: Record<string, string>
+  durationMinutes: number
+  device: 'standard' | 'vr_box' | 'cardboard' | 'quest' | 'external' | 'mixed'
+  withoutMetrics: boolean
+  initialDiscomfort: number | null
+  peakDiscomfort: number | null
+  finalDiscomfort: number | null
+  recoveryMinutes: number | null
+  delayedResponse: string
+  progressionDecision: string
+  professionalObservation: string
+  patientComment: string
+}
+
+export function createRetrospectiveSessionValues(exercises: ExerciseConfig[], sessionDate: string): RetrospectiveSessionValues {
+  return {
+    performedAt: `${sessionDate || new Date().toISOString().slice(0, 10)}T12:00`,
+    performedExerciseIndexes: exercises.map((_, index) => index),
+    omittedExerciseReasons: {},
+    durationMinutes: 0,
+    device: 'standard',
+    withoutMetrics: true,
+    initialDiscomfort: null,
+    peakDiscomfort: null,
+    finalDiscomfort: null,
+    recoveryMinutes: null,
+    delayedResponse: '',
+    progressionDecision: '',
+    professionalObservation: '',
+    patientComment: '',
+  }
 }
 
 export function validateSession(values: SessionFormValues) {
@@ -33,6 +71,7 @@ export function validateSession(values: SessionFormValues) {
   if (values.availableUntil && values.availableUntil < values.availableFrom) errors.availableUntil = 'La fecha final no puede ser anterior.'
   if (values.kind === 'free_note') {
     if (values.mode !== 'in_person') errors.kind = 'La sesión libre debe ser presencial.'
+    validateRetrospective(values, errors)
     return errors
   }
   if (values.exercises.length === 0) setExerciseError('Agregá al menos un ejercicio.')
@@ -81,5 +120,26 @@ export function validateSession(values: SessionFormValues) {
     const plan = buildExerciseExecutionPlan(values.exercises[impossibleExecutionIndex], values.mode)
     setExerciseError(`Ejercicio ${impossibleExecutionIndex + 1}: ${plan.warnings[0] ?? 'La ejecución no es viable en la modalidad seleccionada.'}`)
   }
+  validateRetrospective(values, errors)
   return errors
+}
+
+function validateRetrospective(values: SessionFormValues, errors: Record<string, string>) {
+  if (!values.registerAsCompleted) return
+  const retrospective = values.retrospective
+  if (!retrospective?.performedAt) { errors.retrospective = 'Indicá la fecha y hora reales de ejecución.'; return }
+  const performedAt = new Date(retrospective.performedAt)
+  if (Number.isNaN(performedAt.getTime()) || performedAt.getTime() > Date.now()) errors.retrospective = 'La ejecución retrospectiva no puede quedar en el futuro.'
+  if (retrospective.professionalObservation.trim().length < 3) errors.retrospective = 'Agregá una observación profesional sobre lo realizado.'
+  if (!retrospective.withoutMetrics && (!Number.isInteger(retrospective.durationMinutes) || retrospective.durationMinutes < 1 || retrospective.durationMinutes > 600)) errors.retrospective = 'La duración aproximada debe estar entre 1 y 600 minutos.'
+  if (!retrospective.withoutMetrics) {
+    const symptoms = [retrospective.initialDiscomfort, retrospective.peakDiscomfort, retrospective.finalDiscomfort]
+    if (symptoms.some((value) => value != null && (!Number.isInteger(value) || value < 0 || value > 10))) errors.retrospective = 'Los síntomas retrospectivos deben estar entre 0 y 10.'
+    if (retrospective.recoveryMinutes != null && (!Number.isInteger(retrospective.recoveryMinutes) || retrospective.recoveryMinutes < 0 || retrospective.recoveryMinutes > 1440)) errors.retrospective = 'La recuperación debe estar entre 0 y 1440 minutos.'
+  }
+  if (values.kind !== 'free_note') {
+    values.exercises.forEach((_, index) => {
+      if (!retrospective.performedExerciseIndexes.includes(index) && (retrospective.omittedExerciseReasons[String(index)] ?? '').trim().length < 3) errors.retrospective = `Indicá por qué se omitió el ejercicio ${index + 1}.`
+    })
+  }
 }

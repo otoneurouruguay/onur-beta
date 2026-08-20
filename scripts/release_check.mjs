@@ -63,6 +63,10 @@ for (const marker of [
   'Velocidad de seguimiento ocular',
   'Grave · 220 Hz',
   'Muy agudo · 1320 Hz',
+  'Episodio clínico',
+  'Registrar esta sesión pasada como ya finalizada',
+  'Registrada retrospectivamente',
+  'Sin métricas retrospectivas',
 ]) {
   requireCheck(compiledJavaScript.includes(marker), `La compilación no contiene el control obligatorio: ${marker}.`)
 }

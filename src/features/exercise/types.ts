@@ -19,6 +19,7 @@ export type CognitiveTaskMode = 'none' | 'rare_target' | 'go_no_go' | 'short_mem
 export type CognitiveResponseMode = 'count_at_end' | 'verbal' | 'screen_tap'
 export type CognitiveSymbol = 'circle' | 'square' | 'triangle' | 'diamond' | 'star'
 export type ImmersiveTargetShape = 'circle' | 'diamond' | 'cross'
+export type ExerciseSelectionOrigin = 'suggested' | 'suggested_modified' | 'manual' | 'free'
 
 export interface CognitivePerformanceReport {
   mode: Exclude<CognitiveTaskMode, 'none'>
@@ -64,6 +65,14 @@ export interface ExerciseCompletionReport {
 
 export interface ExerciseConfig {
   name: string
+  selectionOrigin?: ExerciseSelectionOrigin
+  clinicalEpisodeId?: string
+  clinicalSuggestionId?: string
+  clinicalRationale?: string
+  targetImpairment?: string
+  clinicalDoseNote?: string
+  clinicalProgressionNote?: string
+  clinicalRegressionNote?: string
   clinicalProtocol?: 'pppd' | 'stroboscopic_experimental'
   progressionLevel?: 1 | 2 | 3
   progressionCriteria?: string

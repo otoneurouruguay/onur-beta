@@ -76,14 +76,16 @@ describe('ejecución presencial desde la cuenta profesional', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /omitir y finalizar/i }))
     const finalScale = screen.getByRole('group', { name: /malestar al finalizar/i })
+    const peakScale = screen.getByRole('group', { name: /máximo malestar durante/i })
     const difficultyScale = screen.getByRole('group', { name: /dificultad percibida/i })
     fireEvent.click(within(finalScale).getByRole('button', { name: '3' }))
+    fireEvent.click(within(peakScale).getByRole('button', { name: '4' }))
     fireEvent.click(within(difficultyScale).getByRole('button', { name: '2' }))
     fireEvent.change(screen.getByPlaceholderText(/transcribí lo declarado/i), { target: { value: 'Comentario ficticio del paciente' } })
     fireEvent.change(screen.getByPlaceholderText(/observación clínica/i), { target: { value: 'Observación profesional ficticia' } })
     fireEvent.click(screen.getByRole('button', { name: /guardar y finalizar/i }))
 
-    await waitFor(() => expect(mocks.complete).toHaveBeenCalledWith(expect.objectContaining({ activeSeconds: 37, skippedExercises: 1, finalDiscomfort: 3, perceivedDifficulty: 2, patientComment: 'Comentario ficticio del paciente', professionalObservation: 'Observación profesional ficticia' })))
+    await waitFor(() => expect(mocks.complete).toHaveBeenCalledWith(expect.objectContaining({ activeSeconds: 37, skippedExercises: 1, peakDiscomfort: 4, finalDiscomfort: 3, perceivedDifficulty: 2, patientComment: 'Comentario ficticio del paciente', professionalObservation: 'Observación profesional ficticia' })))
     expect(await screen.findByRole('heading', { name: /sesión presencial registrada/i })).toBeInTheDocument()
   })
 

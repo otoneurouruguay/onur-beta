@@ -60,7 +60,11 @@ export function InPersonSessionPage() {
   const revokeQuestPairing = useRevokeQuestSessionPairing()
   const [stage, setStage] = useState<'review' | 'running' | 'quest_waiting' | 'feedback' | 'finished'>('review')
   const [initialDiscomfort, setInitialDiscomfort] = useState<number | null>(null)
+  const [peakDiscomfort, setPeakDiscomfort] = useState<number | null>(null)
   const [finalDiscomfort, setFinalDiscomfort] = useState<number | null>(null)
+  const [recoveryMinutes, setRecoveryMinutes] = useState<number | null>(null)
+  const [delayedResponse, setDelayedResponse] = useState('')
+  const [progressionDecision, setProgressionDecision] = useState('mantener')
   const [perceivedDifficulty, setPerceivedDifficulty] = useState<number | null>(null)
   const [patientComment, setPatientComment] = useState('')
   const [professionalObservation, setProfessionalObservation] = useState('')
@@ -172,8 +176,8 @@ export function InPersonSessionPage() {
   }
 
   const finish = async () => {
-    if (!runnerResult || finalDiscomfort === null || perceivedDifficulty === null || !patientComment.trim()) {
-      setError('Registrá malestar final, dificultad y el comentario declarado por el paciente.')
+    if (!runnerResult || peakDiscomfort === null || finalDiscomfort === null || perceivedDifficulty === null || !patientComment.trim()) {
+      setError('Registrá el máximo durante, el malestar final, la dificultad y el comentario declarado por el paciente.')
       return
     }
     try {
@@ -181,7 +185,11 @@ export function InPersonSessionPage() {
       await completeSupervised.mutateAsync({
         assignment,
         ...runnerResult,
+        peakDiscomfort,
         finalDiscomfort,
+        recoveryMinutes,
+        delayedResponse,
+        progressionDecision,
         perceivedDifficulty,
         patientComment,
         professionalObservation,
@@ -218,7 +226,10 @@ export function InPersonSessionPage() {
         <p className="mt-2 text-sm leading-6 text-white/65">Completá las respuestas del paciente y, si corresponde, tu observación profesional.</p>
       </div>
       <ScaleQuestion label="Malestar al finalizar" hint="Respuesta declarada por el paciente: 0 significa ningún malestar y 10 el mayor malestar imaginable." min={0} max={10} value={finalDiscomfort} onChange={setFinalDiscomfort}/>
+      <ScaleQuestion label="Máximo malestar durante la sesión" hint="Registrá el valor máximo que el paciente recuerda haber sentido durante los ejercicios." min={0} max={10} value={peakDiscomfort} onChange={setPeakDiscomfort}/>
       <ScaleQuestion label="Dificultad percibida" hint="Respuesta declarada por el paciente: 1 significa muy fácil y 5 muy difícil." min={1} max={5} value={perceivedDifficulty} onChange={setPerceivedDifficulty}/>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="block rounded-2xl border border-[#E9E7E7] bg-white p-5 text-sm font-black text-[#2F2F2F]">Recuperación hasta volver a basal <span className="font-normal text-[#747474]">(minutos, opcional)</span><input type="number" min="0" max="1440" value={recoveryMinutes ?? ''} onChange={(event) => setRecoveryMinutes(event.target.value === '' ? null : Number(event.target.value))} className="mt-3 h-12 w-full rounded-2xl border border-[#E9E7E7] px-4 text-base font-normal"/></label><label className="block rounded-2xl border border-[#E9E7E7] bg-white p-5 text-sm font-black text-[#2F2F2F]">Decisión para la próxima sesión<select value={progressionDecision} onChange={(event) => setProgressionDecision(event.target.value)} className="mt-3 h-12 w-full rounded-2xl border border-[#E9E7E7] px-4 text-base font-normal"><option value="mantener">Mantener parámetros</option><option value="progresar_una_variable">Progresar una variable</option><option value="regresar">Regresar carga</option><option value="reevaluar">Reevaluar antes de continuar</option></select></label></div>
+      <label className="block rounded-2xl border border-[#E9E7E7] bg-white p-5 text-sm font-black text-[#2F2F2F]">Respuesta tardía conocida <span className="font-normal text-[#747474]">(opcional)</span><textarea maxLength={1000} rows={3} value={delayedResponse} onChange={(event) => setDelayedResponse(event.target.value)} className="mt-3 w-full resize-none rounded-2xl border border-[#E9E7E7] p-4 text-base font-normal" placeholder="Si todavía no puede conocerse, dejar vacío y completar en seguimiento."/></label>
       <label className="block rounded-2xl border border-[#E9E7E7] bg-white p-5 text-sm font-black text-[#2F2F2F]">Comentario del paciente<textarea maxLength={500} rows={3} value={patientComment} onChange={(event) => setPatientComment(event.target.value)} className="mt-3 w-full resize-none rounded-2xl border border-[#E9E7E7] p-4 text-base font-normal" placeholder="Transcribí lo declarado por el paciente."/><span className="mt-2 block text-right text-[11px] font-bold text-[#747474]">{patientComment.length}/500</span></label>
       <label className="block rounded-2xl border border-[#E9E7E7] bg-white p-5 text-sm font-black text-[#2F2F2F]">Observación profesional <span className="font-normal text-[#747474]">(opcional)</span><textarea maxLength={2000} rows={4} value={professionalObservation} onChange={(event) => setProfessionalObservation(event.target.value)} className="mt-3 w-full resize-none rounded-2xl border border-[#E9E7E7] p-4 text-base font-normal" placeholder="Añadí una observación clínica si corresponde."/><span className="mt-2 block text-right text-[11px] font-bold text-[#747474]">{professionalObservation.length}/2000</span></label>
       <button type="button" disabled={completeSupervised.isPending} onClick={finish} className="flex h-14 w-full items-center justify-center rounded-2xl bg-[#E49A02] text-sm font-black text-white disabled:opacity-60">{completeSupervised.isPending ? 'Guardando…' : 'Guardar y finalizar'}</button>

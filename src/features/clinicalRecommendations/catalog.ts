@@ -37,7 +37,7 @@ export const pathologyRecommendations: readonly PathologyRecommendation[] = [
     clinicalFrame: 'Para déficit periférico unilateral confirmado y clínicamente estable. La selección se ajusta a agudeza visual dinámica, tolerancia al movimiento, equilibrio y marcha.',
     evidence: 'direct',
     evidenceNote: 'Guía de práctica, revisión Cochrane y estudios específicos de neuritis e hipofunción unilateral.',
-    sourceIds: ['SRC-001', 'SRC-002', 'SRC-004', 'SRC-005', 'SRC-006', 'SRC-031'],
+    sourceIds: ['SRC-001', 'SRC-002', 'SRC-004', 'SRC-005', 'SRC-006', 'SRC-031', 'SRC-039', 'SRC-040'],
     options: [
       { title: 'Adaptación y estabilidad de mirada', summary: 'Comenzar con RVO x1 y progresar una sola variable; RVO x2 u objetivo recordado requieren indicación y control profesional.', templateIds: ['template-rvo-bars', 'template-rvo-x2-horizontal', 'template-rvo-x2-vertical', 'template-rvo-x2-diagonal', 'template-remembered-target'] },
       { title: 'Equilibrio y marcha', summary: 'Agregar transferencia de peso y marcha con giros cefálicos según estabilidad, riesgo de caída y ayudas disponibles.', templateIds: ['template-functional-weight-shifts', 'template-functional-gait-head-turns'] },
@@ -50,7 +50,7 @@ export const pathologyRecommendations: readonly PathologyRecommendation[] = [
     clinicalFrame: 'Prioriza estabilidad de mirada, sustitución, equilibrio y estrategias funcionales con atención especial a oscuridad, terreno irregular y oscilopsia.',
     evidence: 'direct',
     evidenceNote: 'Guía de hipofunción periférica y evidencia específica en hipofunción bilateral.',
-    sourceIds: ['SRC-001', 'SRC-007', 'SRC-008'],
+    sourceIds: ['SRC-001', 'SRC-007', 'SRC-008', 'SRC-041'],
     options: [
       { title: 'Mirada y sustitución', summary: 'Usar RVO x1 o sustitución por objetivo recordado según el déficit y la estrategia observada.', templateIds: ['template-rvo-bars', 'template-remembered-target'] },
       { title: 'Control postural y marcha', summary: 'Entrenar tareas funcionales con apoyo, iluminación y supervisión definidos antes de reducir señales visuales.', templateIds: ['template-functional-weight-shifts', 'template-functional-gait-head-turns'] },

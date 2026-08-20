@@ -14,6 +14,7 @@ const PatientCreatePinPage = lazy(() => import('./pages/PatientCreatePinPage').t
 const PatientProfilePage = lazy(() => import('./pages/PatientProfilePage').then((module) => ({ default: module.PatientProfilePage })))
 const PatientFormPage = lazy(() => import('./pages/PatientFormPage').then((module) => ({ default: module.PatientFormPage })))
 const TreatmentCycleFormPage = lazy(() => import('./pages/TreatmentCycleFormPage').then((module) => ({ default: module.TreatmentCycleFormPage })))
+const ClinicalEpisodePage = lazy(() => import('./pages/ClinicalEpisodePage').then((module) => ({ default: module.ClinicalEpisodePage })))
 const SessionBuilderPage = lazy(() => import('./pages/SessionBuilderPage').then((module) => ({ default: module.SessionBuilderPage })))
 const InPersonSessionPage = lazy(() => import('./pages/InPersonSessionPage').then((module) => ({ default: module.InPersonSessionPage })))
 const SessionsPage = lazy(() => import('./pages/SessionsPage').then((module) => ({ default: module.SessionsPage })))
@@ -60,6 +61,7 @@ const router = createBrowserRouter([
       { path: 'pacientes/nuevo', element: load(<PatientFormPage />) },
       { path: 'pacientes/:patientId/editar', element: load(<PatientFormPage />) },
       { path: 'pacientes/:patientId/ciclos/nuevo', element: load(<TreatmentCycleFormPage />) },
+      { path: 'pacientes/:patientId/episodio', element: load(<ClinicalEpisodePage />) },
       { path: 'pacientes/:patientId/sesiones/nueva', element: load(<SessionBuilderPage />) },
       { path: 'pacientes/:patientId/sesiones/:assignmentId/editar', element: load(<SessionBuilderPage />) },
       { path: 'pacientes/:patientId/sesiones/:assignmentId/presencial', element: load(<InPersonSessionPage />) },
