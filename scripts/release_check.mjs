@@ -56,6 +56,8 @@ requireCheck(
   'La compilación no contiene la conexión de autenticación. Usá npm run build:authenticated antes de publicar.',
 )
 for (const marker of [
+  'onur:lazy-import-refresh:',
+  'Actualizar y volver a intentar',
   'Patología o condición clínica',
   'Borrador recuperado automáticamente',
   'Estroboscópicos · experimental',
