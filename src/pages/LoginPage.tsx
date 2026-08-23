@@ -114,7 +114,7 @@ export function LoginPage() {
                 autoCapitalize="none"
                 spellCheck={false}
                 required
-                placeholder={mode === 'professional' ? 'profesional@ejemplo.com' : 'PepitoPerez'}
+                placeholder={mode === 'professional' ? 'profesional@ejemplo.com' : 'Nombre de usuario'}
                 className="mt-2 h-12 w-full rounded-lg border border-[#D9D6D2] bg-white px-3.5 text-sm text-[#171717] transition placeholder:text-[#A1A1A1] focus:border-[#E49A02]"
               />
             </label>
