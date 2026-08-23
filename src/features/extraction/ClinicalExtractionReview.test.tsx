@@ -69,7 +69,10 @@ describe('ClinicalExtractionReview automatic report draft', () => {
     fireEvent.click(screen.getByRole('button', { name: /regenerar desde parámetros/i }))
     expect(window.confirm).toHaveBeenCalled()
     expect((conclusion as HTMLTextAreaElement).value).toContain('70 a 79 años')
-    expect(screen.getByText(/09_TABLA_VALORES_NORMALES_BAP.xlsx/)).toBeInTheDocument()
+    expect(screen.getByText('Comparaciones utilizadas')).toBeInTheDocument()
+    expect(screen.queryByText(/fuentes internas seguras/i)).not.toBeInTheDocument()
+    expect(conclusion).not.toHaveValue(expect.stringContaining('Este borrador'))
+    expect(suggestion).not.toHaveValue(expect.stringContaining('Borrador para revisión profesional'))
   })
 
   it('aplica solo las correcciones editadas y actualiza su estado sin repetir el OCR', async () => {
@@ -97,5 +100,27 @@ describe('ClinicalExtractionReview automatic report draft', () => {
     expect(screen.getByRole('textbox', { name: 'condition 1' })).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'software version' })).not.toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'los forward' })).toBeInTheDocument()
+  })
+
+  it('limpia las aclaraciones redundantes guardadas por versiones anteriores', async () => {
+    mocks.record = {
+      ...record(),
+      professionalConclusion: 'Conclusión clínica sintética. Este borrador describe el perfil funcional y no establece un diagnóstico; debe correlacionarse con anamnesis, examen neurológico y vestibular, marcha, Romberg y estudios asociados.',
+      rehabilitationSuggestion: 'Borrador para revisión profesional.\n\nConsiderar entrenamiento vestibular sintético.\n\nEl profesional debe definir ejercicios, dosis, frecuencia, asistencia, progresión, regresión y precauciones; se sugiere reevaluar con la misma metodología para documentar evolución.',
+    }
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Conclusión para confirmar' })).toHaveValue('Conclusión clínica sintética.'))
+    expect(screen.getByRole('textbox', { name: 'Sugerencia de rehabilitación para confirmar' })).toHaveValue('Considerar entrenamiento vestibular sintético.')
+  })
+
+  it('muestra el motivo devuelto por Supabase cuando la confirmación falla', async () => {
+    mocks.confirm.mockRejectedValue({ message: 'Todos los valores clínicos presentes deben estar confirmados.' })
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Conclusión para confirmar' })).not.toHaveValue(''))
+    fireEvent.click(screen.getByRole('button', { name: /confirmar y ver informe/i }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Todos los valores clínicos presentes deben estar confirmados.'))
   })
 })

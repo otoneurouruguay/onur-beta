@@ -41,6 +41,8 @@ Debe finalizar sin errores. El comando verifica:
 - [ ] Si se confirma la salida, el avance parcial y el tiempo activo quedan registrados.
 - [ ] Las evaluaciones visibles para el paciente aparecen en el portal domiciliario.
 - [ ] Crear o editar un paciente conserva CI, acceso domiciliario y demás datos clínicos.
+- [ ] Confirmar una posturografía genera el informe aunque el lector haya conservado metadatos auxiliares sin métrica, como “Estado del estudio”.
+- [ ] Si falla el guardado o la confirmación de un estudio, la interfaz muestra el motivo devuelto por el servidor y no solo un error genérico.
 - [ ] Los cambios hechos en parámetros de VR se reflejan en la reproducción.
 - [ ] Los controles de video VR se ocultan durante la reproducción y reaparecen al tocar la pantalla.
 

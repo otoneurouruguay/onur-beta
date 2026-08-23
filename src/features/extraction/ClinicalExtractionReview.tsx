@@ -9,11 +9,20 @@ import { pageClassificationLabels } from './types'
 import { useConfirmExtraction, useDiscardExtraction, useManualExtraction, useReplaceExtraction, useSaveExtraction, useStudyExtraction } from './hooks'
 import type { ExtractionReviewRecord } from './repository'
 import { PrivateDocumentViewer } from './PrivateDocumentViewer'
-import { buildBapAutomaticReport } from './bapAutomaticReport'
+import { buildBapAutomaticReport, removeLegacyAutomaticReportBoilerplate } from './bapAutomaticReport'
 import { isReportRelevantField, isReportRequiredField } from './reportFields'
 import { canonicalFieldStatus, deriveFieldCounters, fieldReviewReason, isFieldPresent } from './fieldResults'
 
 const control = 'h-11 rounded-xl border border-[#E9E7E7] bg-white px-3 text-sm text-[#171717]'
+
+function extractionErrorMessage(caught: unknown, fallback: string) {
+  if (caught instanceof Error && caught.message.trim()) return caught.message
+  if (caught && typeof caught === 'object' && 'message' in caught) {
+    const message = (caught as { message?: unknown }).message
+    if (typeof message === 'string' && message.trim()) return message
+  }
+  return fallback
+}
 
 function fieldStatusPresentation(field: ExtractedField) {
   const status = canonicalFieldStatus(field)
@@ -57,7 +66,13 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
 
   useEffect(() => {
     if (query.data) {
-      setDraft(query.data)
+      const cleanedReport = removeLegacyAutomaticReportBoilerplate(query.data.professionalConclusion, query.data.rehabilitationSuggestion)
+      const record = query.data.status === 'review' ? {
+        ...query.data,
+        professionalConclusion: cleanedReport.conclusion,
+        rehabilitationSuggestion: cleanedReport.rehabilitationSuggestion,
+      } : query.data
+      setDraft(record)
       setPageNumber(query.data.sectionPageNumbers[0] ?? 1)
       setEditedFieldIds(new Set())
     }
@@ -86,7 +101,7 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
         if (!cancelled) { setReprocessStatus(''); setNotice('La imagen fue reanalizada con el lector mejorado.') }
       })
       .catch((caught) => {
-        if (!cancelled) { setReprocessStatus(''); setError(caught instanceof Error ? caught.message : 'No fue posible reanalizar el original privado.') }
+        if (!cancelled) { setReprocessStatus(''); setError(extractionErrorMessage(caught, 'No fue posible reanalizar el original privado.')) }
       })
     return () => { cancelled = true }
   }, [query.data, replaceCandidates])
@@ -169,7 +184,7 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
     if (!draft) return
     setError(''); setNotice('')
     try { await save.mutateAsync(draft); setNotice('Borrador guardado.') }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible guardar el borrador.') }
+    catch (caught) { setError(extractionErrorMessage(caught, 'No fue posible guardar el borrador.')) }
   }
 
   const confirmDraft = async () => {
@@ -187,21 +202,21 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
       await confirm.mutateAsync(confirmedDraft.id)
       setDraft({ ...confirmedDraft, status: 'confirmed' })
       navigate(`/app/estudios/${studyId}/informe`, { replace: true })
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible generar el informe.') }
+    } catch (caught) { setError(extractionErrorMessage(caught, 'No fue posible generar el informe.')) }
   }
 
   const chooseManual = async () => {
     if (!draft || !window.confirm('¿Continuar con carga completamente manual?')) return
     setError('')
     try { await manual.mutateAsync(draft.id); setDraft({ ...draft, status: 'manual' }) }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible cambiar a carga manual.') }
+    catch (caught) { setError(extractionErrorMessage(caught, 'No fue posible cambiar a carga manual.')) }
   }
 
   const discardDraft = async () => {
     if (!draft || !window.confirm('¿Descartar el borrador automático? El original privado se conservará.')) return
     setError('')
     try { await discard.mutateAsync(draft.id); setDraft({ ...draft, status: 'discarded' }) }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible descartar el borrador.') }
+    catch (caught) { setError(extractionErrorMessage(caught, 'No fue posible descartar el borrador.')) }
   }
 
   if (query.isPending) return <div className="rounded-2xl border border-[#E9E7E7] bg-white p-6 text-sm text-[#747474]">Cargando parámetros…</div>
@@ -248,7 +263,7 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
         <label className="text-sm font-black text-[#2F2F2F]">Conclusión para confirmar *<textarea disabled={locked} aria-label="Conclusión para confirmar" value={draft.professionalConclusion} onChange={(event) => setDraft({ ...draft, professionalConclusion: event.target.value })} className="mt-2 min-h-44 w-full rounded-2xl border border-[#E9E7E7] p-4 text-sm font-normal leading-6" placeholder="El borrador aparecerá cuando haya parámetros suficientes."/><small className="mt-1 block font-normal text-[#747474]">Editá cualquier frase que no coincida con tu interpretación.</small></label>
         <label className="text-sm font-black text-[#2F2F2F]">Sugerencia de rehabilitación para confirmar *<textarea disabled={locked} aria-label="Sugerencia de rehabilitación para confirmar" value={draft.rehabilitationSuggestion} onChange={(event) => setDraft({ ...draft, rehabilitationSuggestion: event.target.value })} className="mt-2 min-h-44 w-full rounded-2xl border border-[#E9E7E7] p-4 text-sm font-normal leading-6" placeholder="El borrador aparecerá cuando haya parámetros suficientes."/><small className="mt-1 block font-normal text-[#747474]">Ajustá objetivos, dosis, progresión y precauciones según la valoración clínica.</small></label>
       </div>
-      {automaticReport && <details className="mt-5 rounded-2xl border border-[#E9E7E7] bg-[#F7F6F4] p-4"><summary className="cursor-pointer text-xs font-black text-[#2F2F2F]">Cómo se generó este borrador</summary><div className="mt-3 grid gap-4 text-xs leading-5 text-[#747474] lg:grid-cols-2"><div><p className="font-black text-[#2F2F2F]">Comparaciones utilizadas</p>{automaticReport.evidence.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{automaticReport.evidence.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="mt-2">No hubo desvíos comparables o faltan datos para seleccionar referencias.</p>}{automaticReport.warnings.length > 0 && <div className="mt-3 rounded-xl bg-[#FFF7E8] p-3 font-bold text-[#8A5B00]">{automaticReport.warnings.join(' ')}</div>}</div><div><p className="font-black text-[#2F2F2F]">Fuentes internas seguras</p><ul className="mt-2 list-disc space-y-1 pl-5">{automaticReport.sources.map((item) => <li key={item}>{item}</li>)}</ul><p className="mt-3">No se utilizaron informes ni imágenes de la carpeta de datos clínicos sensibles.</p></div></div></details>}
+      {automaticReport && <details className="mt-5 rounded-2xl border border-[#E9E7E7] bg-[#F7F6F4] p-4"><summary className="cursor-pointer text-xs font-black text-[#2F2F2F]">Cómo se generó este borrador</summary><div className="mt-3 text-xs leading-5 text-[#747474]"><p className="font-black text-[#2F2F2F]">Comparaciones utilizadas</p>{automaticReport.evidence.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{automaticReport.evidence.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="mt-2">No hubo desvíos comparables o faltan datos para seleccionar referencias.</p>}{automaticReport.warnings.length > 0 && <div className="mt-3 rounded-xl bg-[#FFF7E8] p-3 font-bold text-[#8A5B00]">{automaticReport.warnings.join(' ')}</div>}</div></details>}
     </section>
 
     {(draft.pages.length > 1 || draft.pages.some((item) => item.classification === 'unrecognized')) && <details className="rounded-2xl border border-[#E9E7E7] bg-white p-4"><summary className="cursor-pointer text-xs font-black text-[#2F2F2F]">Revisar clasificación de páginas</summary><div className="mt-4 grid gap-3 sm:grid-cols-2">{draft.pages.map((item) => <label key={item.pageNumber} className="text-xs font-bold text-[#747474]">Página {item.pageNumber}<select disabled={locked} value={item.classification} onChange={(event) => updateClassification(item.pageNumber, event.target.value as PageClassification)} className={`${control} mt-1 w-full`}>{Object.entries(pageClassificationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>)}</div></details>}

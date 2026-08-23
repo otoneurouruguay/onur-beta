@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ExtractedField } from './types'
-import { buildBapAutomaticReport } from './bapAutomaticReport'
+import { buildBapAutomaticReport, removeLegacyAutomaticReportBoilerplate } from './bapAutomaticReport'
 
 function field(code: string, professionalValue: string, studyType: ExtractedField['studyType'] = 'posturography'): ExtractedField {
   return {
@@ -32,7 +32,7 @@ function bapFields(values: Record<string, string>) {
 }
 
 describe('buildBapAutomaticReport', () => {
-  it('uses the age-specific BAP references and keeps the text preliminary', () => {
+  it('uses the age-specific BAP references without redundant draft disclaimers', () => {
     const result = buildBapAutomaticReport(bapFields({
       reported_age: '76', condition_1: '99', condition_2: '99', condition_3: '98', condition_4: '82', condition_5: '79', condition_6: '27',
       composite_score: '81', sensory_somatosensory: '100', sensory_visual: '82', sensory_vestibular: '80', visual_preference: '70',
@@ -42,8 +42,9 @@ describe('buildBapAutomaticReport', () => {
     expect(result?.conclusion).toContain('dentro de lo esperado')
     expect(result?.conclusion).toContain('preferencia visual')
     expect(result?.rehabilitationSuggestion).toContain('habituación visual')
-    expect(result?.conclusion).toContain('no establece un diagnóstico')
-    expect(result?.sources).toHaveLength(3)
+    expect(result?.conclusion).not.toContain('Este borrador')
+    expect(result?.rehabilitationSuggestion).not.toContain('Borrador para revisión profesional')
+    expect(result?.rehabilitationSuggestion).not.toContain('El profesional debe')
   })
 
   it('describes low synthetic scores and suggests only matching functional targets', () => {
@@ -81,5 +82,12 @@ describe('buildBapAutomaticReport', () => {
 
   it('ignores non-posturography fields', () => {
     expect(buildBapAutomaticReport([field('gain', '0.9', 'vhit')])).toBeNull()
+  })
+
+  it('removes boilerplate persisted by previous automatic drafts', () => {
+    expect(removeLegacyAutomaticReportBoilerplate(
+      'Hallazgo sintético. Este borrador describe el perfil funcional y no establece un diagnóstico; debe correlacionarse con anamnesis, examen neurológico y vestibular, marcha, Romberg y estudios asociados.',
+      'Borrador para revisión profesional.\n\nPlan sintético.\n\nEl profesional debe definir ejercicios, dosis, frecuencia, asistencia, progresión, regresión y precauciones; se sugiere reevaluar con la misma metodología para documentar evolución.',
+    )).toEqual({ conclusion: 'Hallazgo sintético.', rehabilitationSuggestion: 'Plan sintético.' })
   })
 })

@@ -10,6 +10,7 @@ const authProfileMigration = readFileSync(join(process.cwd(), 'supabase/migratio
 const extractionMigration = readFileSync(join(process.cwd(), 'supabase/migrations/202607170004_private_clinical_extraction.sql'), 'utf8')
 const extractionHardeningMigration = readFileSync(join(process.cwd(), 'supabase/migrations/202607170005_harden_extraction_review.sql'), 'utf8')
 const extractionReportMigration = readFileSync(join(process.cwd(), 'supabase/migrations/202607170007_simplified_extraction_report.sql'), 'utf8')
+const extractionConfirmationAlignmentMigration = readFileSync(join(process.cwd(), 'supabase/migrations/202608230001_align_extraction_confirmation.sql'), 'utf8')
 
 describe('contrato SQL de importación', () => {
   it('protege importaciones con RLS y propiedad del paciente', () => {
@@ -165,5 +166,12 @@ describe('contrato SQL de extracción clínica privada', () => {
       expect(statement).not.toContain("'professional_conclusion',")
       expect(statement).not.toContain("'rehabilitation_suggestion',")
     }
+  })
+
+  it('no bloquea el informe por metadatos auxiliares que no producen métricas', () => {
+    expect(extractionConfirmationAlignmentMigration).toContain('field.metric_code is not null')
+    expect(extractionConfirmationAlignmentMigration).toContain('Todos los valores clínicos presentes deben estar confirmados.')
+    expect(extractionConfirmationAlignmentMigration).toContain('revoke all on function public.confirm_document_extraction(uuid) from public')
+    expect(extractionConfirmationAlignmentMigration).toContain('grant execute on function public.confirm_document_extraction(uuid) to authenticated')
   })
 })
