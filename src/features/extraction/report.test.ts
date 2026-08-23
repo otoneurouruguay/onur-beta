@@ -18,7 +18,9 @@ function extraction(overrides: Partial<ExtractionReviewRecord> = {}): Extraction
 describe('informe de extracción confirmado', () => {
   it('muestra literalmente el valor profesional confirmado, no el OCR ni campos sin confirmar', () => {
     expect(buildStudyExtractionReport(extraction(), 'posturography')).toEqual({
-      parameters: [{ code: 'condition_1', label: 'Condición 1', value: '92' }],
+      parameters: [{ code: 'condition_1', label: 'Condición 1', value: '92', status: 'confirmed' }],
+      qualityControls: [],
+      limitations: [],
       conclusion: 'Conclusión profesional sintética.',
       rehabilitationSuggestion: 'Sugerencia profesional sintética.',
     })

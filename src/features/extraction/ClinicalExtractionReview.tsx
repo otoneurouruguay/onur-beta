@@ -11,8 +11,24 @@ import type { ExtractionReviewRecord } from './repository'
 import { PrivateDocumentViewer } from './PrivateDocumentViewer'
 import { buildBapAutomaticReport } from './bapAutomaticReport'
 import { isReportRelevantField, isReportRequiredField } from './reportFields'
+import { canonicalFieldStatus, deriveFieldCounters, fieldReviewReason, isFieldPresent } from './fieldResults'
 
 const control = 'h-11 rounded-xl border border-[#E9E7E7] bg-white px-3 text-sm text-[#171717]'
+
+function fieldStatusPresentation(field: ExtractedField) {
+  const status = canonicalFieldStatus(field)
+  const values: Record<typeof status, { label: string; className: string }> = {
+    detected: { label: 'Detectado', className: 'bg-[#EEF5F0] text-[#496451]' },
+    confirmed: { label: 'Confirmado', className: 'bg-[#EEF5F0] text-[#496451]' },
+    needs_review: { label: 'Revisar', className: 'bg-[#FFF7E8] text-[#8A5B00]' },
+    unreadable: { label: 'No legible', className: 'bg-[#fceced] text-[#a94952]' },
+    not_reported: { label: 'No informado', className: 'bg-[#fceced] text-[#a94952]' },
+    not_performed: { label: 'No realizado', className: 'bg-[#E9E7E7] text-[#747474]' },
+    invalid: { label: 'No calculable', className: 'bg-[#FFF7E8] text-[#8A5B00]' },
+    conflicting: { label: 'En conflicto', className: 'bg-[#fceced] text-[#a94952]' },
+  }
+  return values[status]
+}
 
 function normalizedField(field: ExtractedField, value: string) {
   if (!field.metricCode) return value.trim()
@@ -75,17 +91,18 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
     return () => { cancelled = true }
   }, [query.data, replaceCandidates])
 
-  const parameters = useMemo(() => draft?.fields.filter((field) => isReportRelevantField(field) && (field.professionalValue.trim() || isReportRequiredField(field))) ?? [], [draft])
-  const missing = useMemo(() => parameters.filter((field) => isReportRequiredField(field) && !field.professionalValue.trim()), [parameters])
+  const relevantFields = useMemo(() => draft?.fields.filter(isReportRelevantField) ?? [], [draft])
+  const parameters = useMemo(() => relevantFields.filter((field) => isFieldPresent(field) || isReportRequiredField(field)), [relevantFields])
+  const missing = useMemo(() => parameters.filter((field) => isReportRequiredField(field) && !isFieldPresent(field)), [parameters])
+  const counters = useMemo(() => deriveFieldCounters(relevantFields), [relevantFields])
   const studyType = draft?.fields.find((field) => field.studyType === 'posturography') ? 'posturography' : 'vhit'
   const automaticReport = useMemo(() => draft ? buildBapAutomaticReport(draft.fields, draft.cyclePhase ?? 'unspecified') : null, [draft])
-  const reviewCount = parameters.filter((field) => field.professionalValue.trim() && !field.confirmed && (field.status !== 'read' || field.confidence < .82)).length
   const activeField = draft?.fields.find((field) => field.clientId === selectedField)
   const blocking = missing.length > 0 || !draft?.professionalConclusion.trim() || !draft.rehabilitationSuggestion.trim() || draft.patientMatchStatus === 'mismatch' || draft.pages.some((item) => item.classification === 'unrecognized')
 
   const updateField = (clientId: string, updater: (field: ExtractedField) => ExtractedField) => setDraft((current) => current ? { ...current, fields: current.fields.map((field) => field.clientId === clientId ? updater(field) : field) } : current)
   const updateValue = (field: ExtractedField, value: string) => {
-    updateField(field.clientId, (current) => ({ ...current, professionalValue: value, normalizedValue: normalizedField(current, value), status: value.trim() ? 'review' : 'unrecognized', confirmed: false }))
+    updateField(field.clientId, (current) => ({ ...current, professionalValue: value, normalizedValue: normalizedField(current, value), value: value.trim() || null, displayValue: value, status: value.trim() ? 'needs_review' : 'not_reported', confirmed: false }))
     setEditedFieldIds((current) => new Set(current).add(field.clientId))
     setNotice('')
   }
@@ -132,8 +149,12 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
           ...field,
           professionalValue: value,
           normalizedValue: normalizedField(field, value),
-          status: value ? 'read' : 'unrecognized',
+          value: value || null,
+          displayValue: value,
+          status: value ? 'confirmed' : 'not_reported',
           confirmed: Boolean(value),
+          source: { page: field.pageNumber, regionId: field.source?.regionId ?? 'manual', normalizedBbox: field.region, method: 'professional_edit' },
+          correctionHistory: value && value !== field.rawValue ? [...(field.correctionHistory ?? []), { previousValue: field.rawValue, value, correctedAt: new Date().toISOString(), actor: 'professional' as const }] : field.correctionHistory,
         }
       }),
     })
@@ -157,7 +178,7 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
     const confirmedDraft: ExtractionReviewRecord = {
       ...draft,
       fields: draft.fields.map((field) => isReportRelevantField(field) && field.professionalValue.trim()
-        ? { ...field, confirmed: true, status: 'read' }
+        ? { ...field, confirmed: true, status: ['invalid', 'not_performed'].includes(field.status) ? field.status : 'confirmed' }
         : { ...field, confirmed: false }),
     }
     setError(''); setNotice('')
@@ -198,17 +219,21 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
       <section className="overflow-hidden rounded-2xl border border-[#E9E7E7] bg-white">
         <div className="border-b border-[#E9E7E7] p-5"><h2 className="font-black text-[#171717]">Estudio original</h2><p className="mt-1 text-xs text-[#747474]">Página {pageNumber} de {draft.pages.length} · {draft.sourceFilename}</p></div>
         <div className="relative min-h-[500px] bg-[#E9E7E7]"><PrivateDocumentViewer url={draft.documentUrl} mimeType={draft.mimeType} pageNumber={pageNumber} region={activeField?.pageNumber === pageNumber ? activeField.region : null}/></div>
+        {activeField && <div className="border-t border-[#E9E7E7] bg-[#F7F6F4] p-4 text-xs leading-5 text-[#747474]"><p className="font-black text-[#2F2F2F]">Evidencia del campo seleccionado</p><p>Región: {activeField.source?.regionId ?? 'página completa'} · Método: {activeField.source?.method ?? activeField.extractorMethod}</p><p>OCR crudo: {activeField.rawValue || 'Sin lectura'} · Normalizado: {activeField.normalizedValue || activeField.displayValue || 'null'}</p>{fieldReviewReason(activeField) && <p className="mt-1 font-bold text-[#8A5B00]">Motivo: {fieldReviewReason(activeField)}</p>}</div>}
         {draft.pages.length > 1 && <div className="flex gap-2 overflow-x-auto border-t border-[#E9E7E7] p-3">{draft.pages.map((item) => <button key={item.pageNumber} type="button" onClick={() => setPageNumber(item.pageNumber)} className={`min-w-20 rounded-xl border px-3 py-2 text-left text-xs ${item.pageNumber === pageNumber ? 'border-[#E49A02] bg-[#FFF7E8]' : 'border-[#E9E7E7]'}`}>Pág. {item.pageNumber}</button>)}</div>}
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-[#E9E7E7] bg-white">
-        <div className="flex flex-col gap-3 border-b border-[#E9E7E7] p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-black text-[#171717]">Parámetros obtenidos</h2><p className="mt-1 text-xs text-[#747474]">{parameters.filter((field) => field.professionalValue.trim()).length} detectados · {reviewCount} para revisar · {missing.length} faltantes</p></div>{!locked && <button type="button" onClick={applyParameterCorrections} disabled={editedFieldIds.size === 0} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#E8CE99] bg-[#FFF7E8] px-3 py-2 text-xs font-black text-[#A36B00] disabled:cursor-not-allowed disabled:opacity-45"><RefreshCw size={14}/> Aplicar correcciones{editedFieldIds.size > 0 ? ` (${editedFieldIds.size})` : ''}</button>}</div>
+        <div className="flex flex-col gap-3 border-b border-[#E9E7E7] p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-black text-[#171717]">Parámetros obtenidos</h2><p className="mt-1 text-xs text-[#747474]">{counters.total} controlados · {counters.detected} detectados · {counters.confirmed} confirmados · {counters.needsReview} para revisar · {counters.conflicting} en conflicto · {counters.invalid} inválidos · {counters.notPerformed} no realizados · {counters.missingRequired} faltantes</p></div>{!locked && <button type="button" onClick={applyParameterCorrections} disabled={editedFieldIds.size === 0} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#E8CE99] bg-[#FFF7E8] px-3 py-2 text-xs font-black text-[#A36B00] disabled:cursor-not-allowed disabled:opacity-45"><RefreshCw size={14}/> Aplicar correcciones{editedFieldIds.size > 0 ? ` (${editedFieldIds.size})` : ''}</button>}</div>
         {missing.length > 0 && <p className="border-b border-[#efc3c7] bg-[#fff7f7] px-5 py-3 text-xs font-bold text-[#a94952]">Falta completar o consignar como “no informado”: {missing.map((field) => field.label).join(' · ')}</p>}
         <p className="border-b border-[#E9E7E7] bg-[#F7F6F4] px-5 py-3 text-xs leading-5 text-[#747474]">{studyType === 'posturography' ? 'Se muestran únicamente los datos que alimentan el informe funcional y la sugerencia: edad, seis condiciones, puntaje compuesto, índices sensoriales, preferencia visual y controles de calidad relevantes. El resto permanece disponible en el estudio original y no requiere transcripción.' : 'Se muestran únicamente los datos que alimentan el informe y orientan la sugerencia: protocolo HIMP, plano y canales, ganancias, simetría, sacadas e interpretabilidad. Los demás hallazgos del examen permanecen en el estudio original y no requieren transcripción.'}</p>
-        <div className="max-h-[660px] divide-y divide-[#E9E7E7] overflow-y-auto">{parameters.map((field) => <label key={field.clientId} onClick={() => { setSelectedField(field.clientId); setPageNumber(field.pageNumber) }} className={`grid cursor-pointer gap-2 p-4 sm:grid-cols-[1fr_170px] sm:items-center ${selectedField === field.clientId ? 'bg-[#FFF7E8]' : ''}`}>
-          <span><span className="flex flex-wrap items-center gap-2 text-sm font-black text-[#2F2F2F]">{field.label}{isReportRequiredField(field) ? ' *' : ''}<span className={`rounded-full px-2 py-0.5 text-[9px] uppercase ${field.confirmed ? 'bg-[#EEF5F0] text-[#496451]' : field.status === 'read' && field.confidence >= .82 ? 'bg-[#FFF7E8] text-[#A36B00]' : field.professionalValue ? 'bg-[#FFF7E8] text-[#8A5B00]' : 'bg-[#fceced] text-[#a94952]'}`}>{field.confirmed ? 'Corregido' : editedFieldIds.has(field.clientId) ? 'Editado' : field.status === 'read' && field.confidence >= .82 ? 'Leído' : field.professionalValue ? 'Revisar' : 'Falta'}</span></span>{field.rawValue && <small className="mt-1 block text-[10px] text-[#747474]">Detectado: {field.rawValue} · pág. {field.pageNumber}</small>}</span>
-          <input disabled={locked} aria-label={field.label} value={field.professionalValue} onChange={(event) => updateValue(field, event.target.value)} className={`${control} w-full ${!field.professionalValue ? 'border-[#df9fa5]' : ''}`}/>
-        </label>)}</div>
+        <div className="max-h-[660px] divide-y divide-[#E9E7E7] overflow-y-auto">{parameters.map((field) => {
+          const presentation = fieldStatusPresentation(field)
+          return <label key={field.clientId} onClick={() => { setSelectedField(field.clientId); setPageNumber(field.pageNumber) }} className={`grid cursor-pointer gap-2 p-4 sm:grid-cols-[1fr_170px] sm:items-center ${selectedField === field.clientId ? 'bg-[#FFF7E8]' : ''}`}>
+            <span><span className="flex flex-wrap items-center gap-2 text-sm font-black text-[#2F2F2F]">{field.label}{isReportRequiredField(field) ? ' *' : ''}<span className={`rounded-full px-2 py-0.5 text-[9px] uppercase ${presentation.className}`}>{editedFieldIds.has(field.clientId) ? 'Editado' : presentation.label}</span></span>{field.rawValue && <small className="mt-1 block text-[10px] text-[#747474]">OCR: {field.rawValue} · normalizado: {field.normalizedValue || 'null'} · pág. {field.pageNumber}</small>}{fieldReviewReason(field) && <small className="mt-1 block text-[10px] font-bold text-[#8A5B00]">{fieldReviewReason(field)}</small>}</span>
+            <input disabled={locked} aria-label={field.label} value={field.professionalValue} onChange={(event) => updateValue(field, event.target.value)} className={`${control} w-full ${!isFieldPresent(field) ? 'border-[#df9fa5]' : ''}`}/>
+          </label>
+        })}</div>
         {parameters.length === 0 && <p className="p-6 text-sm text-[#747474]">No se reconocieron parámetros. El original puede pasarse a carga manual.</p>}
       </section>
     </div>

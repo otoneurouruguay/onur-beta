@@ -3,7 +3,33 @@ import type { ExtractedField } from './types'
 
 const reportRelevantCodes: Record<StudyType, ReadonlySet<string>> = {
   posturography: new Set([
+    'study_date',
+    'study_time',
+    'last_name',
+    'first_name',
     'reported_age',
+    'reported_sex',
+    'patient_id',
+    'los_forward',
+    'los_backward',
+    'los_left',
+    'los_right',
+    'los_area',
+    'selected_condition',
+    'selected_area',
+    'scale',
+    'sway_per_second_x',
+    'sway_per_second_y',
+    'sway_per_minute_x',
+    'sway_per_minute_y',
+    'condition_area_1',
+    'condition_area_2',
+    'condition_area_3',
+    'condition_area_4',
+    'condition_area_5',
+    'condition_area_6',
+    'condition_area_7',
+    'condition_area_8',
     'condition_1',
     'condition_2',
     'condition_3',
@@ -18,6 +44,11 @@ const reportRelevantCodes: Record<StudyType, ReadonlySet<string>> = {
     'afis_pattern',
     'mix_ve_som',
     'mix_ve_vi',
+    'pppd_index',
+    'los_score',
+    'sensory_contribution_somatosensory',
+    'sensory_contribution_visual',
+    'sensory_contribution_vestibular',
   ]),
   vhit: new Set([
     'himp',
@@ -33,6 +64,7 @@ const reportRelevantCodes: Record<StudyType, ReadonlySet<string>> = {
 
 const reportRequiredCodes: Record<StudyType, ReadonlySet<string>> = {
   posturography: new Set([
+    'study_date',
     'reported_age',
     'condition_1',
     'condition_2',

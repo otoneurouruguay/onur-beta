@@ -1,6 +1,7 @@
 import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 import type { CycleStudyPhase } from '../documents/types'
 import type { ExtractedField, ExtractedPage, LocalExtractionDraft, PageClassification, PatientMatchStatus, PersistedExtractionDraft } from './types'
+import { persistedFieldStatus } from './fieldResults'
 
 const DEMO_KEY = 'onur-demo-extractions-v1'
 
@@ -26,11 +27,12 @@ function pagePayload(page: ExtractedPage) {
 }
 
 function fieldPayload(field: ExtractedField) {
-  return { client_id: field.clientId, code: field.code, label: field.label, group: field.group, study_type: field.studyType, required: field.required, metric_code: field.metricCode, raw_value: field.rawValue, normalized_value: field.normalizedValue, unit_code: field.unitCode, condition_code: field.conditionCode, side: field.side, page_number: field.pageNumber, region: field.region, confidence: field.confidence, status: field.status, extractor_method: field.extractorMethod, extractor_version: field.extractorVersion, professional_value: field.professionalValue, confirmed: field.confirmed }
+  const region = field.region ? { ...field.region, field_contract: { status: field.status, value: field.value ?? null, display_value: field.displayValue ?? '', warnings: field.warnings ?? [], validation: field.validation ?? null, source: field.source ?? null, candidates: field.candidates ?? [], correction_history: field.correctionHistory ?? [] } } : null
+  return { client_id: field.clientId, code: field.code, label: field.label, group: field.group, study_type: field.studyType, required: field.required, metric_code: field.metricCode, raw_value: field.rawValue, normalized_value: field.normalizedValue, unit_code: field.unitCode, condition_code: field.conditionCode, side: field.side, page_number: field.pageNumber, region, confidence: field.confidence, status: persistedFieldStatus(field.status), extractor_method: field.extractorMethod, extractor_version: field.extractorVersion, professional_value: field.professionalValue, confirmed: field.confirmed }
 }
 
 export function extractionPayload(draft: LocalExtractionDraft) {
-  return { intake_kind: draft.intakeKind, extractor_version: draft.extractorVersion, patient_match_status: draft.patientMatchStatus, mismatch_fields: draft.mismatchFields, pages: draft.pages.map(pagePayload), fields: draft.fields.map(fieldPayload) }
+  return { intake_kind: draft.intakeKind, extractor_version: draft.extractorVersion, patient_match_status: draft.patientMatchStatus, mismatch_fields: draft.mismatchFields, study_date: draft.studyDate ?? null, upload_date: draft.uploadDate ?? null, pages: draft.pages.map(pagePayload), fields: draft.fields.map(fieldPayload) }
 }
 
 export async function createExtractionDraft(documentId: string, patientId: string, draft: LocalExtractionDraft, documentDate: string, treatmentCycleId: string, sourceFilename: string, mimeType: string, cyclePhase: CycleStudyPhase = 'unspecified') {
@@ -63,7 +65,10 @@ function fromPage(row: Record<string, unknown>): ExtractedPage {
 }
 
 function fromField(row: Record<string, unknown>): ExtractedField {
-  return { clientId: String(row.client_key), code: String(row.field_code), label: String(row.field_label), group: String(row.field_group), studyType: String(row.study_type) as ExtractedField['studyType'], required: Boolean(row.required), metricCode: String(row.metric_code ?? ''), rawValue: String(row.raw_value ?? ''), normalizedValue: String(row.normalized_value ?? ''), unitCode: String(row.unit_code ?? ''), conditionCode: String(row.condition_code ?? ''), side: String(row.side ?? '') as ExtractedField['side'], pageNumber: Number(row.page_number), region: row.source_region as ExtractedField['region'], confidence: Number(row.extraction_confidence ?? 0), status: String(row.extraction_status) as ExtractedField['status'], extractorMethod: String(row.extractor_method) as ExtractedField['extractorMethod'], extractorVersion: String(row.extractor_version), professionalValue: String(row.professional_value ?? ''), confirmed: Boolean(row.is_confirmed) }
+  const storedRegion = row.source_region as (Record<string, unknown> & { field_contract?: Record<string, unknown> }) | null
+  const contract = storedRegion?.field_contract
+  const region = storedRegion && ['x', 'y', 'width', 'height'].every((key) => typeof storedRegion[key] === 'number') ? { x: Number(storedRegion.x), y: Number(storedRegion.y), width: Number(storedRegion.width), height: Number(storedRegion.height) } : null
+  return { clientId: String(row.client_key), code: String(row.field_code), label: String(row.field_label), group: String(row.field_group), studyType: String(row.study_type) as ExtractedField['studyType'], required: Boolean(row.required), metricCode: String(row.metric_code ?? ''), rawValue: String(row.raw_value ?? ''), normalizedValue: String(row.normalized_value ?? ''), unitCode: String(row.unit_code ?? ''), conditionCode: String(row.condition_code ?? ''), side: String(row.side ?? '') as ExtractedField['side'], pageNumber: Number(row.page_number), region, confidence: Number(row.extraction_confidence ?? 0), status: String(contract?.status ?? row.extraction_status) as ExtractedField['status'], extractorMethod: String(row.extractor_method) as ExtractedField['extractorMethod'], extractorVersion: String(row.extractor_version), professionalValue: String(row.professional_value ?? ''), confirmed: Boolean(row.is_confirmed), value: contract?.value as ExtractedField['value'], displayValue: String(contract?.display_value ?? row.professional_value ?? ''), warnings: Array.isArray(contract?.warnings) ? contract.warnings.map(String) : [], validation: contract?.validation as ExtractedField['validation'], source: contract?.source as ExtractedField['source'], candidates: Array.isArray(contract?.candidates) ? contract.candidates as ExtractedField['candidates'] : [], correctionHistory: Array.isArray(contract?.correction_history) ? contract.correction_history as ExtractedField['correctionHistory'] : [] }
 }
 
 export async function getExtractionForStudy(studyId: string): Promise<ExtractionReviewRecord | null> {

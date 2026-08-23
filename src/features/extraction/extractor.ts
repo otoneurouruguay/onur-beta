@@ -1,8 +1,9 @@
 import { parseLocaleNumber } from '../studies/normalization'
 import { posturographyFieldDefinitions, vestibularFieldDefinitions } from './catalog'
+import { findBapStructuredValue, validateBapFields } from './bapStructuredExtraction'
 import type { ExtractedField, ExtractedPage, ExtractionFieldDefinition, IntakeKind, PageClassification, PatientMatchStatus, SourceRegion } from './types'
 
-export const EXTRACTOR_VERSION = 'onur-local-ocr-1.5'
+export const EXTRACTOR_VERSION = 'onur-local-ocr-2.0'
 
 function fold(value: string) {
   return value.toLocaleLowerCase('es-UY').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -72,7 +73,12 @@ function normalizedValue(raw: string) {
   return raw.trim()
 }
 
-interface LocatedValue { value: string; confidence: number; region: SourceRegion | null }
+interface LocatedValue {
+  value: string
+  confidence: number
+  region: SourceRegion | null
+  structured?: ReturnType<typeof findBapStructuredValue>
+}
 
 const multilineCodes = new Set(['clinical_exam', 'history', 'symptoms', 'referral_reason', 'conclusion', 'conduct', 'professional_observations'])
 
@@ -298,6 +304,10 @@ function hasBapChartLayout(page: ExtractedPage) {
 }
 
 function findDefinitionValue(definition: ExtractionFieldDefinition, page: ExtractedPage): LocatedValue | null {
+  if (definition.studyType === 'posturography' && page.classification === 'posturography' && page.template?.type === 'bap_2_32') {
+    const structured = findBapStructuredValue(definition.code, page)
+    if (structured) return { value: structured.raw, confidence: structured.confidence, region: structured.region, structured }
+  }
   const isBapGraphValue = /^condition_[1-6]$/.test(definition.code) || definition.code === 'composite_score' || ['sensory_somatosensory', 'sensory_visual', 'sensory_vestibular', 'visual_preference'].includes(definition.code)
   // Sólo se aplican coordenadas de las barras si el OCR reconoce ambos paneles
   // BAP. Esto evita que un documento de texto con "Condición 1" se lea como gráfico.
@@ -330,20 +340,32 @@ function findDefinitionValue(definition: ExtractionFieldDefinition, page: Extrac
 
 export function extractFields(pages: ExtractedPage[], intakeKind: IntakeKind): ExtractedField[] {
   const definitions = intakeKind === 'posturography_bap' ? posturographyFieldDefinitions : [...vestibularFieldDefinitions, ...posturographyFieldDefinitions]
-  return definitions.map((definition) => {
+  const fields = definitions.map((definition): ExtractedField => {
     const relevantPages = pages.filter((page) => definition.studyType === 'posturography' ? page.classification === 'posturography' : ['vestibular_report', 'vhit_graph', 'referral', 'other_clinical'].includes(page.classification))
     const found = relevantPages.map((page) => ({ page, found: findDefinitionValue(definition, page) })).find((candidate) => candidate.found)
     const value = found?.found?.value ?? ''
     const confidence = found?.found?.confidence ?? 0
+    const structured = found?.found?.structured
+    const normalized = structured ? structured.value === null ? '' : String(structured.value) : normalizedValue(value)
+    const semanticValue = structured?.value ?? (normalized && Number.isFinite(Number(normalized)) ? Number(normalized) : normalized || null)
+    const status = structured?.status ?? (!value ? 'not_reported' : confidence >= .82 ? 'detected' : 'needs_review')
     return {
       clientId: crypto.randomUUID(), code: definition.code, label: definition.label, group: definition.group,
       studyType: definition.studyType, required: Boolean(definition.required), metricCode: definition.metricCode ?? '',
-      rawValue: value, normalizedValue: normalizedValue(value), unitCode: definition.unitCode ?? '', conditionCode: definition.conditionCode ?? '', side: definition.side ?? '',
+      rawValue: value, normalizedValue: normalized, unitCode: definition.unitCode ?? '', conditionCode: definition.conditionCode ?? '', side: definition.side ?? '',
       pageNumber: found?.page.pageNumber ?? (relevantPages[0]?.pageNumber ?? 1), region: found?.found?.region as SourceRegion | null ?? null,
-      confidence, status: !value ? 'unrecognized' : confidence >= .82 ? 'read' : 'review', extractorMethod: 'local_ocr' as const,
-      extractorVersion: EXTRACTOR_VERSION, professionalValue: value, confirmed: false,
+      confidence, status, extractorMethod: 'local_ocr' as const,
+      extractorVersion: EXTRACTOR_VERSION, professionalValue: structured?.displayValue ?? value, confirmed: false,
+      value: semanticValue,
+      displayValue: structured?.displayValue ?? value,
+      warnings: structured?.warnings ?? (!value && definition.required ? ['El parámetro obligatorio no fue informado o no pudo leerse.'] : []),
+      validation: structured?.validation ?? { rangeValid: null, crossCheckValid: null, multiPassAgreement: null },
+      source: { page: found?.page.pageNumber ?? (relevantPages[0]?.pageNumber ?? 1), regionId: structured?.regionId ?? 'generic_page', normalizedBbox: found?.found?.region ?? null, method: structured?.method ?? 'ocr_original' },
+      candidates: structured?.candidates ?? (value ? [{ raw: value, value: semanticValue, confidence, method: 'ocr_original' }] : []),
+      correctionHistory: [],
     }
   })
+  return intakeKind === 'posturography_bap' ? validateBapFields(fields) : fields
 }
 
 export interface PatientIdentityForMatch { fullName: string; birthDate: string; affiliateNumber: string; insurer?: string }

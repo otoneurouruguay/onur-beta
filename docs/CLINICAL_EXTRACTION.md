@@ -6,7 +6,7 @@ ONUr Beta utiliza OCR local para preparar un borrador de parámetros de posturog
 
 1. Abrir **Cargar estudio**, seleccionar el paciente, tipo, fecha y uno o varios archivos PDF/JPG/JPEG/PNG/WEBP.
 2. Si hay varios archivos, el navegador los reúne en un único PDF privado y conserva los nombres originales en la descripción. Luego procesa todas las páginas localmente. Para BAP se amplía la imagen, se prueba contraste y orientación, y se leen tanto rótulos como valores por posición en los gráficos.
-3. Revisar solamente los **parámetros obtenidos** y corregir los que estén marcados para revisar o faltantes.
+3. Revisar los **datos estructurados** y su evidencia: recorte, OCR crudo, valor normalizado, estado y motivo concreto de revisión.
 4. Revisar y editar el borrador automático de **conclusión** y **sugerencia de rehabilitación** según la valoración clínica.
 5. Confirmar y generar el informe, o guardar el borrador para continuar luego.
 
@@ -14,7 +14,11 @@ Las opciones técnicas y el descarte permanecen disponibles dentro de **Opciones
 
 ## BAP y reanálisis
 
-La versión `onur-local-ocr-1.5` usa varias lecturas complementarias: página completa, contraste general y regiones específicas del panel izquierdo, gráficos y pie. En los gráficos realiza dos binarizaciones para recuperar dígitos impresos sobre fondos celestes, verdes, grises o degradados. Los encabezados de condiciones y organización sensorial se usan como anclas; de ese modo, los porcentajes del gráfico circular o los números de los ejes no se confunden con C1-C6.
+La versión `onur-local-ocr-2.0` detecta primero la plantilla BAP mediante señales visuales/textuales y relación de aspecto. Si no reúne evidencia suficiente conserva el extractor genérico. Para una BAP reconocida usa siempre los píxeles originales (no el tamaño CSS), aplica la orientación del navegador y ejecuta lecturas independientes por regiones normalizadas con margen, escalas 2x/3x/4x, color, grises y umbrales para texto oscuro o claro. Los recortes prioritarios recuperan edad, fecha/hora, patrón afisiológico, PPPD y sway sin bloquear la interfaz: Tesseract trabaja en su Web Worker local.
+
+El candidato final no se decide por la confianza cruda de Tesseract. Se combinan coincidencia entre pasadas, alias, posición, rango, suma de contribuciones, fórmulas sensoriales y concordancia entre el área seleccionada y la condición. Una discordancia válida se conserva como `conflicting`; infinito se conserva como `invalid / No calculable`; y las condiciones 7/8 deshabilitadas como `not_performed`, nunca como cero.
+
+Cada campo conserva `raw`, `value`, unidad, estado, confianza combinada, página/región/método, advertencias, validaciones y candidatos. Los estados disponibles son `detected`, `confirmed`, `needs_review`, `unreadable`, `not_reported`, `not_performed`, `invalid` y `conflicting`. Los borradores históricos `read/review/unrecognized` se normalizan al mostrarlos. Las correcciones profesionales conservan valor anterior, fecha y fuente `professional_edit`; un reanálisis no las reemplaza silenciosamente.
 
 Al abrir un borrador creado con una versión anterior, ONUr vuelve a analizar el original privado en el navegador y conserva las correcciones profesionales que difieran de la lectura anterior. El reprocesamiento queda auditado sin almacenar el contenido clínico en el registro de auditoría.
 
@@ -28,7 +32,7 @@ Para posturografías BAP, ONUr compara los valores mostrados con referencias por
 
 La aplicación completa los dos textos cuando están vacíos. Si el profesional ya los editó, no los sobrescribe: el botón **Regenerar desde parámetros** solicita confirmación antes de reemplazarlos. La sección **Cómo se generó este borrador** muestra cada comparación, las advertencias por datos faltantes y las fuentes utilizadas.
 
-El motor usa únicamente los valores visibles en la pantalla de revisión. Los valores por debajo de la referencia inferior se describen como reducidos; los indicadores de patrón solo se señalan cuando superan el límite superior consignado. Sin edad válida no clasifica contra la norma. Un indicador afisiológico elevado prioriza el control de calidad y la repetición de condiciones antes de proponer objetivos.
+El motor usa únicamente el objeto estructurado visible en la pantalla de revisión. El informe confirmado se proyecta desde esa misma estructura; ni la imagen ni el OCR se vuelven a leer al redactarlo. Los valores por debajo de la referencia inferior se describen como reducidos; los indicadores de patrón solo se señalan cuando superan el límite superior consignado. Sin edad válida no clasifica contra la norma. Un indicador afisiológico elevado prioriza el control de calidad y la repetición de condiciones antes de proponer objetivos.
 
 La posturografía se realiza fuera de ONUr. Cada documento se identifica como **inicial**, **final**, **control/seguimiento** o **sin especificar** dentro del ciclo. La inicial puede alimentar el borrador funcional; la final se usa para comparación longitudinal y no genera por sí sola una nueva prescripción.
 
@@ -61,7 +65,16 @@ El OCR 1.5 reconoce además el formato narrativo `G. Regresión OD / OI`, la sim
 
 El corpus reproducible `bap_ocr_corpus_synthetic.json` incluye capturas limpias, pequeñas, comprimidas, borrosas, de bajo contraste y con números señuelo. Cada archivo declara once resultados esperados: seis condiciones, compuesto y cuatro índices de organización sensorial. Ninguna muestra contiene datos personales ni procede de una historia clínica.
 
-Ejecutar `npm run ocr:benchmark` para medir el reconocimiento real con Tesseract y el mismo perfil de regiones que usa el navegador. La prueba falla si la precisión campo por campo baja de 95 %. Este umbral es técnico y no certifica interpretabilidad clínica.
+Ejecutar `npm run ocr:benchmark` para medir el corpus sintético. La prueba falla si la precisión campo por campo baja de 95 %. Este umbral es técnico y no certifica interpretabilidad clínica.
+
+La captura clínica de referencia no se copia al repositorio ni se registra en consola. En un entorno local autorizado se verifica con:
+
+```powershell
+$env:ONUR_BAP_REFERENCE_IMAGE='C:\ruta\privada\captura.jpg'
+npx vitest run scripts/evaluate_bap_reference.test.ts --environment node --maxWorkers=1
+```
+
+Sin esa variable la prueba queda omitida. El contrato comprueba identidad impresa, edad 73, fecha/hora, áreas, C1-C6, compuesto, organización y contribución sensorial, LOS, sway, índices mixtos, PPPD y condiciones 7/8.
 
 ## Límites y seguridad
 
@@ -70,7 +83,8 @@ Ejecutar `npm run ocr:benchmark` para medir el reconocimiento real con Tesseract
 - La conclusión y la sugerencia de rehabilitación son editables y solo pasan al informe después de la confirmación del profesional responsable.
 - Las referencias locales son heterogéneas y todavía requieren validación clínica formal antes del uso asistencial con datos reales.
 - El paciente no participa de la carga ni recibe acceso al original durante la revisión.
-- Los documentos y valores clínicos no se imprimen en consola ni se usan como fixtures, logs o datos de staging.
+- Los documentos y valores clínicos no se imprimen en consola ni se usan como fixtures, logs o datos de staging. La prueba clínica recibe solo una ruta local autorizada y no copia el archivo.
+- No existe proveedor multimodal ni clave en el navegador. Todos los assets OCR se sirven desde `BASE_URL/ocr`; no se envían imágenes o recortes a servicios externos.
 
 ## Informes escaneados y OCR 1.5
 

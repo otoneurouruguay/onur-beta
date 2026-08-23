@@ -34,8 +34,12 @@ export function StudyExtractionReportPage() {
       {report.parameters.length === 0 ? <p className="p-6 text-sm text-[#747474]">No hay parámetros confirmados para este estudio.</p> : <dl className="divide-y divide-[#E9E7E7]">{report.parameters.map((parameter) => <div key={parameter.code} className="grid gap-1 px-6 py-4 sm:grid-cols-[1fr_auto] sm:items-center sm:px-8"><dt className="text-sm font-bold text-[#2F2F2F]">{parameter.label}</dt><dd className="text-sm font-black text-[#171717]">{parameter.value}</dd></div>)}</dl>}
     </section>
 
+    {report.qualityControls.length > 0 && <section className="overflow-hidden rounded-2xl border border-[#E9E7E7] bg-white"><div className="border-b border-[#E9E7E7] p-6 sm:p-8"><h2 className="text-lg font-black text-[#171717]">Controles de calidad</h2><p className="mt-1 text-xs leading-5 text-[#747474]">Valores impresos por el equipo, sin interpretación automática de puntos de corte.</p></div><dl className="divide-y divide-[#E9E7E7]">{report.qualityControls.map((parameter) => <div key={parameter.code} className="grid gap-1 px-6 py-4 sm:grid-cols-[1fr_auto] sm:items-center sm:px-8"><dt className="text-sm font-bold text-[#2F2F2F]">{parameter.label}</dt><dd className="text-sm font-black text-[#171717]">{parameter.value}</dd></div>)}</dl></section>}
+
+    {report.limitations.length > 0 && <section className="rounded-2xl border border-[#E8CE99] bg-[#FFF7E8] p-6 sm:p-8"><h2 className="text-lg font-black text-[#7A5100]">Limitaciones</h2><ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[#8A5B00]">{report.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul></section>}
+
     <section className="grid gap-5 lg:grid-cols-2">
-      <article className="rounded-2xl border border-[#E9E7E7] bg-white p-6 sm:p-8"><h2 className="text-lg font-black text-[#171717]">Conclusión profesional</h2><p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-[#2F2F2F]">{report.conclusion}</p></article>
+      <article className="rounded-2xl border border-[#E9E7E7] bg-white p-6 sm:p-8"><h2 className="text-lg font-black text-[#171717]">Impresión profesional</h2><p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-[#2F2F2F]">{report.conclusion}</p></article>
       <article className="rounded-2xl border border-[#E9E7E7] bg-white p-6 sm:p-8"><h2 className="text-lg font-black text-[#171717]">Sugerencia de rehabilitación</h2><p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-[#2F2F2F]">{report.rehabilitationSuggestion}</p></article>
     </section>
 

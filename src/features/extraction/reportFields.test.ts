@@ -7,8 +7,8 @@ describe('campos relevantes para informe y rehabilitación', () => {
     expect(isReportRelevantField({ studyType: 'posturography', code: 'sensory_vestibular' })).toBe(true)
     expect(isReportRelevantField({ studyType: 'posturography', code: 'mix_ve_som' })).toBe(true)
     expect(isReportRelevantField({ studyType: 'posturography', code: 'software_version' })).toBe(false)
-    expect(isReportRelevantField({ studyType: 'posturography', code: 'los_forward' })).toBe(false)
-    expect(isReportRelevantField({ studyType: 'posturography', code: 'pppd_index' })).toBe(false)
+    expect(isReportRelevantField({ studyType: 'posturography', code: 'los_forward' })).toBe(true)
+    expect(isReportRelevantField({ studyType: 'posturography', code: 'pppd_index' })).toBe(true)
     expect(isReportRequiredField({ studyType: 'posturography', code: 'mix_ve_som' })).toBe(false)
   })
 

@@ -6,8 +6,10 @@ import { useUploadDocument } from '../features/documents/hooks'
 import { cycleStudyPhaseLabels, type CycleStudyPhase } from '../features/documents/types'
 import { ClinicalFileDropzone } from '../features/extraction/ClinicalFileDropzone'
 import { extractFields } from '../features/extraction/extractor'
+import { deriveFieldCounters } from '../features/extraction/fieldResults'
 import { analyzeClinicalFile, releaseExtractionPreviews } from '../features/extraction/localOcr'
 import { prepareClinicalUpload } from '../features/extraction/prepareClinicalUpload'
+import { isReportRelevantField } from '../features/extraction/reportFields'
 import { pageClassificationLabels, type IntakeKind, type LocalExtractionDraft, type PageClassification } from '../features/extraction/types'
 import { usePatients } from '../features/patients/hooks'
 import { useTreatmentCycles } from '../features/sessions/hooks'
@@ -19,6 +21,12 @@ const intakeOptions: Array<{ value: IntakeKind; title: string }> = [
 
 const phaseOptions: CycleStudyPhase[] = ['initial', 'final', 'follow_up', 'unspecified']
 const fieldClass = 'mt-2 h-12 w-full rounded-2xl border border-[#E9E7E7] bg-white px-4 text-sm text-[#171717]'
+
+function localIsoDate(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
 
 function phaseFromQuery(value: string | null): CycleStudyPhase {
   return phaseOptions.includes(value as CycleStudyPhase) ? value as CycleStudyPhase : 'unspecified'
@@ -35,7 +43,8 @@ export function ImportStudyPage() {
   const [intakeKind, setIntakeKind] = useState<IntakeKind>(params.get('kind') === 'vestibular' ? 'vestibular_and_reports' : 'posturography_bap')
   const [cyclePhase, setCyclePhase] = useState<CycleStudyPhase>(phaseFromQuery(params.get('phase')))
   const [cycleId, setCycleId] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(localIsoDate)
+  const [uploadDate] = useState(localIsoDate)
   const [description, setDescription] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [preparedFile, setPreparedFile] = useState<File | null>(null)
@@ -64,7 +73,7 @@ export function ImportStudyPage() {
           if (!cancelled) setProgress(value.phase === 'done' ? 'Lectura terminada.' : `Analizando página ${value.currentPage} de ${value.totalPages}`)
         })
       })
-      .then((result) => { if (!result) return; if (!cancelled) setDraft(result); else releaseExtractionPreviews(result) })
+      .then((result) => { if (!result) return; if (!cancelled) { setDraft(result); if (result.studyDate) setDate(result.studyDate) } else releaseExtractionPreviews(result) })
       .catch((caught) => { if (!cancelled) { setError(caught instanceof Error ? caught.message : 'No fue posible analizar los archivos localmente.'); setProgress('') } })
     return () => { cancelled = true }
   }, [files, intakeKind, selectedPatient])
@@ -75,11 +84,7 @@ export function ImportStudyPage() {
     const pages = current.pages.map((page) => page.pageNumber === pageNumber ? { ...page, classification } : page)
     return { ...current, pages, fields: extractFields(pages, current.intakeKind) }
   })
-  const counts = useMemo(() => ({
-    read: draft?.fields.filter((field) => field.professionalValue.trim()).length ?? 0,
-    review: draft?.fields.filter((field) => field.professionalValue.trim() && field.status !== 'read').length ?? 0,
-    missing: draft?.fields.filter((field) => field.required && !field.professionalValue.trim()).length ?? 0,
-  }), [draft])
+  const counts = useMemo(() => deriveFieldCounters(draft?.fields.filter(isReportRelevantField) ?? []), [draft])
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -106,7 +111,8 @@ export function ImportStudyPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-black text-[#2F2F2F]">Paciente *<select className={fieldClass} value={patientId} onChange={(event) => { setPatientId(event.target.value); changeFiles([]) }}><option value="">Seleccionar…</option>{patients.map((patient) => <option key={patient.id} value={patient.id}>{patient.fullName}</option>)}</select></label>
           <label className="text-sm font-black text-[#2F2F2F]">Tipo de estudio *<select className={fieldClass} value={intakeKind} onChange={(event) => { const next = event.target.value as IntakeKind; setIntakeKind(next); if (next !== 'posturography_bap') setCyclePhase('unspecified') }}>{intakeOptions.map((option) => <option key={option.value} value={option.value}>{option.title}</option>)}</select></label>
-          <label className="text-sm font-black text-[#2F2F2F]">Fecha *<input type="date" className={fieldClass} value={date} onChange={(event) => setDate(event.target.value)}/></label>
+          <label className="text-sm font-black text-[#2F2F2F]">Fecha del estudio *<input type="date" className={fieldClass} value={date} onChange={(event) => setDate(event.target.value)}/><small className="mt-2 block font-normal leading-5 text-[#747474]">Se prioriza la fecha legible dentro del estudio.</small></label>
+          <label className="text-sm font-black text-[#2F2F2F]">Fecha de carga<input type="date" className={fieldClass} value={uploadDate} readOnly/><small className="mt-2 block font-normal leading-5 text-[#747474]">Registro administrativo; no reemplaza la fecha clínica.</small></label>
           <label className="text-sm font-black text-[#2F2F2F]">Ciclo {intakeKind === 'posturography_bap' && ['initial', 'final'].includes(cyclePhase) ? '*' : ''}<select className={fieldClass} value={cycleId} onChange={(event) => setCycleId(event.target.value)}><option value="">Sin asociar</option>{cycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.label}</option>)}</select></label>
           {intakeKind === 'posturography_bap' && <label className="text-sm font-black text-[#2F2F2F] sm:col-span-2">Momento dentro del ciclo *<select className={fieldClass} value={cyclePhase} onChange={(event) => setCyclePhase(event.target.value as CycleStudyPhase)}>{phaseOptions.map((phase) => <option key={phase} value={phase}>{cycleStudyPhaseLabels[phase]}</option>)}</select><small className="mt-2 block font-normal leading-5 text-[#747474]">“Inicial” y “final” permiten comparar el mismo ciclo sin asumir una cantidad fija de sesiones.</small></label>}
         </div>
@@ -114,7 +120,7 @@ export function ImportStudyPage() {
         <div className="mt-6"><ClinicalFileDropzone files={files} previewUrl={draft?.pages[0]?.previewUrl ?? ''} pageCount={draft?.pages.length ?? 0} disabled={upload.isPending} onFiles={changeFiles} onError={setError}/></div>
 
         {progress && <div role="status" className="mt-4 rounded-2xl bg-[#FFF7E8] p-4 text-sm font-black text-[#A36B00]">{progress}</div>}
-        {draft && <div className="mt-4 rounded-2xl border border-[#E9E7E7] bg-[#F7F6F4] p-4"><p className="text-sm font-black text-[#2F2F2F]">{counts.read} parámetros obtenidos</p><p className="mt-1 text-xs text-[#747474]">{counts.review} dudosos · {counts.missing} obligatorios faltantes · {draft.pages.length} página(s)</p></div>}
+        {draft && <div className="mt-4 rounded-2xl border border-[#E9E7E7] bg-[#F7F6F4] p-4"><p className="text-sm font-black text-[#2F2F2F]">{counts.total} parámetros controlados</p><p className="mt-1 text-xs text-[#747474]">{counts.detected} detectados · {counts.needsReview} para revisar · {counts.conflicting} en conflicto · {counts.invalid} inválidos · {counts.notPerformed} no realizados · {counts.missingRequired} obligatorios faltantes</p></div>}
         {draft?.patientMatchStatus === 'mismatch' && <div className="mt-4 flex gap-3 rounded-2xl border border-[#efc3c7] bg-[#fceced] p-4"><AlertTriangle className="shrink-0 text-[#a94952]" size={20}/><p className="text-xs leading-5 text-[#8d3c45]"><strong>Posible discrepancia de identidad.</strong> Se confirmará en el informe sin cambiar el paciente automáticamente.</p></div>}
 
         {draft && (draft.pages.length > 1 || draft.pages.some((page) => page.classification === 'unrecognized')) && <details className="mt-4 rounded-2xl border border-[#E9E7E7] p-4"><summary className="cursor-pointer text-xs font-black text-[#2F2F2F]">Revisar páginas</summary><div className="mt-4 grid gap-3 sm:grid-cols-2">{draft.pages.map((page) => <label key={page.pageNumber} className="text-xs font-bold text-[#747474]">Página {page.pageNumber}<select value={page.classification} onChange={(event) => changeClassification(page.pageNumber, event.target.value as PageClassification)} className="mt-1 h-10 w-full rounded-xl border border-[#E9E7E7] px-3 text-xs">{Object.entries(pageClassificationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>)}</div></details>}

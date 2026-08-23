@@ -66,7 +66,7 @@ describe('OCR de informe vestibular escaneado sintetico', () => {
       expect(fields.find((field) => field.code === 'conclusion')?.rawValue).toContain('Hallazgo vestibular sintetico')
       expect(fields.find((field) => field.code === 'conclusion')?.rawValue).toContain('informacion perteneciente a una persona real')
       expect(fields.find((field) => field.code === 'conduct')?.rawValue).toContain('Reevaluacion sintetica y plan ficticio supervisado')
-      expect(fields.find((field) => field.code === 'document_type')).toMatchObject({ rawValue: 'Informe vestibular / vHIT', status: 'review' })
+      expect(fields.find((field) => field.code === 'document_type')).toMatchObject({ rawValue: 'Informe vestibular / vHIT', status: 'needs_review' })
     } finally {
       await worker.terminate()
     }

@@ -86,16 +86,16 @@ describe('ClinicalExtractionReview automatic report draft', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Aplicar correcciones (1)' }))
 
     expect(screen.getByRole('button', { name: 'Aplicar correcciones' })).toBeDisabled()
-    expect(screen.getByText('Corregido')).toBeInTheDocument()
+    expect(screen.getByText('Confirmado')).toBeInTheDocument()
     expect(screen.getByText(/0 para revisar/)).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('1 corrección aplicada')
   })
 
-  it('no solicita transcribir parámetros que no alimentan el informe ni la sugerencia', () => {
+  it('muestra los parámetros estructurados del estudio y omite metadatos técnicos ajenos', () => {
     render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
 
     expect(screen.getByRole('textbox', { name: 'condition 1' })).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'software version' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('textbox', { name: 'los forward' })).not.toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'los forward' })).toBeInTheDocument()
   })
 })

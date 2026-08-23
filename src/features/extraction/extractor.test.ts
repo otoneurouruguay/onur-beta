@@ -35,20 +35,20 @@ describe('extracción literal revisable', () => {
     expect(fields.find((field) => field.code === 'afis_pattern')).toMatchObject({ rawValue: 'No aplica', normalizedValue: 'not_applicable' })
     expect(fields.find((field) => field.code === 'pppd_index')).toMatchObject({ rawValue: '∞', normalizedValue: 'infinite' })
     expect(fields.find((field) => field.code === 'condition_1')).toMatchObject({ rawValue: '91 %', normalizedValue: '91' })
-    expect(fields.find((field) => field.code === 'condition_5')).toMatchObject({ rawValue: '', status: 'unrecognized' })
+    expect(fields.find((field) => field.code === 'condition_5')).toMatchObject({ rawValue: '', status: 'not_reported' })
   })
 
   it('extrae ganancias por lado sin interpretar curvas', () => {
     const fields = extractFields([page('vHIT curva canal horizontal\nGanancia derecha: 0,88\nGanancia izquierda: 0,82\nValor ilegible:', 'vhit_graph', .72)], 'vestibular_and_reports')
-    expect(fields.find((field) => field.code === 'gain_right')).toMatchObject({ rawValue: '0,88', normalizedValue: '0.88', side: 'right', status: 'review' })
+    expect(fields.find((field) => field.code === 'gain_right')).toMatchObject({ rawValue: '0,88', normalizedValue: '0.88', side: 'right', status: 'needs_review' })
     expect(fields.find((field) => field.code === 'gain_left')).toMatchObject({ rawValue: '0,82', normalizedValue: '0.82', side: 'left' })
     expect(fields.some((field) => field.metricCode.includes('curve_interpretation'))).toBe(false)
   })
 
   it('marca OCR parcial y campos obligatorios faltantes sin inventarlos', () => {
     const fields = extractFields([page('Informe vestibular\nFecha del estudio: 17/07/2026\nConclusión:', 'vestibular_report', .58)], 'vestibular_and_reports')
-    expect(fields.find((field) => field.code === 'study_date')?.status).toBe('review')
-    expect(fields.find((field) => field.code === 'conclusion')).toMatchObject({ rawValue: '', required: true, status: 'unrecognized' })
+    expect(fields.find((field) => field.code === 'study_date')?.status).toBe('needs_review')
+    expect(fields.find((field) => field.code === 'conclusion')).toMatchObject({ rawValue: '', required: true, status: 'not_reported' })
   })
 
   it('reconoce el formato clínico G. Regresión OD/OI usado en los informes locales', () => {
@@ -75,10 +75,10 @@ describe('extracción literal revisable', () => {
 
     expect(fields.find((field) => field.code === 'conclusion')).toMatchObject({
       rawValue: 'Hallazgo vestibular sintetico para probar la lectura de un bloque de varias lineas sin datos de una persona real.',
-      status: 'read',
+      status: 'detected',
     })
-    expect(fields.find((field) => field.code === 'conduct')).toMatchObject({ rawValue: 'Reevaluacion sintetica y plan ficticio.', status: 'read' })
-    expect(fields.find((field) => field.code === 'document_type')).toMatchObject({ rawValue: 'Informe vestibular / vHIT', status: 'review' })
+    expect(fields.find((field) => field.code === 'conduct')).toMatchObject({ rawValue: 'Reevaluacion sintetica y plan ficticio.', status: 'detected' })
+    expect(fields.find((field) => field.code === 'document_type')).toMatchObject({ rawValue: 'Informe vestibular / vHIT', status: 'needs_review' })
   })
 
   it('conserva completa una frase narrativa de examen clinico', () => {
@@ -91,7 +91,7 @@ describe('extracción literal revisable', () => {
       ],
     }
     const field = extractFields([reportPage], 'vestibular_and_reports').find((candidate) => candidate.code === 'clinical_exam')
-    expect(field).toMatchObject({ rawValue: 'Se realizo examen clinico e instrumentado del sistema vestibular y de los sistemas oculomotores centrales.', status: 'read' })
+    expect(field).toMatchObject({ rawValue: 'Se realizo examen clinico e instrumentado del sistema vestibular y de los sistemas oculomotores centrales.', status: 'detected' })
   })
 
   it('lee panel BAP compacto y porcentajes ubicados por columna', () => {
@@ -112,7 +112,7 @@ describe('extracción literal revisable', () => {
     const fields = extractFields([bapPage], 'posturography_bap')
     expect(fields.find((field) => field.code === 'los_forward')).toMatchObject({ rawValue: '-07,73', normalizedValue: '-7.73' })
     expect(fields.find((field) => field.code === 'los_backward')).toMatchObject({ rawValue: '04,31', normalizedValue: '4.31' })
-    expect(fields.find((field) => field.code === 'condition_1')).toMatchObject({ rawValue: '90', normalizedValue: '90', status: 'review' })
+    expect(fields.find((field) => field.code === 'condition_1')).toMatchObject({ rawValue: '90', normalizedValue: '90', status: 'needs_review' })
     expect(fields.find((field) => field.code === 'condition_4')).toMatchObject({ rawValue: '82', normalizedValue: '82' })
     expect(fields.find((field) => field.code === 'composite_score')).toMatchObject({ rawValue: '81', normalizedValue: '81' })
     expect(fields.find((field) => field.code === 'sensory_somatosensory')).toMatchObject({ rawValue: '100', normalizedValue: '100' })
