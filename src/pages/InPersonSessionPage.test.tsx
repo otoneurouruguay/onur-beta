@@ -110,6 +110,22 @@ describe('ejecución presencial desde la cuenta profesional', () => {
     expect(await screen.findByRole('heading', { name: /sesión presencial registrada/i })).toBeInTheDocument()
   })
 
+  it('muestra el mensaje concreto que devuelve el servidor al fallar el cierre', async () => {
+    mocks.complete.mockRejectedValueOnce({ message: 'No existe un cierre presencial pendiente para esta sesión.' })
+    renderPage()
+
+    fireEvent.click(within(screen.getByRole('group', { name: /malestar antes de comenzar/i })).getByRole('button', { name: '1' }))
+    fireEvent.click(screen.getByRole('button', { name: /comenzar sesión presencial/i }))
+    await waitFor(() => expect(mocks.start).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: /omitir y finalizar/i }))
+    fireEvent.click(within(screen.getByRole('group', { name: /malestar al finalizar/i })).getByRole('button', { name: '1' }))
+    fireEvent.click(within(screen.getByRole('group', { name: /máximo malestar durante/i })).getByRole('button', { name: '2' }))
+    fireEvent.click(within(screen.getByRole('group', { name: /dificultad percibida/i })).getByRole('button', { name: '1' }))
+    fireEvent.click(screen.getByRole('button', { name: /guardar y finalizar/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No existe un cierre presencial pendiente para esta sesión.')
+  })
+
   it('muestra reanudación desde el principio para una asignación iniciada', () => {
     mocks.status = 'started'
     renderPage()

@@ -74,6 +74,7 @@ for (const marker of [
   'Esta posturografía ya está cargada',
   'Ya existe una posturografía',
   'si corresponde.',
+  'complete_supervised_in_person_session_v2',
 ]) {
   requireCheck(compiledJavaScript.includes(marker), `La compilación no contiene el control obligatorio: ${marker}.`)
 }

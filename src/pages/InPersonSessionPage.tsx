@@ -11,6 +11,15 @@ import { isQuestClinicAssignment } from '../features/sessions/questRepository'
 
 type RunnerResult = { activeSeconds: number; skippedExercises: number; eventLog: SessionEventLogEntry[] }
 
+function readableError(caught: unknown, fallback: string) {
+  if (caught instanceof Error && caught.message.trim()) return caught.message
+  if (caught && typeof caught === 'object' && 'message' in caught) {
+    const message = (caught as { message?: unknown }).message
+    if (typeof message === 'string' && message.trim()) return message
+  }
+  return fallback
+}
+
 function FreeInPersonSessionRecorder({ patientId, patientName, assignment }: { patientId: string; patientName: string; assignment: SessionAssignmentRecord }) {
   const record = useRecordFreeInPersonSession(patientId)
   const [outcome, setOutcome] = useState<'completed' | 'cancelled'>('completed')
@@ -196,7 +205,7 @@ export function InPersonSessionPage() {
       })
       setStage('finished')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'La ejecución terminó, pero no fue posible guardar el cierre supervisado. Volvé a intentar sin abandonar esta pantalla.')
+      setError(readableError(caught, 'La ejecución terminó, pero no fue posible guardar el cierre supervisado. Volvé a intentar sin abandonar esta pantalla.'))
     }
   }
 
