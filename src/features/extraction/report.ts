@@ -36,7 +36,9 @@ export function buildStudyExtractionReport(
   const confirmed = extraction.fields
       .filter((field) => field.studyType === studyType && isReportRelevantField(field) && field.confirmed && Boolean(field.professionalValue.trim()))
       .map((field) => ({ code: field.code, label: field.label, value: field.professionalValue.trim(), status: canonicalFieldStatus(field) }))
-  const qualityCodes = new Set(['afis_pattern', 'mix_ve_som', 'mix_ve_vi', 'pppd_index'])
+  const qualityCodes = new Set(studyType === 'posturography'
+    ? ['afis_pattern', 'mix_ve_som', 'mix_ve_vi', 'pppd_index']
+    : ['test_device', 'calibration_quality', 'gain_method', 'impulse_counts', 'head_velocity'])
   return {
     parameters: confirmed.filter((field) => !qualityCodes.has(field.code)),
     qualityControls: confirmed.filter((field) => qualityCodes.has(field.code)),

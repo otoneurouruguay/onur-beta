@@ -12,6 +12,7 @@ import { PrivateDocumentViewer } from './PrivateDocumentViewer'
 import { buildBapAutomaticReport, removeLegacyAutomaticReportBoilerplate } from './bapAutomaticReport'
 import { isReportRelevantField, isReportRequiredField } from './reportFields'
 import { canonicalFieldStatus, deriveFieldCounters, fieldReviewReason, isFieldPresent } from './fieldResults'
+import { buildVestibularAutomaticReport } from './vestibularAutomaticReport'
 
 const control = 'h-11 rounded-xl border border-[#E9E7E7] bg-white px-3 text-sm text-[#171717]'
 
@@ -111,7 +112,7 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
   const missing = useMemo(() => parameters.filter((field) => isReportRequiredField(field) && !isFieldPresent(field)), [parameters])
   const counters = useMemo(() => deriveFieldCounters(relevantFields), [relevantFields])
   const studyType = draft?.fields.find((field) => field.studyType === 'posturography') ? 'posturography' : 'vhit'
-  const automaticReport = useMemo(() => draft ? buildBapAutomaticReport(draft.fields, draft.cyclePhase ?? 'unspecified') : null, [draft])
+  const automaticReport = useMemo(() => draft ? studyType === 'posturography' ? buildBapAutomaticReport(draft.fields, draft.cyclePhase ?? 'unspecified') : buildVestibularAutomaticReport(draft.fields) : null, [draft, studyType])
   const activeField = draft?.fields.find((field) => field.clientId === selectedField)
   const blocking = missing.length > 0 || !draft?.professionalConclusion.trim() || !draft.rehabilitationSuggestion.trim() || draft.patientMatchStatus === 'mismatch' || draft.pages.some((item) => item.classification === 'unrecognized')
 
@@ -143,7 +144,7 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
   }, [automaticReport, draft])
 
   const applyAutomaticReport = () => {
-    if (!draft || !automaticReport) { setError('Completá los parámetros de la posturografía para generar el borrador automático.'); return }
+    if (!draft || !automaticReport) { setError(studyType === 'posturography' ? 'Completá los parámetros de la posturografía para generar el borrador automático.' : 'El documento no contiene una conclusión o conducta literal para recuperar.'); return }
     const replacesText = Boolean(draft.professionalConclusion.trim() || draft.rehabilitationSuggestion.trim())
     const alreadyCurrent = draft.professionalConclusion === automaticReport.conclusion && draft.rehabilitationSuggestion === automaticReport.rehabilitationSuggestion
     if (replacesText && !alreadyCurrent && !window.confirm('¿Reemplazar los textos actuales por un nuevo borrador basado en los parámetros mostrados?')) return
@@ -241,7 +242,7 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
       <section className="overflow-hidden rounded-2xl border border-[#E9E7E7] bg-white">
         <div className="flex flex-col gap-3 border-b border-[#E9E7E7] p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-black text-[#171717]">Parámetros obtenidos</h2><p className="mt-1 text-xs text-[#747474]">{counters.total} controlados · {counters.detected} detectados · {counters.confirmed} confirmados · {counters.needsReview} para revisar · {counters.conflicting} en conflicto · {counters.invalid} inválidos · {counters.notPerformed} no realizados · {counters.missingRequired} faltantes</p></div>{!locked && <button type="button" onClick={applyParameterCorrections} disabled={editedFieldIds.size === 0} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#E8CE99] bg-[#FFF7E8] px-3 py-2 text-xs font-black text-[#A36B00] disabled:cursor-not-allowed disabled:opacity-45"><RefreshCw size={14}/> Aplicar correcciones{editedFieldIds.size > 0 ? ` (${editedFieldIds.size})` : ''}</button>}</div>
         {missing.length > 0 && <p className="border-b border-[#efc3c7] bg-[#fff7f7] px-5 py-3 text-xs font-bold text-[#a94952]">Falta completar o consignar como “no informado”: {missing.map((field) => field.label).join(' · ')}</p>}
-        <p className="border-b border-[#E9E7E7] bg-[#F7F6F4] px-5 py-3 text-xs leading-5 text-[#747474]">{studyType === 'posturography' ? 'Se muestran únicamente los datos que alimentan el informe funcional y la sugerencia: edad, seis condiciones, puntaje compuesto, índices sensoriales, preferencia visual y controles de calidad relevantes. El resto permanece disponible en el estudio original y no requiere transcripción.' : 'Se muestran únicamente los datos que alimentan el informe y orientan la sugerencia: protocolo HIMP, plano y canales, ganancias, simetría, sacadas e interpretabilidad. Los demás hallazgos del examen permanecen en el estudio original y no requieren transcripción.'}</p>
+        <p className="border-b border-[#E9E7E7] bg-[#F7F6F4] px-5 py-3 text-xs leading-5 text-[#747474]">{studyType === 'posturography' ? 'Se muestran únicamente los datos que alimentan el informe funcional y la sugerencia: edad, seis condiciones, puntaje compuesto, índices sensoriales, preferencia visual y controles de calidad relevantes. El resto permanece disponible en el estudio original y no requiere transcripción.' : 'ONUr adapta los datos obligatorios al documento: en un informe narrativo controla identidad temporal, conclusión y secciones consignadas; cuando detecta vHIT agrega HIMP, canales, ganancias, simetría, sacadas, impulsos y calidad técnica. Las curvas nunca se interpretan automáticamente.'}</p>
         <div className="max-h-[660px] divide-y divide-[#E9E7E7] overflow-y-auto">{parameters.map((field) => {
           const presentation = fieldStatusPresentation(field)
           return <label key={field.clientId} onClick={() => { setSelectedField(field.clientId); setPageNumber(field.pageNumber) }} className={`grid cursor-pointer gap-2 p-4 sm:grid-cols-[1fr_170px] sm:items-center ${selectedField === field.clientId ? 'bg-[#FFF7E8]' : ''}`}>
@@ -256,7 +257,7 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
     <section className="rounded-2xl border border-[#E9E7E7] bg-white p-5 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div><div className="flex items-center gap-2"><Sparkles size={18} className="text-[#E49A02]"/><h2 className="font-black text-[#171717]">Conclusión y rehabilitación</h2></div><p className="mt-1 max-w-3xl text-xs leading-5 text-[#747474]">{studyType === 'posturography' ? 'ONUr genera un borrador preliminar con los parámetros mostrados y las referencias BAP por edad. Podés corregirlo libremente; nunca reemplaza tu criterio profesional.' : 'En vHIT, ONUr transcribe el estudio y controla los datos críticos. La interpretación y la recomendación se completan profesionalmente porque dependen de síntomas, examen, calidad técnica, equipo y patrón de sacadas.'}</p></div>
-        {!locked && studyType === 'posturography' && <button type="button" onClick={applyAutomaticReport} disabled={!automaticReport} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#E8CE99] bg-[#FFF7E8] px-3 py-2 text-xs font-black text-[#A36B00] disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw size={14}/> Regenerar desde parámetros</button>}
+        {!locked && <button type="button" onClick={applyAutomaticReport} disabled={!automaticReport} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#E8CE99] bg-[#FFF7E8] px-3 py-2 text-xs font-black text-[#A36B00] disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw size={14}/>{studyType === 'posturography' ? 'Regenerar desde parámetros' : 'Recuperar texto del informe'}</button>}
       </div>
       <div className="mt-3 flex flex-wrap gap-2"><span className="rounded-full bg-[#FFF7E8] px-2.5 py-1 text-[10px] font-black uppercase text-[#A36B00]">Borrador automático</span><span className="rounded-full bg-[#E9E7E7] px-2.5 py-1 text-[10px] font-black uppercase text-[#747474]">Editable</span><span className="rounded-full bg-[#FFF7E8] px-2.5 py-1 text-[10px] font-black uppercase text-[#8A5B00]">Confirmación obligatoria</span></div>
       <div className="mt-5 grid gap-5 lg:grid-cols-2">

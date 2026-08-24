@@ -12,13 +12,14 @@ describe('campos relevantes para informe y rehabilitación', () => {
     expect(isReportRequiredField({ studyType: 'posturography', code: 'mix_ve_som' })).toBe(false)
   })
 
-  it('limita vHIT al núcleo vestibular interpretable', () => {
+  it('incluye el contrato vestibular completo y respeta requisitos dinámicos', () => {
     expect(isReportRelevantField({ studyType: 'vhit', code: 'himp' })).toBe(true)
     expect(isReportRelevantField({ studyType: 'vhit', code: 'gain_right' })).toBe(true)
     expect(isReportRelevantField({ studyType: 'vhit', code: 'calibration_quality' })).toBe(true)
-    expect(isReportRelevantField({ studyType: 'vhit', code: 'skew' })).toBe(false)
-    expect(isReportRelevantField({ studyType: 'vhit', code: 'gait' })).toBe(false)
-    expect(isReportRelevantField({ studyType: 'vhit', code: 'test_device' })).toBe(false)
-    expect(isReportRequiredField({ studyType: 'vhit', code: 'calibration_quality' })).toBe(false)
+    expect(isReportRelevantField({ studyType: 'vhit', code: 'skew' })).toBe(true)
+    expect(isReportRelevantField({ studyType: 'vhit', code: 'gait' })).toBe(true)
+    expect(isReportRelevantField({ studyType: 'vhit', code: 'test_device' })).toBe(true)
+    expect(isReportRequiredField({ studyType: 'vhit', code: 'gain_right', required: true })).toBe(true)
+    expect(isReportRequiredField({ studyType: 'vhit', code: 'calibration_quality', required: false })).toBe(false)
   })
 })

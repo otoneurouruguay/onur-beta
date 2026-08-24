@@ -3,8 +3,8 @@ import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { bapRecognitionProfile, binarizeBapDarkText, binarizeBapLightText, detectBapTemplate, expandedBapRegion, type BapPreprocessMode, type BapRecognitionRegion } from './bapOcrProfile'
 import { classifyPage, comparePatientIdentity, EXTRACTOR_VERSION, extractFields, type PatientIdentityForMatch } from './extractor'
-import { clinicalReportSummaryRegion } from './reportOcrProfile'
 import type { ExtractedPage, ExtractionProgress, IntakeKind, LocalExtractionDraft, OcrLine } from './types'
+import { detectVestibularTemplate, expandedVestibularRegion, vestibularReportRecognitionProfile, vhitRecognitionProfile, type VestibularRecognitionRegion } from './vestibularOcrProfile'
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -130,21 +130,8 @@ function regionPsm(region: BapRecognitionRegion) {
   return PSM.SPARSE_TEXT
 }
 
-function textRegion(source: HTMLCanvasElement, region: { x: number; y: number; width: number; height: number }) {
-  const sourceX = Math.round(source.width * region.x)
-  const sourceY = Math.round(source.height * region.y)
-  const sourceWidth = Math.max(1, Math.round(source.width * region.width))
-  const sourceHeight = Math.max(1, Math.round(source.height * region.height))
-  const scale = Math.min(3, 3000 / Math.max(sourceWidth, sourceHeight))
-  const target = document.createElement('canvas')
-  target.width = Math.max(1, Math.round(sourceWidth * scale))
-  target.height = Math.max(1, Math.round(sourceHeight * scale))
-  const context = target.getContext('2d')
-  if (!context) throw new Error('El navegador no permite preparar el bloque de texto clinico.')
-  context.imageSmoothingEnabled = true
-  context.imageSmoothingQuality = 'high'
-  context.drawImage(source, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, target.width, target.height)
-  return target
+function vestibularPsm(region: VestibularRecognitionRegion) {
+  return region.psm === 'single_block' ? PSM.SINGLE_BLOCK : PSM.SPARSE_TEXT
 }
 
 function mergeOcrLines(groups: OcrLine[][]) {
@@ -184,14 +171,22 @@ async function recognizeCanvas(canvas: HTMLCanvasElement, intakeKind: IntakeKind
       lineGroups.push(resultLines(contrastedResult, contrasted, undefined, { regionId: 'full_page', method: 'ocr_grayscale', passId: 'full-grayscale' }))
     }
     if (intakeKind === 'vestibular_and_reports') {
-      // Los informes escaneados suelen concentrar "En suma" y "Conducta" en
-      // el tercio inferior. PSM.SPARSE_TEXT separa esas frases en fragmentos;
-      // una segunda lectura como bloque preserva sus renglones y continuidad.
-      const prepared = textRegion(selected.canvas, clinicalReportSummaryRegion)
-      await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_BLOCK, preserve_interword_spaces: '1', user_defined_dpi: '300' })
-      const summaryResult = await worker.recognize(prepared, { rotateAuto: false }, { text: true, blocks: true })
-      results.push(summaryResult)
-      lineGroups.push(resultLines(summaryResult, prepared, clinicalReportSummaryRegion, { regionId: 'report_summary', method: 'ocr_original', passId: 'report-summary' }))
+      const detected = detectVestibularTemplate(selected.result.data.text, selected.canvas.width, selected.canvas.height)
+      const profile = detected.type === 'vhit_labeled' ? vhitRecognitionProfile : detected.type === 'vestibular_report' ? vestibularReportRecognitionProfile : []
+      for (const region of profile) {
+        const target = expandedVestibularRegion(region.bbox)
+        const passCount = Math.max(region.scales.length, region.modes.length)
+        for (let pass = 0; pass < passCount; pass += 1) {
+          const scale = region.scales[pass % region.scales.length]
+          const mode = region.modes[pass % region.modes.length]
+          const prepared = bapRegionCanvas(selected.canvas, target, scale, mode)
+          await worker.setParameters({ tessedit_pageseg_mode: vestibularPsm(region), preserve_interword_spaces: '1', user_defined_dpi: '300' })
+          const regionResult = await worker.recognize(prepared, { rotateAuto: false }, { text: true, blocks: true })
+          results.push(regionResult)
+          const method = mode === 'original' ? 'ocr_original' : mode === 'grayscale' ? 'ocr_grayscale' : 'ocr_threshold'
+          lineGroups.push(resultLines(regionResult, prepared, target, { regionId: region.id, method, passId: `${region.id}-${mode}-${scale}` }))
+        }
+      }
       await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT, preserve_interword_spaces: '1', user_defined_dpi: '300' })
     }
     if (intakeKind === 'posturography_bap') {
@@ -239,11 +234,20 @@ async function imageCanvas(file: File) {
 
 async function analyzeCanvas(canvas: HTMLCanvasElement, pageNumber: number, intakeKind: IntakeKind, embeddedText = '', embeddedLines: OcrLine[] = []): Promise<ExtractedPage> {
   const ocr = embeddedText.trim().length > 80 ? { text: embeddedText, confidence: 95, rotationDegrees: 0, lines: embeddedLines, canvas } : await recognizeCanvas(canvas, intakeKind)
-  const template = detectBapTemplate(ocr.text, ocr.canvas.width, ocr.canvas.height)
+  const bapTemplate = detectBapTemplate(ocr.text, ocr.canvas.width, ocr.canvas.height)
+  const vestibularTemplate = detectVestibularTemplate(ocr.text, ocr.canvas.width, ocr.canvas.height)
+  const template = intakeKind === 'posturography_bap' ? bapTemplate : vestibularTemplate
+  const templateType = intakeKind === 'posturography_bap' ? bapTemplate.detected ? 'bap_2_32' as const : 'generic' as const : vestibularTemplate.type
   const genericClassification = classifyPage(ocr.text)
-  const classification = intakeKind === 'posturography_bap' && template.detected ? { classification: 'posturography' as const, confidence: Math.max(template.confidence, genericClassification.confidence) } : genericClassification
+  const classification = intakeKind === 'posturography_bap' && bapTemplate.detected
+    ? { classification: 'posturography' as const, confidence: Math.max(bapTemplate.confidence, genericClassification.confidence) }
+    : intakeKind === 'vestibular_and_reports' && vestibularTemplate.type === 'vhit_labeled'
+      ? { classification: 'vhit_graph' as const, confidence: Math.max(vestibularTemplate.confidence, genericClassification.confidence) }
+      : intakeKind === 'vestibular_and_reports' && vestibularTemplate.type === 'vestibular_report'
+        ? { classification: 'vestibular_report' as const, confidence: Math.max(vestibularTemplate.confidence, genericClassification.confidence) }
+        : genericClassification
   const previewUrl = URL.createObjectURL(await canvasBlob(ocr.canvas))
-  return { pageNumber, proposedClassification: classification.classification, classification: classification.classification, classificationConfidence: classification.confidence, rotationDegrees: ocr.rotationDegrees, width: ocr.canvas.width, height: ocr.canvas.height, previewUrl, text: ocr.text, lines: ocr.lines, template: { type: template.detected ? 'bap_2_32' : 'generic', confidence: template.confidence, matchedSignals: template.matchedSignals, aspectRatio: template.aspectRatio } }
+  return { pageNumber, proposedClassification: classification.classification, classification: classification.classification, classificationConfidence: classification.confidence, rotationDegrees: ocr.rotationDegrees, width: ocr.canvas.width, height: ocr.canvas.height, previewUrl, text: ocr.text, lines: ocr.lines, template: { type: templateType, confidence: template.confidence, matchedSignals: template.matchedSignals, aspectRatio: template.aspectRatio } }
 }
 
 async function analyzePdf(file: File, intakeKind: IntakeKind, progress: (value: ExtractionProgress) => void) {

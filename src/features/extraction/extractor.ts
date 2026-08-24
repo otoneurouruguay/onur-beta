@@ -1,9 +1,10 @@
 import { parseLocaleNumber } from '../studies/normalization'
 import { posturographyFieldDefinitions, vestibularFieldDefinitions } from './catalog'
 import { findBapStructuredValue, validateBapFields } from './bapStructuredExtraction'
+import { findVestibularStructuredValue, validateVestibularFields } from './vestibularStructuredExtraction'
 import type { ExtractedField, ExtractedPage, ExtractionFieldDefinition, IntakeKind, PageClassification, PatientMatchStatus, SourceRegion } from './types'
 
-export const EXTRACTOR_VERSION = 'onur-local-ocr-2.0'
+export const EXTRACTOR_VERSION = 'onur-local-ocr-2.1'
 
 function fold(value: string) {
   return value.toLocaleLowerCase('es-UY').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -77,7 +78,7 @@ interface LocatedValue {
   value: string
   confidence: number
   region: SourceRegion | null
-  structured?: ReturnType<typeof findBapStructuredValue>
+  structured?: ReturnType<typeof findBapStructuredValue> | ReturnType<typeof findVestibularStructuredValue>
 }
 
 const multilineCodes = new Set(['clinical_exam', 'history', 'symptoms', 'referral_reason', 'conclusion', 'conduct', 'professional_observations'])
@@ -308,6 +309,10 @@ function findDefinitionValue(definition: ExtractionFieldDefinition, page: Extrac
     const structured = findBapStructuredValue(definition.code, page)
     if (structured) return { value: structured.raw, confidence: structured.confidence, region: structured.region, structured }
   }
+  if (definition.studyType === 'vhit') {
+    const structured = findVestibularStructuredValue(definition.code, page)
+    if (structured) return { value: structured.raw, confidence: structured.confidence, region: structured.region, structured }
+  }
   const isBapGraphValue = /^condition_[1-6]$/.test(definition.code) || definition.code === 'composite_score' || ['sensory_somatosensory', 'sensory_visual', 'sensory_vestibular', 'visual_preference'].includes(definition.code)
   // Sólo se aplican coordenadas de las barras si el OCR reconoce ambos paneles
   // BAP. Esto evita que un documento de texto con "Condición 1" se lea como gráfico.
@@ -342,7 +347,9 @@ export function extractFields(pages: ExtractedPage[], intakeKind: IntakeKind): E
   const definitions = intakeKind === 'posturography_bap' ? posturographyFieldDefinitions : [...vestibularFieldDefinitions, ...posturographyFieldDefinitions]
   const fields = definitions.map((definition): ExtractedField => {
     const relevantPages = pages.filter((page) => definition.studyType === 'posturography' ? page.classification === 'posturography' : ['vestibular_report', 'vhit_graph', 'referral', 'other_clinical'].includes(page.classification))
-    const found = relevantPages.map((page) => ({ page, found: findDefinitionValue(definition, page) })).find((candidate) => candidate.found)
+    const found = relevantPages.map((page) => ({ page, found: findDefinitionValue(definition, page) }))
+      .filter((candidate): candidate is { page: ExtractedPage; found: NonNullable<ReturnType<typeof findDefinitionValue>> } => Boolean(candidate.found))
+      .sort((first, second) => second.found.confidence - first.found.confidence)[0]
     const value = found?.found?.value ?? ''
     const confidence = found?.found?.confidence ?? 0
     const structured = found?.found?.structured
@@ -365,7 +372,7 @@ export function extractFields(pages: ExtractedPage[], intakeKind: IntakeKind): E
       correctionHistory: [],
     }
   })
-  return intakeKind === 'posturography_bap' ? validateBapFields(fields) : fields
+  return intakeKind === 'posturography_bap' ? validateBapFields(fields) : validateVestibularFields(fields, pages)
 }
 
 export interface PatientIdentityForMatch { fullName: string; birthDate: string; affiliateNumber: string; insurer?: string }

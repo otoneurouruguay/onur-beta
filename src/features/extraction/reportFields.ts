@@ -51,14 +51,52 @@ const reportRelevantCodes: Record<StudyType, ReadonlySet<string>> = {
     'sensory_contribution_vestibular',
   ]),
   vhit: new Set([
+    'study_date',
+    'study_time',
+    'patient_name',
+    'reported_age',
+    'patient_id',
+    'institution',
+    'document_type',
+    'professional',
+    'referral_reason',
+    'history',
+    'symptoms',
+    'evolution',
+    'clinical_exam',
+    'test_device',
     'himp',
+    'shimp',
     'curves_channels',
     'gain_right',
     'gain_left',
+    'gain_right_horizontal',
+    'gain_left_horizontal',
+    'gain_right_anterior',
+    'gain_left_anterior',
+    'gain_right_posterior',
+    'gain_left_posterior',
+    'gain_method',
     'symmetry',
     'saccades',
+    'impulse_counts',
+    'head_velocity',
     'calibration_quality',
+    'cranial_nerve_vii',
+    'fixation_system',
+    'visual_suppression',
+    'skew',
+    'head_shaking',
+    'vibration_test',
+    'vor_cancellation',
+    'positional_tests',
+    'gait',
+    'saccadic_precision',
+    'saccadic_velocity',
+    'smooth_pursuit',
     'conclusion',
+    'conduct',
+    'professional_observations',
   ]),
 }
 
@@ -93,6 +131,7 @@ export function isReportRelevantField(field: Pick<ExtractedField, 'studyType' | 
   return reportRelevantCodes[field.studyType].has(field.code)
 }
 
-export function isReportRequiredField(field: Pick<ExtractedField, 'studyType' | 'code'>) {
+export function isReportRequiredField(field: Pick<ExtractedField, 'studyType' | 'code'> & Partial<Pick<ExtractedField, 'required'>>) {
+  if (field.required !== undefined && field.studyType === 'vhit') return field.required
   return reportRequiredCodes[field.studyType].has(field.code)
 }

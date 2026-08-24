@@ -1,7 +1,7 @@
 {
   "name": "onur-beta",
   "private": true,
-  "version": "0.1.0-beta.68",
+  "version": "0.1.0-beta.69",
   "type": "module",
   "scripts": {
     "prepare:ocr": "node scripts/sync_ocr_assets.mjs",
@@ -17,6 +17,7 @@
     "test:run": "vitest run --maxWorkers=2",
     "preocr:benchmark": "npm run prepare:ocr",
     "ocr:benchmark": "vitest run scripts/evaluate_bap_ocr.test.ts scripts/evaluate_report_ocr.test.ts --environment node --reporter verbose",
+    "ocr:vestibular": "vitest run scripts/evaluate_vhit_ocr.test.ts scripts/evaluate_report_ocr.test.ts --environment node --reporter verbose --maxWorkers=1",
     "ocr:reference": "vitest run scripts/evaluate_bap_reference.test.ts --environment node --reporter verbose --maxWorkers=1",
     "typecheck": "tsc -b --pretty false",
     "staging:dry-run": "bash scripts/deploy_staging.sh --dry-run",

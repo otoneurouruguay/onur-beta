@@ -44,6 +44,17 @@ function record(): ExtractionReviewRecord {
   }
 }
 
+function vestibularRecord(): ExtractionReviewRecord {
+  const vestibularField = (code: string, value: string): ExtractedField => ({
+    clientId: `synthetic-${code}`, code, label: code, group: 'Conclusión', studyType: 'vhit', required: code === 'conclusion', metricCode: '', rawValue: value, normalizedValue: value, unitCode: '', conditionCode: '', side: '', pageNumber: 1, region: null, confidence: .93, status: 'detected', extractorMethod: 'local_ocr', extractorVersion: 'onur-local-ocr-2.1', professionalValue: value, confirmed: false,
+  })
+  return {
+    id: 'synthetic-vestibular-job', documentId: 'synthetic-document', studyIds: ['synthetic-study'], status: 'review', intakeKind: 'vestibular_and_reports', extractorVersion: 'onur-local-ocr-2.1', patientMatchStatus: 'match', mismatchFields: [],
+    pages: [{ pageNumber: 1, proposedClassification: 'vestibular_report', classification: 'vestibular_report', classificationConfidence: .95, rotationDegrees: 0, width: 1000, height: 1400, previewUrl: '', text: '', lines: [], template: { type: 'vestibular_report', confidence: .95, matchedSignals: 4, aspectRatio: .71 } }],
+    fields: [vestibularField('conclusion', 'Conclusión vestibular literal sintética.'), vestibularField('conduct', 'Conducta literal sintética.')], sourceFilename: 'vestibular-synthetic.png', mimeType: 'image/png', documentUrl: '', sectionStudyId: 'synthetic-study', sectionPageNumbers: [1], professionalConclusion: '', rehabilitationSuggestion: '',
+  }
+}
+
 describe('ClinicalExtractionReview automatic report draft', () => {
   afterEach(cleanup)
 
@@ -122,5 +133,15 @@ describe('ClinicalExtractionReview automatic report draft', () => {
     fireEvent.click(screen.getByRole('button', { name: /confirmar y ver informe/i }))
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Todos los valores clínicos presentes deben estar confirmados.'))
+  })
+
+  it('recupera literalmente En suma y Conducta en informes vestibulares', async () => {
+    mocks.record = vestibularRecord()
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Conclusión para confirmar' })).toHaveValue('Conclusión vestibular literal sintética.'))
+    expect(screen.getByRole('textbox', { name: 'Sugerencia de rehabilitación para confirmar' })).toHaveValue('Conducta literal sintética.')
+    expect(screen.getByRole('button', { name: 'Recuperar texto del informe' })).toBeEnabled()
+    expect(screen.getByText(/las curvas nunca se interpretan automáticamente/i)).toBeInTheDocument()
   })
 })

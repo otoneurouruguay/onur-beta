@@ -20,6 +20,14 @@ El candidato final no se decide por la confianza cruda de Tesseract. Se combinan
 
 Cada campo conserva `raw`, `value`, unidad, estado, confianza combinada, página/región/método, advertencias, validaciones y candidatos. Los estados disponibles son `detected`, `confirmed`, `needs_review`, `unreadable`, `not_reported`, `not_performed`, `invalid` y `conflicting`. Los borradores históricos `read/review/unrecognized` se normalizan al mostrarlos. Las correcciones profesionales conservan valor anterior, fecha y fuente `professional_edit`; un reanálisis no las reemplaza silenciosamente.
 
+## Informes vestibulares y vHIT 2.1
+
+La versión `onur-local-ocr-2.1` distingue un informe vestibular narrativo de una hoja o captura vHIT rotulada. Corrige orientación y vuelve a leer por separado encabezado, cuerpo clínico, resumen/conducta, métricas vHIT y controles de calidad con pasadas en color, grises y umbral de texto oscuro. Un documento que no reúne señales suficientes permanece como genérico y requiere clasificación profesional.
+
+El contrato vestibular conserva identidad y fecha impresas, institución/profesional, antecedentes, examen, HIMP/SHIMP, plano y canales, ganancias globales y por canal cuando están rotuladas, método de ganancia, simetría, sacadas explícitas, impulsos, velocidad cefálica, equipo, calibración/artefactos, conclusión y conducta. Las ganancias se validan en el intervalo 0–2 y la simetría en 0–100 %. Dos lecturas válidas discordantes quedan como `conflicting`; un valor fuera de rango queda como `invalid`.
+
+Los requisitos se adaptan al tipo de página. Un informe narrativo no queda bloqueado por no incluir ganancias vHIT. Una página vHIT sí solicita fecha, HIMP, canales, ganancias laterales, simetría y sacadas. ONUr nunca deduce sacadas, déficit ni normalidad desde la forma de las curvas: si no existe texto explícito, el campo permanece no informado y exige revisión. `En suma` y `Conducta` pueden copiarse literalmente al borrador profesional, pero no se genera una interpretación ni una recomendación nueva.
+
 Al abrir un borrador creado con una versión anterior, ONUr vuelve a analizar el original privado en el navegador y conserva las correcciones profesionales que difieran de la lectura anterior. El reprocesamiento queda auditado sin almacenar el contenido clínico en el registro de auditoría.
 
 ## Borrador automático de conclusión y rehabilitación
@@ -65,7 +73,7 @@ El OCR 1.5 reconoce además el formato narrativo `G. Regresión OD / OI`, la sim
 
 El corpus reproducible `bap_ocr_corpus_synthetic.json` incluye capturas limpias, pequeñas, comprimidas, borrosas, de bajo contraste y con números señuelo. Cada archivo declara once resultados esperados: seis condiciones, compuesto y cuatro índices de organización sensorial. Ninguna muestra contiene datos personales ni procede de una historia clínica.
 
-Ejecutar `npm run ocr:benchmark` para medir el corpus sintético. La prueba falla si la precisión campo por campo baja de 95 %. Este umbral es técnico y no certifica interpretabilidad clínica.
+Ejecutar `npm run ocr:benchmark` para medir el corpus BAP sintético y `npm run ocr:vestibular` para comprobar orientación/ganancias vHIT y el informe narrativo escaneado. La prueba BAP falla si la precisión campo por campo baja de 95 %. Estos umbrales son técnicos y no certifican interpretabilidad clínica.
 
 La captura clínica de referencia no se copia al repositorio ni se registra en consola. En un entorno local autorizado se verifica con:
 
@@ -86,9 +94,9 @@ Sin esa variable la prueba queda omitida. El contrato comprueba identidad impres
 - Los documentos y valores clínicos no se imprimen en consola ni se usan como fixtures, logs o datos de staging. La prueba clínica recibe solo una ruta local autorizada y no copia el archivo.
 - No existe proveedor multimodal ni clave en el navegador. Todos los assets OCR se sirven desde `BASE_URL/ocr`; no se envían imágenes o recortes a servicios externos.
 
-## Informes escaneados y OCR 1.5
+## Compatibilidad con informes escaneados 1.5
 
-La versión 1.5 conserva la lectura de bloque de informes vestibulares, agrega formatos estructurados de vHIT y permite analizar un documento compuesto por varios archivos. Esto permite recomponer `En suma` y `Conducta` cuando ocupan varios renglones y descartar fragmentos duplicados de la lectura de página completa. Si el tipo de documento no está escrito literalmente, se propone desde la clasificación de página y queda marcado para revisión profesional.
+La compatibilidad 1.5 conserva la lectura de bloque y permite analizar un documento compuesto por varios archivos. Esto permite recomponer `En suma` y `Conducta` cuando ocupan varios renglones y descartar fragmentos duplicados de la lectura de página completa. Si el tipo de documento no está escrito literalmente, se propone desde la clasificación de página y queda marcado para revisión profesional.
 
 La regresion usa `vestibular_report_scanned_synthetic.jpg`, una imagen completamente ficticia con perspectiva, resumen multilinea y conducta. Ningun documento real se incorpora al corpus.
 
@@ -96,4 +104,4 @@ La regresion usa `vestibular_report_scanned_synthetic.jpg`, una imagen completam
 
 Los archivos en `tests/fixtures/synthetic-clinical` son exclusivamente sintéticos, se regeneran con `scripts/generate_synthetic_clinical_fixtures.py` y llevan una advertencia visible. No se incluyen documentos clínicos reales en el repositorio, la compilación, CI ni staging.
 
-El benchmark ampliado cubre varias degradaciones del mismo diseño BAP, pero una plantilla nueva, un recorte severo o una fotografía con reflejos todavía puede requerir corrección manual y un nuevo caso sintético equivalente.
+Los benchmarks cubren varias degradaciones BAP, un vHIT sintético girado y un informe vestibular narrativo con perspectiva. Una plantilla nueva, un recorte severo, una fotografía con reflejos o un diseño específico de otro fabricante todavía puede requerir corrección manual y un nuevo caso sintético equivalente.

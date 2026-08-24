@@ -7,6 +7,7 @@ export type CanonicalExtractionFieldStatus = 'detected' | 'confirmed' | 'needs_r
 export type ExtractionFieldStatus = CanonicalExtractionFieldStatus | 'read' | 'review' | 'unrecognized'
 export type PatientMatchStatus = 'match' | 'mismatch' | 'not_checked' | 'confirmed_by_professional'
 export type ExtractionSourceMethod = 'ocr_original' | 'ocr_grayscale' | 'ocr_threshold' | 'regex' | 'cross_validation' | 'vision_fallback' | 'professional_edit'
+export type ExtractionTemplateType = 'bap_2_32' | 'vhit_labeled' | 'vestibular_report' | 'generic'
 
 export interface SourceRegion { x: number; y: number; width: number; height: number }
 
@@ -30,7 +31,7 @@ export interface ExtractedPage {
   previewUrl: string
   text: string
   lines: OcrLine[]
-  template?: { type: 'bap_2_32' | 'generic'; confidence: number; matchedSignals: number; aspectRatio: number }
+  template?: { type: ExtractionTemplateType; confidence: number; matchedSignals: number; aspectRatio: number }
 }
 
 export interface ExtractionFieldDefinition {
