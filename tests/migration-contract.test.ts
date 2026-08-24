@@ -11,6 +11,7 @@ const extractionMigration = readFileSync(join(process.cwd(), 'supabase/migration
 const extractionHardeningMigration = readFileSync(join(process.cwd(), 'supabase/migrations/202607170005_harden_extraction_review.sql'), 'utf8')
 const extractionReportMigration = readFileSync(join(process.cwd(), 'supabase/migrations/202607170007_simplified_extraction_report.sql'), 'utf8')
 const extractionConfirmationAlignmentMigration = readFileSync(join(process.cwd(), 'supabase/migrations/202608230001_align_extraction_confirmation.sql'), 'utf8')
+const cyclePosturographyMigration = readFileSync(join(process.cwd(), 'supabase/migrations/202608240001_unique_cycle_posturography_slots.sql'), 'utf8')
 
 describe('contrato SQL de importación', () => {
   it('protege importaciones con RLS y propiedad del paciente', () => {
@@ -173,5 +174,19 @@ describe('contrato SQL de extracción clínica privada', () => {
     expect(extractionConfirmationAlignmentMigration).toContain('Todos los valores clínicos presentes deben estar confirmados.')
     expect(extractionConfirmationAlignmentMigration).toContain('revoke all on function public.confirm_document_extraction(uuid) from public')
     expect(extractionConfirmationAlignmentMigration).toContain('grant execute on function public.confirm_document_extraction(uuid) to authenticated')
+  })
+})
+
+describe('contrato SQL de posturografías por ciclo', () => {
+  it('impide nuevas iniciales o finales duplicadas incluso ante cargas simultáneas', () => {
+    expect(cyclePosturographyMigration).toContain('clinical_studies_unique_cycle_posturography_slot')
+    expect(cyclePosturographyMigration).toContain('pg_advisory_xact_lock')
+    expect(cyclePosturographyMigration).toContain("new.cycle_phase not in ('initial', 'final')")
+    expect(cyclePosturographyMigration).toContain('Ya existe una posturografía % para este ciclo')
+  })
+
+  it('toma la fase del documento antes de crear el estudio extraído', () => {
+    expect(cyclePosturographyMigration).toContain('select source.cycle_phase into document_phase')
+    expect(cyclePosturographyMigration).toContain('new.cycle_phase := document_phase')
   })
 })

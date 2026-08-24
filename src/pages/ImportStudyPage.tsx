@@ -13,6 +13,7 @@ import { isReportRelevantField } from '../features/extraction/reportFields'
 import { pageClassificationLabels, type IntakeKind, type LocalExtractionDraft, type PageClassification } from '../features/extraction/types'
 import { usePatients } from '../features/patients/hooks'
 import { useTreatmentCycles } from '../features/sessions/hooks'
+import { useClinicalStudies } from '../features/studies/hooks'
 
 const intakeOptions: Array<{ value: IntakeKind; title: string }> = [
   { value: 'posturography_bap', title: 'Posturografía' },
@@ -39,6 +40,7 @@ export function ImportStudyPage() {
   const [patientId, setPatientId] = useState(params.get('patient') ?? '')
   const selectedPatient = patients.find((patient) => patient.id === patientId)
   const { data: cycles = [] } = useTreatmentCycles(patientId)
+  const { data: studies = [], isPending: studiesPending } = useClinicalStudies()
   const upload = useUploadDocument(patientId)
   const [intakeKind, setIntakeKind] = useState<IntakeKind>(params.get('kind') === 'vestibular' ? 'vestibular_and_reports' : 'posturography_bap')
   const [cyclePhase, setCyclePhase] = useState<CycleStudyPhase>(phaseFromQuery(params.get('phase')))
@@ -53,7 +55,11 @@ export function ImportStudyPage() {
   const [error, setError] = useState('')
   const draftRef = useRef<LocalExtractionDraft | null>(null)
 
-  useEffect(() => { setCycleId(cycles.find((cycle) => cycle.status === 'active')?.id ?? cycles[0]?.id ?? '') }, [cycles])
+  const requestedCycleId = params.get('cycle') ?? ''
+  useEffect(() => {
+    const requestedCycle = cycles.find((cycle) => cycle.id === requestedCycleId)
+    setCycleId(requestedCycle?.id ?? cycles.find((cycle) => cycle.status === 'active')?.id ?? cycles[0]?.id ?? '')
+  }, [cycles, requestedCycleId])
   useEffect(() => { draftRef.current = draft }, [draft])
   useEffect(() => () => releaseExtractionPreviews(draftRef.current), [])
 
@@ -85,13 +91,22 @@ export function ImportStudyPage() {
     return { ...current, pages, fields: extractFields(pages, current.intakeKind) }
   })
   const counts = useMemo(() => deriveFieldCounters(draft?.fields.filter(isReportRelevantField) ?? []), [draft])
+  const protectedCycleSlot = intakeKind === 'posturography_bap' && ['initial', 'final'].includes(cyclePhase) && Boolean(patientId && cycleId)
+  const existingCyclePosturography = useMemo(() => protectedCycleSlot ? studies.find((study) => (
+    study.patientId === patientId
+    && study.treatmentCycleId === cycleId
+    && study.studyType === 'posturography'
+    && study.cyclePhase === cyclePhase
+  )) : undefined, [cycleId, cyclePhase, patientId, protectedCycleSlot, studies])
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!patientId || !selectedPatient) { setError('Seleccioná primero al paciente.'); return }
-    if (!preparedFile || !draft) { setError('Esperá a que termine la lectura de todos los archivos.'); return }
     if (!date) { setError('Indicá la fecha del documento.'); return }
     if (intakeKind === 'posturography_bap' && ['initial', 'final'].includes(cyclePhase) && !cycleId) { setError('Seleccioná el ciclo de la posturografía inicial o final.'); return }
+    if (protectedCycleSlot && studiesPending) { setError('Esperá a que termine la verificación de estudios del ciclo.'); return }
+    if (existingCyclePosturography) { setError(`Ya existe una posturografía ${cyclePhase === 'initial' ? 'inicial' : 'final'} para este ciclo. Abrí el estudio cargado.`); return }
+    if (!preparedFile || !draft) { setError('Esperá a que termine la lectura de todos los archivos.'); return }
     setError('')
     try {
       const sourceList = files.length > 1 ? `Archivos originales reunidos: ${files.map((file) => file.name).join(' · ')}` : ''
@@ -117,7 +132,7 @@ export function ImportStudyPage() {
           {intakeKind === 'posturography_bap' && <label className="text-sm font-black text-[#2F2F2F] sm:col-span-2">Momento dentro del ciclo *<select className={fieldClass} value={cyclePhase} onChange={(event) => setCyclePhase(event.target.value as CycleStudyPhase)}>{phaseOptions.map((phase) => <option key={phase} value={phase}>{cycleStudyPhaseLabels[phase]}</option>)}</select><small className="mt-2 block font-normal leading-5 text-[#747474]">“Inicial” y “final” permiten comparar el mismo ciclo sin asumir una cantidad fija de sesiones.</small></label>}
         </div>
 
-        <div className="mt-6"><ClinicalFileDropzone files={files} previewUrl={draft?.pages[0]?.previewUrl ?? ''} pageCount={draft?.pages.length ?? 0} disabled={upload.isPending} onFiles={changeFiles} onError={setError}/></div>
+        {existingCyclePosturography ? <div className="mt-6 rounded-2xl border border-[#D9E7DF] bg-[#F0F8F3] p-5"><p className="text-sm font-black text-[#28613D]">Esta posturografía ya está cargada</p><p className="mt-2 text-xs leading-5 text-[#496451]">{existingCyclePosturography.performedAt.slice(0, 10)} · {existingCyclePosturography.sourceFilename}. Para evitar duplicados, abrí el registro existente.</p><Link to={`/app/estudios/${existingCyclePosturography.id}/revisar`} className="mt-4 inline-flex rounded-xl bg-[#28613D] px-4 py-2.5 text-xs font-black text-white">Ver estudio cargado</Link></div> : <div className="mt-6"><ClinicalFileDropzone files={files} previewUrl={draft?.pages[0]?.previewUrl ?? ''} pageCount={draft?.pages.length ?? 0} disabled={upload.isPending || (protectedCycleSlot && studiesPending)} onFiles={changeFiles} onError={setError}/></div>}
 
         {progress && <div role="status" className="mt-4 rounded-2xl bg-[#FFF7E8] p-4 text-sm font-black text-[#A36B00]">{progress}</div>}
         {draft && <div className="mt-4 rounded-2xl border border-[#E9E7E7] bg-[#F7F6F4] p-4"><p className="text-sm font-black text-[#2F2F2F]">{counts.total} parámetros controlados</p><p className="mt-1 text-xs text-[#747474]">{counts.detected} detectados · {counts.needsReview} para revisar · {counts.conflicting} en conflicto · {counts.invalid} inválidos · {counts.notPerformed} no realizados · {counts.missingRequired} obligatorios faltantes</p></div>}
@@ -129,7 +144,7 @@ export function ImportStudyPage() {
         <div className="mt-5 flex gap-3 rounded-2xl bg-[#F7F6F4] p-4"><ShieldCheck className="shrink-0 text-[#E49A02]" size={20}/><p className="text-xs leading-5 text-[#747474]">El original combinado permanece privado. La preparación y el OCR ocurren en este navegador; cada resultado requiere confirmación profesional.</p></div>
 
         {error && <p role="alert" className="mt-4 rounded-2xl bg-[#fceced] p-4 text-sm font-bold text-[#a94952]">{error}</p>}
-        <button disabled={!draft || upload.isPending} className="mt-6 w-full rounded-2xl bg-[#E49A02] px-5 py-4 text-sm font-black text-white disabled:opacity-50">{upload.isPending ? 'Guardando…' : 'Continuar al informe'}</button>
+        <button disabled={!draft || upload.isPending || Boolean(existingCyclePosturography) || (protectedCycleSlot && studiesPending)} className="mt-6 w-full rounded-2xl bg-[#E49A02] px-5 py-4 text-sm font-black text-white disabled:opacity-50">{upload.isPending ? 'Guardando…' : existingCyclePosturography ? 'Estudio ya cargado' : 'Continuar al informe'}</button>
       </section>
     </form>
   </div>

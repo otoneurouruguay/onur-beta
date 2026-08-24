@@ -17,6 +17,19 @@ import { usePatientAssessments } from '../features/assessments/hooks'
 import { assessmentPhaseLabels } from '../features/assessments/questions'
 import { useClinicalEpisodes } from '../features/clinicalEpisodes/hooks'
 import { pathologyLabel } from '../features/clinicalEpisodes/catalog'
+import { useClinicalStudies } from '../features/studies/hooks'
+import { buildPatientStudyOverview } from '../features/studies/patientOverview'
+import type { ClinicalStudySummary } from '../features/studies/types'
+
+function PosturographySlot({ phase, study, patientId, cycleId }: { phase: 'initial' | 'final'; study?: ClinicalStudySummary; patientId: string; cycleId: string }) {
+  const title = `POSTUROGRAFÍA ${phase === 'initial' ? 'INICIAL' : 'FINAL'}`
+
+  if (study) return <Link to={`/app/estudios/${study.id}/revisar`} className="rounded-2xl border-2 border-[#B9D9C5] bg-[#F0F8F3] p-6 transition hover:border-[#28613D]"><div className="flex items-start justify-between gap-3"><FileImage className="text-[#28613D]" size={25}/><StatusBadge status={study.status}/></div><strong className="mt-4 block text-sm font-black text-[#171717]">{title} CARGADA</strong><span className="mt-2 block truncate text-xs leading-5 text-[#496451]">{study.performedAt.slice(0, 10)} · {study.sourceFilename}</span><span className="mt-4 block text-xs font-black text-[#28613D]">Ver estudio cargado →</span></Link>
+
+  if (!cycleId) return <article className="rounded-2xl border-2 border-[#DEDCD9] bg-[#F7F6F4] p-6"><FileImage className="text-[#747474]" size={25}/><strong className="mt-4 block text-sm font-black text-[#171717]">{title}</strong><span className="mt-2 block text-xs leading-5 text-[#747474]">Primero iniciá un ciclo de tratamiento para habilitar este espacio.</span></article>
+
+  return <Link to={`/app/estudios/importar?patient=${patientId}&kind=bap&phase=${phase}&cycle=${cycleId}`} className="rounded-2xl border-2 border-[#E8CE99] bg-[#FFF7E8] p-6 transition hover:border-[#E49A02]"><FileImage className="text-[#E49A02]" size={25}/><strong className="mt-4 block text-sm font-black text-[#171717]">{title}</strong><span className="mt-2 block text-xs leading-5 text-[#747474]">{phase === 'initial' ? 'El espacio inicial está disponible para este ciclo.' : 'El espacio final está disponible para la reevaluación del ciclo.'}</span><span className="mt-4 block text-xs font-black text-[#E49A02]">Cargar estudio {phase === 'initial' ? 'inicial' : 'final'} →</span></Link>
+}
 
 export function PatientProfilePage() {
   const { patientId } = useParams()
@@ -27,6 +40,7 @@ export function PatientProfilePage() {
   const { data: documents = [] } = usePatientDocuments(patientId ?? '')
   const { data: assessments = [] } = usePatientAssessments(patientId ?? '')
   const { data: clinicalEpisodes = [] } = useClinicalEpisodes(patientId ?? '')
+  const { data: studies = [], isPending: studiesPending, error: studiesError } = useClinicalStudies()
   const duplicateAssignment = useDuplicateInPersonAssignment(patientId ?? '')
   const revokeAssignment = useRevokeSessionAssignment(patientId ?? '')
   const retrospectiveCompletion = useRecordRetrospectiveSession(patientId ?? '')
@@ -40,6 +54,7 @@ export function PatientProfilePage() {
   const activeEpisode = clinicalEpisodes.find((episode) => episode.treatmentCycleId === activeCycle?.id)
   const activeAssignment = assignments.find((assignment) => assignment.status === 'assigned' || assignment.status === 'started')
   const activePermissions = documents.filter((document) => document.sharedWithPatient).length
+  const studyOverview = buildPatientStudyOverview(studies, patientId ?? '', activeCycle?.id ?? '')
 
   if (isPending) return <p className="text-sm text-[#747474]">Cargando paciente…</p>
 
@@ -147,10 +162,20 @@ export function PatientProfilePage() {
         }
       />
 
+      <Link to={`/app/pacientes/${patient.id}/episodio${activeCycle ? `?cycle=${activeCycle.id}` : ''}`} className="flex flex-col gap-5 rounded-2xl border border-[#D9E7DF] bg-[#F0F8F3] p-6 transition hover:border-[#9FC9AE] sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 gap-4"><span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-white text-[#28613D]"><ClipboardCheck size={23}/></span><div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#496451]">Clínica actual</p><h2 className="mt-2 text-xl font-black text-[#171717]">{activeEpisode ? pathologyLabel(activeEpisode.diagnosisCode) : 'Clínica pendiente de registro'}</h2><p className="mt-2 text-xs leading-5 text-[#496451]">{activeEpisode ? `${activeCycle?.label ?? 'Ciclo actual'} · ${activeEpisode.diagnosisSource || activeEpisode.measuredImpairments || 'Abrí el episodio para consultar la evaluación completa.'}` : activeCycle ? 'Registrá el diagnóstico o condición clínica del ciclo para verla apenas abras al paciente.' : 'Iniciá un ciclo y registrá el episodio clínico del paciente.'}</p></div></div>
+        <div className="flex shrink-0 items-center gap-3">{activeEpisode && <StatusBadge status={activeEpisode.status}/>}<span className="text-xs font-black text-[#28613D]">{activeEpisode ? 'Ver episodio →' : 'Registrar clínica →'}</span></div>
+      </Link>
+
       <section className="grid gap-4 lg:grid-cols-3" aria-label="Carga privada de estudios">
-        <Link to={`/app/estudios/importar?patient=${patient.id}&kind=bap&phase=initial`} className="rounded-2xl border-2 border-[#E8CE99] bg-[#FFF7E8] p-6 transition hover:border-[#E49A02]"><FileImage className="text-[#E49A02]" size={25}/><strong className="mt-4 block text-sm font-black text-[#171717]">POSTUROGRAFÍA INICIAL</strong><span className="mt-2 block text-xs leading-5 text-[#747474]">Subí uno o varios PDF o imágenes del estudio realizado fuera de ONUr y asocialo al ciclo.</span><span className="mt-4 block text-xs font-black text-[#E49A02]">Cargar estudio inicial →</span></Link>
-        <Link to={`/app/estudios/importar?patient=${patient.id}&kind=bap&phase=final`} className="rounded-2xl border-2 border-[#E8CE99] bg-[#FFF7E8] p-6 transition hover:border-[#E49A02]"><FileImage className="text-[#E49A02]" size={25}/><strong className="mt-4 block text-sm font-black text-[#171717]">POSTUROGRAFÍA FINAL</strong><span className="mt-2 block text-xs leading-5 text-[#747474]">Registrá la reevaluación final dentro del mismo ciclo para conservar la comparación clínica.</span><span className="mt-4 block text-xs font-black text-[#E49A02]">Cargar estudio final →</span></Link>
-        <Link to={`/app/estudios/importar?patient=${patient.id}&kind=vestibular`} className="rounded-2xl border-2 border-[#E9E7E7] bg-[#f8f8fc] p-6 transition hover:border-[#5E5E5E]"><FileText className="text-[#5E5E5E]" size={25}/><strong className="mt-4 block text-sm font-black text-[#171717]">ESTUDIOS VESTIBULARES, vHIT E INFORMES</strong><span className="mt-2 block text-xs leading-5 text-[#747474]">Informes, HIMP/SHIMP, oculomotores, órdenes, gráficos y estudios multipágina.</span><span className="mt-4 block text-xs font-black text-[#5E5E5E]">Cargar y extraer localmente →</span></Link>
+        <PosturographySlot phase="initial" study={studyOverview.initialPosturography} patientId={patient.id} cycleId={activeCycle?.id ?? ''}/>
+        <PosturographySlot phase="final" study={studyOverview.finalPosturography} patientId={patient.id} cycleId={activeCycle?.id ?? ''}/>
+        <Link to={`/app/estudios/importar?patient=${patient.id}&kind=vestibular${activeCycle ? `&cycle=${activeCycle.id}` : ''}`} className="rounded-2xl border-2 border-[#E9E7E7] bg-[#f8f8fc] p-6 transition hover:border-[#5E5E5E]"><FileText className="text-[#5E5E5E]" size={25}/><strong className="mt-4 block text-sm font-black text-[#171717]">ESTUDIOS VESTIBULARES, vHIT E INFORMES</strong><span className="mt-2 block text-xs leading-5 text-[#747474]">{studyOverview.reports.length ? `${studyOverview.reports.length} ${studyOverview.reports.length === 1 ? 'informe cargado' : 'informes cargados'} · podés agregar otros.` : 'Informes, HIMP/SHIMP, oculomotores, órdenes, gráficos y estudios multipágina.'}</span><span className="mt-4 block text-xs font-black text-[#5E5E5E]">Cargar y extraer localmente →</span></Link>
+      </section>
+
+      <section className="rounded-2xl border border-[#E9E7E7] bg-white p-6" aria-labelledby="loaded-studies-title">
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="loaded-studies-title" className="text-lg font-black text-[#171717]">Estudios e informes cargados</h2><p className="mt-1 text-xs leading-5 text-[#747474]">Consultá lo ya registrado antes de iniciar una carga nueva.</p></div><Link to={`/app/estudios/importar?patient=${patient.id}`} className="text-xs font-black text-[#E49A02]">Cargar otro informe</Link></div>
+        {studiesPending ? <p className="mt-5 text-sm text-[#747474]">Cargando estudios…</p> : studiesError ? <p role="alert" className="mt-5 text-sm font-bold text-[#a94952]">No fue posible cargar los estudios del paciente.</p> : studyOverview.patientStudies.length === 0 ? <p className="mt-5 rounded-2xl bg-[#F7F6F4] p-4 text-sm text-[#747474]">Todavía no hay estudios ni informes cargados.</p> : <div className="mt-5 divide-y divide-[#E9E7E7]">{studyOverview.patientStudies.map((study) => <Link key={study.id} to={`/app/estudios/${study.id}/revisar`} className="flex flex-col gap-3 py-4 transition hover:bg-[#F7F6F4] sm:flex-row sm:items-center sm:justify-between sm:px-3"><div className="min-w-0"><p className="text-sm font-black text-[#2F2F2F]">{study.studyType === 'posturography' ? `Posturografía${study.cyclePhase !== 'unspecified' ? ` · ${cycleStudyPhaseLabels[study.cyclePhase]}` : ''}` : 'Informe vestibular / vHIT'}</p><p className="mt-1 truncate text-xs text-[#747474]">{study.performedAt.slice(0, 10)} · {study.sourceFilename}{study.treatmentCycleId === activeCycle?.id ? ' · ciclo actual' : ''}</p></div><div className="flex items-center gap-3"><StatusBadge status={study.status}/><span className="text-xs font-black text-[#E49A02]">Ver →</span></div></Link>)}</div>}
       </section>
 
       <section className="grid gap-5 lg:grid-cols-[0.72fr_1.28fr]">

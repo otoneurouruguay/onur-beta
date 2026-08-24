@@ -34,4 +34,17 @@ describe('repositorio demo de documentos', () => {
     expect(second).not.toBe(first)
     expect((await listPatientDocumentAccessRequests('ana-p')).filter(item=>item.documentId===locked.id)).toHaveLength(2)
   })
+
+  it('impide cargar dos posturografías iniciales dentro del mismo ciclo', async () => {
+    const input = {
+      patientId: 'ana-p', treatmentCycleId: 'cycle-ana-2', documentType: 'posturography' as const,
+      cyclePhase: 'initial' as const, documentDate: '2026-08-01', description: '', shareWithPatient: false,
+      file: new File(['posturografía'], 'inicial.pdf', { type: 'application/pdf' }),
+      deviceName: '', protocolCode: 'bap-auto-review', protocolVersion: '1',
+    }
+
+    await uploadClinicalDocument(input)
+    await expect(uploadClinicalDocument({ ...input, file: new File(['otra'], 'otra-inicial.pdf', { type: 'application/pdf' }) }))
+      .rejects.toThrow('Ya existe una posturografía inicial')
+  })
 })

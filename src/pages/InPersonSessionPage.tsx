@@ -176,8 +176,8 @@ export function InPersonSessionPage() {
   }
 
   const finish = async () => {
-    if (!runnerResult || peakDiscomfort === null || finalDiscomfort === null || perceivedDifficulty === null || !patientComment.trim()) {
-      setError('Registrá el máximo durante, el malestar final, la dificultad y el comentario declarado por el paciente.')
+    if (!runnerResult || peakDiscomfort === null || finalDiscomfort === null || perceivedDifficulty === null) {
+      setError('Registrá el máximo durante, el malestar final y la dificultad percibida.')
       return
     }
     try {
@@ -195,8 +195,8 @@ export function InPersonSessionPage() {
         professionalObservation,
       })
       setStage('finished')
-    } catch {
-      setError('La ejecución terminó, pero no fue posible guardar el cierre supervisado. Volvé a intentar sin abandonar esta pantalla.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'La ejecución terminó, pero no fue posible guardar el cierre supervisado. Volvé a intentar sin abandonar esta pantalla.')
     }
   }
 
@@ -230,7 +230,7 @@ export function InPersonSessionPage() {
       <ScaleQuestion label="Dificultad percibida" hint="Respuesta declarada por el paciente: 1 significa muy fácil y 5 muy difícil." min={1} max={5} value={perceivedDifficulty} onChange={setPerceivedDifficulty}/>
       <div className="grid gap-4 sm:grid-cols-2"><label className="block rounded-2xl border border-[#E9E7E7] bg-white p-5 text-sm font-black text-[#2F2F2F]">Recuperación hasta volver a basal <span className="font-normal text-[#747474]">(minutos, opcional)</span><input type="number" min="0" max="1440" value={recoveryMinutes ?? ''} onChange={(event) => setRecoveryMinutes(event.target.value === '' ? null : Number(event.target.value))} className="mt-3 h-12 w-full rounded-2xl border border-[#E9E7E7] px-4 text-base font-normal"/></label><label className="block rounded-2xl border border-[#E9E7E7] bg-white p-5 text-sm font-black text-[#2F2F2F]">Decisión para la próxima sesión<select value={progressionDecision} onChange={(event) => setProgressionDecision(event.target.value)} className="mt-3 h-12 w-full rounded-2xl border border-[#E9E7E7] px-4 text-base font-normal"><option value="mantener">Mantener parámetros</option><option value="progresar_una_variable">Progresar una variable</option><option value="regresar">Regresar carga</option><option value="reevaluar">Reevaluar antes de continuar</option></select></label></div>
       <label className="block rounded-2xl border border-[#E9E7E7] bg-white p-5 text-sm font-black text-[#2F2F2F]">Respuesta tardía conocida <span className="font-normal text-[#747474]">(opcional)</span><textarea maxLength={1000} rows={3} value={delayedResponse} onChange={(event) => setDelayedResponse(event.target.value)} className="mt-3 w-full resize-none rounded-2xl border border-[#E9E7E7] p-4 text-base font-normal" placeholder="Si todavía no puede conocerse, dejar vacío y completar en seguimiento."/></label>
-      <label className="block rounded-2xl border border-[#E9E7E7] bg-white p-5 text-sm font-black text-[#2F2F2F]">Comentario del paciente<textarea maxLength={500} rows={3} value={patientComment} onChange={(event) => setPatientComment(event.target.value)} className="mt-3 w-full resize-none rounded-2xl border border-[#E9E7E7] p-4 text-base font-normal" placeholder="Transcribí lo declarado por el paciente."/><span className="mt-2 block text-right text-[11px] font-bold text-[#747474]">{patientComment.length}/500</span></label>
+      <label className="block rounded-2xl border border-[#E9E7E7] bg-white p-5 text-sm font-black text-[#2F2F2F]">Comentario del paciente <span className="font-normal text-[#747474]">(opcional)</span><textarea maxLength={500} rows={3} value={patientComment} onChange={(event) => setPatientComment(event.target.value)} className="mt-3 w-full resize-none rounded-2xl border border-[#E9E7E7] p-4 text-base font-normal" placeholder="Transcribí lo declarado por el paciente si corresponde."/><span className="mt-2 block text-right text-[11px] font-bold text-[#747474]">{patientComment.length}/500</span></label>
       <label className="block rounded-2xl border border-[#E9E7E7] bg-white p-5 text-sm font-black text-[#2F2F2F]">Observación profesional <span className="font-normal text-[#747474]">(opcional)</span><textarea maxLength={2000} rows={4} value={professionalObservation} onChange={(event) => setProfessionalObservation(event.target.value)} className="mt-3 w-full resize-none rounded-2xl border border-[#E9E7E7] p-4 text-base font-normal" placeholder="Añadí una observación clínica si corresponde."/><span className="mt-2 block text-right text-[11px] font-bold text-[#747474]">{professionalObservation.length}/2000</span></label>
       <button type="button" disabled={completeSupervised.isPending} onClick={finish} className="flex h-14 w-full items-center justify-center rounded-2xl bg-[#E49A02] text-sm font-black text-white disabled:opacity-60">{completeSupervised.isPending ? 'Guardando…' : 'Guardar y finalizar'}</button>
     </article> : <article className="overflow-hidden rounded-2xl border border-[#E9E7E7] bg-white shadow-[0_20px_48px_rgba(18,50,56,0.08)]">

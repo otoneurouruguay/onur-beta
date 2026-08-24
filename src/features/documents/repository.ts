@@ -40,6 +40,17 @@ export async function uploadClinicalDocument(input:DocumentUploadInput):Promise<
   const cyclePhase=input.cyclePhase??'unspecified'
   if(input.file.size>25*1024*1024)throw new Error('El archivo supera el máximo de 25 MB.')
   if(['initial','final'].includes(cyclePhase)&&!input.treatmentCycleId)throw new Error('La posturografía inicial o final debe asociarse a un ciclo.')
+  if(input.documentType==='posturography'&&['initial','final'].includes(cyclePhase)){
+    const phaseLabel=cyclePhase==='initial'?'inicial':'final'
+    if(!isSupabaseConfigured||!supabase){
+      const duplicate=readDemo().some(item=>item.patientId===input.patientId&&item.treatmentCycleId===input.treatmentCycleId&&item.documentType==='posturography'&&item.cyclePhase===cyclePhase)
+      if(duplicate)throw new Error(`Ya existe una posturografía ${phaseLabel} para este ciclo. Abrí el estudio cargado.`)
+    }else{
+      const{data:duplicate,error:duplicateError}=await supabase.from('clinical_studies').select('id').eq('patient_id',input.patientId).eq('treatment_cycle_id',input.treatmentCycleId).eq('study_type','posturography').eq('cycle_phase',cyclePhase).limit(1).maybeSingle()
+      if(duplicateError)throw duplicateError
+      if(duplicate)throw new Error(`Ya existe una posturografía ${phaseLabel} para este ciclo. Abrí el estudio cargado.`)
+    }
+  }
   const mimeType=resolvedMime(input.file);if(!mimeType)throw new Error('El tipo de archivo no está permitido.')
   if ((!isSupabaseConfigured || !supabase) && input.extractionDraft) {
     const record:ClinicalDocumentRecord={id:crypto.randomUUID(),patientId:input.patientId,treatmentCycleId:input.treatmentCycleId,documentType:input.documentType,cyclePhase,originalFilename:input.file.name,storagePath:`demo/${crypto.randomUUID()}-${safeFilename(input.file.name)}`,mimeType,fileSizeBytes:input.file.size,documentDate:input.documentDate,description:input.description,createdAt:new Date().toISOString(),sharedWithPatient:false,permissionId:'',permissionLevel:'',studyId:'',studyStatus:'draft',deviceName:input.deviceName,protocolCode:input.protocolCode,protocolVersion:input.protocolVersion}

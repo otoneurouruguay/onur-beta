@@ -69,6 +69,11 @@ for (const marker of [
   'Registrar esta sesión pasada como ya finalizada',
   'Registrada retrospectivamente',
   'Sin métricas retrospectivas',
+  'Clínica actual',
+  'Estudios e informes cargados',
+  'Esta posturografía ya está cargada',
+  'Ya existe una posturografía',
+  'si corresponde.',
 ]) {
   requireCheck(compiledJavaScript.includes(marker), `La compilación no contiene el control obligatorio: ${marker}.`)
 }

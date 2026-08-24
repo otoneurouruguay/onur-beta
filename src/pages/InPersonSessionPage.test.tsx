@@ -89,6 +89,27 @@ describe('ejecución presencial desde la cuenta profesional', () => {
     expect(await screen.findByRole('heading', { name: /sesión presencial registrada/i })).toBeInTheDocument()
   })
 
+  it('permite guardar el cierre sin comentario del paciente ni observación profesional', async () => {
+    renderPage()
+
+    const initialScale = screen.getByRole('group', { name: /malestar antes de comenzar/i })
+    fireEvent.click(within(initialScale).getByRole('button', { name: '1' }))
+    fireEvent.click(screen.getByRole('button', { name: /comenzar sesión presencial/i }))
+    await waitFor(() => expect(mocks.start).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByRole('button', { name: /omitir y finalizar/i }))
+    fireEvent.click(within(screen.getByRole('group', { name: /malestar al finalizar/i })).getByRole('button', { name: '1' }))
+    fireEvent.click(within(screen.getByRole('group', { name: /máximo malestar durante/i })).getByRole('button', { name: '2' }))
+    fireEvent.click(within(screen.getByRole('group', { name: /dificultad percibida/i })).getByRole('button', { name: '1' }))
+    fireEvent.click(screen.getByRole('button', { name: /guardar y finalizar/i }))
+
+    await waitFor(() => expect(mocks.complete).toHaveBeenCalledWith(expect.objectContaining({
+      patientComment: '',
+      professionalObservation: '',
+    })))
+    expect(await screen.findByRole('heading', { name: /sesión presencial registrada/i })).toBeInTheDocument()
+  })
+
   it('muestra reanudación desde el principio para una asignación iniciada', () => {
     mocks.status = 'started'
     renderPage()
