@@ -25,6 +25,16 @@ export async function listPatientDocuments(patientId:string):Promise<ClinicalDoc
   const{data,error}=await supabase.from('source_documents').select(selectDocument).eq('patient_id',patientId).order('document_date',{ascending:false});if(error)throw error;return(data??[]).map(fromRow)
 }
 
+export async function deleteClinicalDocument(document:ClinicalDocumentRecord):Promise<void>{
+  if(!isSupabaseConfigured||!supabase){
+    writeDemo(readDemo().filter(item=>item.id!==document.id))
+    writeDemoRequests(readDemoRequests().filter(item=>item.documentId!==document.id))
+    return
+  }
+  const{error}=await supabase.functions.invoke('cleanup-clinical-upload',{body:{patient_id:document.patientId,document_id:document.id,storage_path:document.storagePath,action:'delete_document'}})
+  if(error)throw new Error('No fue posible eliminar el documento. Intentá nuevamente.')
+}
+
 export async function listCurrentPatientDocumentCatalog():Promise<PatientDocumentCatalogRecord[]>{
   if(!isSupabaseConfigured||!supabase){const requests=readDemoRequests();return readDemo().filter(item=>item.patientId==='ana-p').sort((a,b)=>b.documentDate.localeCompare(a.documentDate)).map(item=>{const request=requests.filter(candidate=>candidate.documentId===item.id).sort((a,b)=>b.requestedAt.localeCompare(a.requestedAt))[0];return{...item,requestId:request?.id??'',requestStatus:request?.status??'',requestedAt:request?.requestedAt??'',canView:item.sharedWithPatient,canDownload:item.permissionLevel==='view_download'}})}
   const{data,error}=await supabase.rpc('list_my_document_catalog');if(error)throw error;return((data??[]) as Record<string,unknown>[]).map(row=>({id:String(row.document_id),patientId:'',treatmentCycleId:'',documentType:String(row.document_type) as PatientDocumentCatalogRecord['documentType'],cyclePhase:String(row.cycle_phase??'unspecified') as CycleStudyPhase,originalFilename:String(row.original_filename),storagePath:'',mimeType:String(row.mime_type),fileSizeBytes:Number(row.file_size_bytes??0),documentDate:String(row.document_date),description:String(row.description??''),createdAt:'',sharedWithPatient:Boolean(row.permission_level),permissionId:'',permissionLevel:String(row.permission_level??'') as PatientDocumentCatalogRecord['permissionLevel'],studyId:'',studyStatus:'',deviceName:'',requestId:String(row.request_id??''),requestStatus:String(row.request_status??'') as PatientDocumentCatalogRecord['requestStatus'],requestedAt:String(row.requested_at??''),canView:Boolean(row.permission_level),canDownload:row.permission_level==='view_download'}))

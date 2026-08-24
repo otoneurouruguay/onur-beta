@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { listCurrentPatientDocumentCatalog, listCurrentPatientDocuments, listPatientDocumentAccessRequests, listPatientDocuments, requestDocumentAccess, resolveDocumentAccessRequest, setDocumentPermission, uploadClinicalDocument } from './repository'
+import { deleteClinicalDocument, listCurrentPatientDocumentCatalog, listCurrentPatientDocuments, listPatientDocumentAccessRequests, listPatientDocuments, requestDocumentAccess, resolveDocumentAccessRequest, setDocumentPermission, uploadClinicalDocument } from './repository'
 
 describe('repositorio demo de documentos', () => {
   beforeEach(() => localStorage.clear())
@@ -46,5 +46,15 @@ describe('repositorio demo de documentos', () => {
     await uploadClinicalDocument(input)
     await expect(uploadClinicalDocument({ ...input, file: new File(['otra'], 'otra-inicial.pdf', { type: 'application/pdf' }) }))
       .rejects.toThrow('Ya existe una posturografía inicial')
+  })
+
+  it('elimina un documento cargado y sus solicitudes de acceso', async () => {
+    const document = (await listPatientDocuments('ana-p')).find((item) => !item.sharedWithPatient)!
+    await requestDocumentAccess(document.id)
+
+    await deleteClinicalDocument(document)
+
+    expect((await listPatientDocuments('ana-p')).some((item) => item.id === document.id)).toBe(false)
+    expect((await listPatientDocumentAccessRequests('ana-p')).some((item) => item.documentId === document.id)).toBe(false)
   })
 })
