@@ -31,6 +31,14 @@ function PosturographySlot({ phase, study, patientId, cycleId }: { phase: 'initi
   return <Link to={`/app/estudios/importar?patient=${patientId}&kind=bap&phase=${phase}&cycle=${cycleId}`} className="rounded-2xl border-2 border-[#E8CE99] bg-[#FFF7E8] p-6 transition hover:border-[#E49A02]"><FileImage className="text-[#E49A02]" size={25}/><strong className="mt-4 block text-sm font-black text-[#171717]">{title}</strong><span className="mt-2 block text-xs leading-5 text-[#747474]">{phase === 'initial' ? 'El espacio inicial está disponible para este ciclo.' : 'El espacio final está disponible para la reevaluación del ciclo.'}</span><span className="mt-4 block text-xs font-black text-[#E49A02]">Cargar estudio {phase === 'initial' ? 'inicial' : 'final'} →</span></Link>
 }
 
+export function VestibularStudySlot({ studies, patientId, cycleId }: { studies: ClinicalStudySummary[]; patientId: string; cycleId: string }) {
+  const latestStudy = [...studies].sort((first, second) => second.performedAt.localeCompare(first.performedAt))[0]
+
+  if (latestStudy) return <Link to={`/app/estudios/${latestStudy.id}/revisar`} className="rounded-2xl border-2 border-[#B9D9C5] bg-[#F0F8F3] p-6 transition hover:border-[#28613D]"><div className="flex items-start justify-between gap-3"><FileText className="text-[#28613D]" size={25}/><StatusBadge status={latestStudy.status}/></div><strong className="mt-4 block text-sm font-black text-[#171717]">{studies.length === 1 ? 'INFORME VESTIBULAR / vHIT CARGADO' : 'ESTUDIOS VESTIBULARES / vHIT CARGADOS'}</strong><span className="mt-2 block truncate text-xs leading-5 text-[#496451]">{latestStudy.performedAt.slice(0, 10)} · {latestStudy.sourceFilename}</span>{studies.length > 1 && <span className="mt-2 block text-xs leading-5 text-[#496451]">{studies.length} informes cargados · se muestra el más reciente.</span>}<span className="mt-4 block text-xs font-black text-[#28613D]">{studies.length === 1 ? 'Ver estudio cargado →' : 'Ver último estudio cargado →'}</span></Link>
+
+  return <Link to={`/app/estudios/importar?patient=${patientId}&kind=vestibular${cycleId ? `&cycle=${cycleId}` : ''}`} className="rounded-2xl border-2 border-[#E9E7E7] bg-[#f8f8fc] p-6 transition hover:border-[#5E5E5E]"><FileText className="text-[#5E5E5E]" size={25}/><strong className="mt-4 block text-sm font-black text-[#171717]">ESTUDIOS VESTIBULARES, vHIT E INFORMES</strong><span className="mt-2 block text-xs leading-5 text-[#747474]">Informes, HIMP/SHIMP, oculomotores, órdenes, gráficos y estudios multipágina.</span><span className="mt-4 block text-xs font-black text-[#5E5E5E]">Cargar y extraer localmente →</span></Link>
+}
+
 export function PatientProfilePage() {
   const { patientId } = useParams()
   const location = useLocation()
@@ -170,7 +178,7 @@ export function PatientProfilePage() {
       <section className="grid gap-4 lg:grid-cols-3" aria-label="Carga privada de estudios">
         <PosturographySlot phase="initial" study={studyOverview.initialPosturography} patientId={patient.id} cycleId={activeCycle?.id ?? ''}/>
         <PosturographySlot phase="final" study={studyOverview.finalPosturography} patientId={patient.id} cycleId={activeCycle?.id ?? ''}/>
-        <Link to={`/app/estudios/importar?patient=${patient.id}&kind=vestibular${activeCycle ? `&cycle=${activeCycle.id}` : ''}`} className="rounded-2xl border-2 border-[#E9E7E7] bg-[#f8f8fc] p-6 transition hover:border-[#5E5E5E]"><FileText className="text-[#5E5E5E]" size={25}/><strong className="mt-4 block text-sm font-black text-[#171717]">ESTUDIOS VESTIBULARES, vHIT E INFORMES</strong><span className="mt-2 block text-xs leading-5 text-[#747474]">{studyOverview.reports.length ? `${studyOverview.reports.length} ${studyOverview.reports.length === 1 ? 'informe cargado' : 'informes cargados'} · podés agregar otros.` : 'Informes, HIMP/SHIMP, oculomotores, órdenes, gráficos y estudios multipágina.'}</span><span className="mt-4 block text-xs font-black text-[#5E5E5E]">Cargar y extraer localmente →</span></Link>
+        <VestibularStudySlot studies={studyOverview.reports} patientId={patient.id} cycleId={activeCycle?.id ?? ''}/>
       </section>
 
       <section className="rounded-2xl border border-[#E9E7E7] bg-white p-6" aria-labelledby="loaded-studies-title">
