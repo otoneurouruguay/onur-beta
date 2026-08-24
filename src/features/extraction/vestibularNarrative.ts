@@ -41,7 +41,12 @@ function beforeOtherSection(value: string, section: VestibularNarrativeSection) 
     const match = pattern.exec(value)
     if (match?.index !== undefined) end = Math.min(end, match.index)
   }
-  return value.slice(0, end)
+  const bounded = value.slice(0, end)
+  if (section !== 'conclusion' || end === value.length) return bounded
+  // Algunas pasadas OCR dejan solamente "Cancelación" (inicio de la etiqueta
+  // "Cancelación del VOR") pegado justo antes de "Conducta:". Es un fragmento
+  // estructural incompleto, no contenido clínico, y no debe cerrar la conclusión.
+  return bounded.replace(/(^|[.!?;]\s+)cancelaci[oó]n\s*$/iu, '$1').trimEnd()
 }
 
 function informationScore(value: string) {

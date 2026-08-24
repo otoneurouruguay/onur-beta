@@ -30,4 +30,15 @@ describe('borrador literal vestibular', () => {
     expect(result?.conclusion).not.toMatch(/En suma|Conducta/i)
     expect(result?.rehabilitationSuggestion).toBe('VORx1')
   })
+
+  it('elimina una etiqueta vestibular incompleta antes de Conducta', () => {
+    const result = buildVestibularAutomaticReport([
+      field('conclusion', 'Síndrome vestibular sintético. Sistemas oculomotores normales. Cancelación Conducta: Rehabilitación vestibular sintética.'),
+      field('conduct', 'Trabajo de VORx1 sintético.'),
+    ])
+
+    expect(result?.conclusion).toBe('Síndrome vestibular sintético. Sistemas oculomotores normales.')
+    expect(result?.conclusion).not.toMatch(/Cancelación|Conducta/i)
+    expect(result?.rehabilitationSuggestion).toBe('Trabajo de VORx1 sintético.')
+  })
 })

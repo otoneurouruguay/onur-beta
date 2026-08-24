@@ -144,4 +144,16 @@ describe('ClinicalExtractionReview automatic report draft', () => {
     expect(screen.getByRole('button', { name: 'Recuperar texto del informe' })).toBeEnabled()
     expect(screen.getByText(/las curvas nunca se interpretan automáticamente/i)).toBeInTheDocument()
   })
+
+  it('limpia Conducta de un borrador vestibular anterior sin reemplazar la rehabilitación editada', async () => {
+    mocks.record = {
+      ...vestibularRecord(),
+      professionalConclusion: 'Síndrome vestibular sintético. Sistemas oculomotores normales. Cancelación Conducta: Rehabilitación vestibular sintética.',
+      rehabilitationSuggestion: 'Trabajo de VORx1 x2 y propioceptivo.',
+    }
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Conclusión para confirmar' })).toHaveValue('Síndrome vestibular sintético. Sistemas oculomotores normales.'))
+    expect(screen.getByRole('textbox', { name: 'Sugerencia de rehabilitación para confirmar' })).toHaveValue('Trabajo de VORx1 x2 y propioceptivo.')
+  })
 })

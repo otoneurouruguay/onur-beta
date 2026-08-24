@@ -13,6 +13,7 @@ import { buildBapAutomaticReport, removeLegacyAutomaticReportBoilerplate } from 
 import { isReportRelevantField, isReportRequiredField } from './reportFields'
 import { canonicalFieldStatus, deriveFieldCounters, fieldReviewReason, isFieldPresent } from './fieldResults'
 import { buildVestibularAutomaticReport } from './vestibularAutomaticReport'
+import { sanitizeVestibularNarrative } from './vestibularNarrative'
 
 const control = 'h-11 rounded-xl border border-[#E9E7E7] bg-white px-3 text-sm text-[#171717]'
 
@@ -68,9 +69,14 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
   useEffect(() => {
     if (query.data) {
       const cleanedReport = removeLegacyAutomaticReportBoilerplate(query.data.professionalConclusion, query.data.rehabilitationSuggestion)
+      const hasVestibularFields = query.data.fields.some((field) => field.studyType === 'vhit')
+      const hasEmbeddedConduct = /\bconducta\s*:/iu.test(cleanedReport.conclusion)
+      const conclusion = hasVestibularFields && hasEmbeddedConduct
+        ? sanitizeVestibularNarrative(cleanedReport.conclusion, 'conclusion')
+        : cleanedReport.conclusion
       const record = query.data.status === 'review' ? {
         ...query.data,
-        professionalConclusion: cleanedReport.conclusion,
+        professionalConclusion: conclusion,
         rehabilitationSuggestion: cleanedReport.rehabilitationSuggestion,
       } : query.data
       setDraft(record)
