@@ -155,5 +155,12 @@ describe('ClinicalExtractionReview automatic report draft', () => {
 
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Conclusión para confirmar' })).toHaveValue('Síndrome vestibular sintético. Sistemas oculomotores normales.'))
     expect(screen.getByRole('textbox', { name: 'Sugerencia de rehabilitación para confirmar' })).toHaveValue('Trabajo de VORx1 x2 y propioceptivo.')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar para después' }))
+    await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({
+      professionalConclusion: 'Síndrome vestibular sintético. Sistemas oculomotores normales.',
+      rehabilitationSuggestion: 'Trabajo de VORx1 x2 y propioceptivo.',
+    })))
+    expect(screen.getByRole('status')).toHaveTextContent('Borrador guardado.')
   })
 })
