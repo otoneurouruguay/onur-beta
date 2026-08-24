@@ -16,6 +16,7 @@ interface ExercisePlayerProps {
   onSkip?: (activeSeconds: number, report?: ExerciseCompletionReport) => void
   onComplete?: (activeSeconds: number, report?: ExerciseCompletionReport) => void
   preparationSeconds?: number
+  fullscreenTargetRef?: React.RefObject<HTMLElement | null>
 }
 
 function PreparationOverlay({ remaining, vrBox, config }: { remaining: number; vrBox: boolean; config: ExerciseConfig }) {
@@ -109,7 +110,7 @@ function CardboardTrackingOverlay({ status, failureReason, calibrationProgress, 
   return <div className="absolute inset-0 z-30 grid grid-cols-2 divide-x divide-white/10 bg-[#171717]/96" role="status" aria-live="assertive" data-cardboard-tracking-status={status}>{content('izquierdo')}{content('derecho')}</div>
 }
 
-function CompatibleExercisePlayer({ config, onExit, onSkip, onComplete, preparationSeconds }: ExercisePlayerProps) {
+function CompatibleExercisePlayer({ config, onExit, onSkip, onComplete, preparationSeconds, fullscreenTargetRef }: ExercisePlayerProps) {
   const vrBox = config.displayMode === 'vr_box'
   const cardboard = vrBox && config.cardboardEnabled
   const immersiveScenario = config.purpose === 'immersive_context' ? getImmersiveScenario(config.immersiveScenarioId) : undefined
@@ -239,7 +240,7 @@ function CompatibleExercisePlayer({ config, onExit, onSkip, onComplete, preparat
 
   useEffect(() => { if (paused || completionOpen) { setControlsVisible(true); return }; const timeout = window.setTimeout(() => setControlsVisible(false), 3000); return () => window.clearTimeout(timeout) }, [paused, completionOpen, activityVersion])
   const showControls = () => { setControlsVisible(true); setActivityVersion((version) => version + 1) }
-  const requestFullscreen = async () => { try { await containerRef.current?.requestFullscreen(); if (config.displayMode === 'vr_box') { const orientation = screen.orientation as ScreenOrientation & { lock?: (value: 'landscape') => Promise<void> }; await orientation.lock?.('landscape') } } catch { /* Continúa sin fullscreen. */ } }
+  const requestFullscreen = async () => { try { await (fullscreenTargetRef?.current ?? containerRef.current)?.requestFullscreen(); if (config.displayMode === 'vr_box') { const orientation = screen.orientation as ScreenOrientation & { lock?: (value: 'landscape') => Promise<void> }; await orientation.lock?.('landscape') } } catch { /* Continúa sin fullscreen. */ } }
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     showControls()
     if (config.displayMode === 'vr_box') return

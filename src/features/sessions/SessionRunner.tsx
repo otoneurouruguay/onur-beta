@@ -67,9 +67,19 @@ function RestScreen({ seconds, label, nextLabel, displayMode, advanceMode, viewe
   const cardboard = viewerProfile === 'cardboard'
 
   useEffect(() => {
-    if (ready) { if (advanceMode === 'automatic') onComplete(); return }
-    const timer = window.setTimeout(() => setRemaining((value) => value - 1), 1000)
+    const deadline = Date.now() + seconds * 1_000
+    let timer = 0
+    const tick = () => {
+      const nextRemaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1_000))
+      setRemaining(nextRemaining)
+      if (nextRemaining > 0) timer = window.setTimeout(tick, 250)
+    }
+    timer = window.setTimeout(tick, 250)
     return () => window.clearTimeout(timer)
+  }, [seconds])
+
+  useEffect(() => {
+    if (ready && advanceMode === 'automatic') onComplete()
   }, [advanceMode, onComplete, ready])
 
   useEffect(() => {
@@ -94,7 +104,7 @@ function RestScreen({ seconds, label, nextLabel, displayMode, advanceMode, viewe
   return <div className={`fixed inset-0 z-[100] bg-[#171717] text-white ${vrBox ? 'grid grid-cols-2 divide-x divide-white/10' : ''}`}>{content('izquierdo')}{vrBox && content('derecho')}</div>
 }
 
-function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, nextStopCriteria, onComplete, onExit }: VrBoxTransitionUnit & { onComplete: () => void; onExit: () => void }) {
+function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, nextStopCriteria, fullscreenTargetRef, onComplete, onExit }: VrBoxTransitionUnit & { fullscreenTargetRef?: React.RefObject<HTMLElement | null>; onComplete: () => void; onExit: () => void }) {
   const [started, setStarted] = useState(direction === 'take_off')
   const [remaining, setRemaining] = useState(seconds)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -112,20 +122,14 @@ function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, n
   useEffect(() => {
     if (!started || remaining > 0 || completedRef.current) return
     completedRef.current = true
-    const complete = async () => {
-      if (direction === 'take_off' && document.fullscreenElement) {
-        try { await document.exitFullscreen() } catch { /* La sesión continúa aunque el navegador conserve pantalla completa. */ }
-      }
-      onComplete()
-    }
-    void complete()
+    onComplete()
   }, [direction, onComplete, remaining, started])
 
   const startVrPreparation = async () => {
     setTrackingPermissionError('')
     setActivatingSensors(viewerProfile === 'cardboard')
     const activationRequest = viewerProfile === 'cardboard' ? activateCardboardTracking() : Promise.resolve({ permission: 'granted' as const })
-    const fullscreenRequest = containerRef.current?.requestFullscreen?.()
+    const fullscreenRequest = (fullscreenTargetRef?.current ?? containerRef.current)?.requestFullscreen?.()
     const activation = await activationRequest
     try {
       await fullscreenRequest
@@ -182,6 +186,7 @@ function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, n
 export function SessionRunner({ session, onFinish, onExit }: { session: SessionAssignmentRecord; onFinish: (activeSeconds: number, skippedExercises: number, eventLog: SessionEventLogEntry[]) => void; onExit: (activeSeconds: number, skippedExercises: number, eventLog: SessionEventLogEntry[]) => void }) {
   const units = useMemo(() => buildUnits(session.exercises), [session.exercises])
   const [index, setIndex] = useState(0)
+  const fullscreenTargetRef = useRef<HTMLDivElement>(null)
   const skippedRef = useRef(0)
   const activeSecondsRef = useRef(0)
   const eventLogRef = useRef<SessionEventLogEntry[]>([])
@@ -284,20 +289,29 @@ export function SessionRunner({ session, onFinish, onExit }: { session: SessionA
   }, [onFinish, units.length])
 
   if (!unit) return null
-  if (unit.type === 'rest') return <RestScreen {...unit} onComplete={() => advance()} onExit={() => { requestExit() }}/>
-  if (unit.type === 'vr_box_transition') return <VrBoxTransitionScreen {...unit} onComplete={() => advance()} onExit={() => { requestExit() }}/>
 
-  const progress = units.slice(0, index + 1).filter((item) => item.type === 'exercise').length
-  const total = session.exercises.reduce((count, exercise) => count + exercise.rounds, 0)
-  const preparationSeconds = unit.config.displayMode === 'vr_box'
-    ? 0
-    : Math.max(
-      unit.config.stopCriteria ? 5 : 0,
-      unit.config.purpose === 'immersive_context' && unit.config.displayMode === 'quest_browser' && progress > 1 ? 5 : 0,
-      unit.config.preparationSeconds,
-    )
-  return <>
-    {unit.config.displayMode !== 'vr_box' && !(unit.config.displayMode === 'quest_browser' && unit.config.purpose === 'immersive_context') && <div className="fixed left-4 top-20 z-[110] rounded-full bg-black/55 px-3 py-2 text-[10px] font-black text-white backdrop-blur">{unit.label} · {progress}/{total}</div>}
-    <ExercisePlayer key={index} config={{ ...unit.config, rounds: 1 }} preparationSeconds={preparationSeconds} onComplete={(seconds, report) => advance(seconds, report)} onSkip={(seconds, report) => advance(seconds, report ?? { doseMode: unit.config.doseMode, completion: 'skipped' })} onExit={requestExit}/>
-  </>
+  let content: React.ReactNode
+  if (unit.type === 'rest') {
+    content = <RestScreen key={index} {...unit} onComplete={() => advance()} onExit={() => { requestExit() }}/>
+  } else if (unit.type === 'vr_box_transition') {
+    content = <VrBoxTransitionScreen key={index} {...unit} fullscreenTargetRef={fullscreenTargetRef} onComplete={() => advance()} onExit={() => { requestExit() }}/>
+  } else {
+    const progress = units.slice(0, index + 1).filter((item) => item.type === 'exercise').length
+    const total = session.exercises.reduce((count, exercise) => count + exercise.rounds, 0)
+    const preparationSeconds = unit.config.displayMode === 'vr_box'
+      ? 0
+      : Math.max(
+        unit.config.stopCriteria ? 5 : 0,
+        unit.config.purpose === 'immersive_context' && unit.config.displayMode === 'quest_browser' && progress > 1 ? 5 : 0,
+        unit.config.preparationSeconds,
+      )
+    content = <>
+      {unit.config.displayMode !== 'vr_box' && !(unit.config.displayMode === 'quest_browser' && unit.config.purpose === 'immersive_context') && <div className="fixed left-4 top-20 z-[110] rounded-full bg-black/55 px-3 py-2 text-[10px] font-black text-white backdrop-blur">{unit.label} · {progress}/{total}</div>}
+      <ExercisePlayer key={index} fullscreenTargetRef={fullscreenTargetRef} config={{ ...unit.config, rounds: 1 }} preparationSeconds={preparationSeconds} onComplete={(seconds, report) => advance(seconds, report)} onSkip={(seconds, report) => advance(seconds, report ?? { doseMode: unit.config.doseMode, completion: 'skipped' })} onExit={requestExit}/>
+    </>
+  }
+
+  return <div ref={fullscreenTargetRef} data-testid="session-runner-viewport" className="fixed inset-0 z-[100] overflow-hidden bg-[#081113] text-white">
+    {content}
+  </div>
 }

@@ -12,8 +12,8 @@ const trackingPermissionMock = vi.hoisted(() => vi.fn<() => Promise<CardboardTra
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); trackingPermissionMock.mockReset(); trackingPermissionMock.mockResolvedValue({ permission: 'granted', signalSource: 'relative' }) })
 
 vi.mock('../exercise/ExercisePlayer', () => ({
-  ExercisePlayer: (props: { config: ExerciseConfig; preparationSeconds?: number; onComplete?: (activeSeconds: number, report?: ExerciseCompletionReport) => void; onExit?: (activeSeconds: number, report: ExerciseCompletionReport) => void }) => {
-    exercisePlayerMock({ config: props.config, preparationSeconds: props.preparationSeconds })
+  ExercisePlayer: (props: { config: ExerciseConfig; preparationSeconds?: number; fullscreenTargetRef?: React.RefObject<HTMLElement | null>; onComplete?: (activeSeconds: number, report?: ExerciseCompletionReport) => void; onExit?: (activeSeconds: number, report: ExerciseCompletionReport) => void }) => {
+    exercisePlayerMock({ config: props.config, preparationSeconds: props.preparationSeconds, fullscreenTargetRef: props.fullscreenTargetRef })
     return <><button type="button" onClick={() => props.onComplete?.(1, {
       doseMode: props.config.doseMode,
       completion: 'target_completed',
@@ -55,6 +55,55 @@ describe('SessionRunner', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Completar ejercicio' }))
 
     await waitFor(() => expect(exercisePlayerMock.mock.calls.at(-1)?.[0]).toMatchObject({ preparationSeconds: 10 }))
+  })
+
+  it('completa la cuenta regresiva del descanso sin detenerse', async () => {
+    vi.useFakeTimers()
+    const restSession = {
+      ...session,
+      exercises: [
+        { ...session.exercises[0], preparationSeconds: 0 as const, restSeconds: 3 },
+        { ...session.exercises[1], preparationSeconds: 0 as const },
+      ],
+    }
+    render(<SessionRunner session={restSession} onFinish={vi.fn()} onExit={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Completar ejercicio' }))
+    expect(screen.getByText('3')).toBeInTheDocument()
+    await act(async () => { vi.advanceTimersByTime(1_000) })
+    expect(screen.getByText('2')).toBeInTheDocument()
+    await act(async () => { vi.advanceTimersByTime(1_000) })
+    expect(screen.getByText('1')).toBeInTheDocument()
+    await act(async () => { vi.advanceTimersByTime(1_000) })
+    expect(screen.getByText('Descanso finalizado')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Iniciar siguiente fase' })).toBeInTheDocument()
+  })
+
+  it('conserva el mismo contenedor de pantalla completa entre ejercicio, descanso y ejercicio', async () => {
+    vi.useFakeTimers()
+    exercisePlayerMock.mockClear()
+    const restSession = {
+      ...session,
+      exercises: [
+        { ...session.exercises[0], preparationSeconds: 0 as const, restSeconds: 1 },
+        { ...session.exercises[1], preparationSeconds: 0 as const },
+      ],
+    }
+    render(<SessionRunner session={restSession} onFinish={vi.fn()} onExit={vi.fn()} />)
+
+    const firstRef = exercisePlayerMock.mock.calls.at(-1)?.[0].fullscreenTargetRef as React.RefObject<HTMLElement | null>
+    const fullscreenTarget = firstRef.current
+    expect(fullscreenTarget).toBe(screen.getByTestId('session-runner-viewport'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Completar ejercicio' }))
+    expect(screen.getByTestId('session-runner-viewport')).toBe(fullscreenTarget)
+    await act(async () => { vi.advanceTimersByTime(1_000) })
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar siguiente fase' }))
+
+    const secondRef = exercisePlayerMock.mock.calls.at(-1)?.[0].fullscreenTargetRef as React.RefObject<HTMLElement | null>
+    expect(secondRef).toBe(firstRef)
+    expect(secondRef.current).toBe(fullscreenTarget)
+    expect(screen.getByTestId('session-runner-viewport')).toBe(fullscreenTarget)
   })
 
   it('advierte antes de salir y entrega el avance parcial para guardarlo', () => {

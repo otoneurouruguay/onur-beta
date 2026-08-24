@@ -18,6 +18,17 @@ vi.mock('../immersive/ImmersivePanorama', () => ({
 afterEach(() => { cleanup(); vi.useRealTimers() })
 
 describe('avance del reproductor', () => {
+  it('solicita pantalla completa sobre el contenedor estable de la sesión', () => {
+    const fullscreenTarget = document.createElement('div')
+    const requestFullscreen = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(fullscreenTarget, 'requestFullscreen', { value: requestFullscreen })
+
+    render(<ExercisePlayer fullscreenTargetRef={{ current: fullscreenTarget }} config={{ ...defaultExerciseConfig, preparationSeconds: 0 }} onExit={vi.fn()}/>)
+    fireEvent.click(screen.getByRole('button', { name: 'Pantalla completa' }))
+
+    expect(requestFullscreen).toHaveBeenCalledOnce()
+  })
+
   it('finaliza automáticamente un ejercicio VR Box por tiempo', async () => {
     vi.useFakeTimers()
     const onComplete = vi.fn()
