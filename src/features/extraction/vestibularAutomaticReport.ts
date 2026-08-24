@@ -1,4 +1,5 @@
 import { canonicalFieldStatus } from './fieldResults'
+import { sanitizeVestibularNarrative } from './vestibularNarrative'
 import type { ExtractedField } from './types'
 
 export interface VestibularAutomaticReport {
@@ -19,8 +20,8 @@ function usableField(fields: ExtractedField[], code: string) {
  * interpreta curvas, no diagnostica y no genera una conducta nueva.
  */
 export function buildVestibularAutomaticReport(fields: ExtractedField[]): VestibularAutomaticReport | null {
-  const conclusion = usableField(fields, 'conclusion')
-  const conduct = usableField(fields, 'conduct')
+  const conclusion = sanitizeVestibularNarrative(usableField(fields, 'conclusion'), 'conclusion')
+  const conduct = sanitizeVestibularNarrative(usableField(fields, 'conduct'), 'conduct')
   if (!conclusion && !conduct) return null
   return {
     conclusion,

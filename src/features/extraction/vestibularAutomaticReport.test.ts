@@ -14,4 +14,20 @@ describe('borrador literal vestibular', () => {
   it('no usa texto inválido o ausente', () => {
     expect(buildVestibularAutomaticReport([field('conclusion', '', 'not_reported')])).toBeNull()
   })
+
+  it('elimina bloques OCR superpuestos y no mezcla Conducta dentro de En suma', () => {
+    const duplicated = [
+      'Síndrome vestibular agudo periférico derecho. No evidencia de alteración',
+      'En suma: Síndrome vestibular agudo periférico derecho. No evidencia de alteración',
+      'En suma: Síndrome vestibular agudo periférico derecho. No evidencia de alteración propioceptiva.',
+      'Sistemas de comando oculomotores normales para la edad.',
+      'Sistemas de comando oculomotores normales para la edad.',
+      'Conducta: Tiene indicado rehabilitación vestibular para SVA derecho.',
+    ].join(' ')
+    const result = buildVestibularAutomaticReport([field('conclusion', duplicated), field('conduct', 'VORx1')])
+
+    expect(result?.conclusion).toBe('Síndrome vestibular agudo periférico derecho. No evidencia de alteración propioceptiva. Sistemas de comando oculomotores normales para la edad.')
+    expect(result?.conclusion).not.toMatch(/En suma|Conducta/i)
+    expect(result?.rehabilitationSuggestion).toBe('VORx1')
+  })
 })

@@ -94,6 +94,58 @@ describe('extracción literal revisable', () => {
     expect(field).toMatchObject({ rawValue: 'Se realizo examen clinico e instrumentado del sistema vestibular y de los sistemas oculomotores centrales.', status: 'detected' })
   })
 
+  it('deduplica En suma de varias pasadas y corta antes de Conducta', () => {
+    const reportPage: ExtractedPage = {
+      ...page('Informe vestibular sintetico\nEn suma\nConducta', 'vestibular_report'),
+      lines: [
+        { text: 'En suma: Hallazgo vestibular sintetico.', confidence: 88, region: { x: .12, y: .66, width: .35, height: .019 } },
+        { text: 'En suma: Hallazgo vestibular sintetico. Segundo dato literal.', confidence: 94, region: { x: .12, y: .685, width: .58, height: .019 } },
+        { text: 'Segundo dato literal.', confidence: 92, region: { x: .12, y: .71, width: .23, height: .019 } },
+        { text: 'Conducta: VORx1', confidence: 95, region: { x: .12, y: .738, width: .2, height: .019 } },
+      ],
+    }
+    const fields = extractFields([reportPage], 'vestibular_and_reports')
+
+    expect(fields.find((field) => field.code === 'conclusion')?.rawValue).toBe('Hallazgo vestibular sintetico. Segundo dato literal.')
+    expect(fields.find((field) => field.code === 'conduct')?.rawValue).toBe('VORx1')
+  })
+
+  it('elige una sola pasada para Examen clínico y separa etiquetas compactas consecutivas', () => {
+    const reportPage: ExtractedPage = {
+      ...page('Informe vestibular sintetico', 'vestibular_report'),
+      lines: [
+        { text: 'Se realizo examen clinico e instrumentado del sistema vestibular.', confidence: 90, region: { x: .1, y: .2, width: .65, height: .02 }, regionId: 'clinical_body', passId: 'clinical_body-original-2' },
+        { text: 'AF: HTA. AP: HTA. MC: Sindrome vestibular sintetico.', confidence: 89, region: { x: .1, y: .23, width: .6, height: .02 }, regionId: 'clinical_body', passId: 'clinical_body-original-2' },
+        { text: 'Se realice examen clinico del sistema vestibular y oculomotor.', confidence: 76, region: { x: .1, y: .201, width: .6, height: .02 }, regionId: 'clinical_body', passId: 'clinical_body-grayscale-3' },
+        { text: 'AF: HTA. AP: HTA. MC: Otro bloque superpuesto.', confidence: 74, region: { x: .1, y: .231, width: .55, height: .02 }, regionId: 'clinical_body', passId: 'clinical_body-grayscale-3' },
+        { text: 'Test vibracional: (-) Cancelacion del VOR: Normal', confidence: 94, region: { x: .1, y: .42, width: .52, height: .02 } },
+        { text: 'Sistema Sacadico: Precision: Correcta Velocidad: normal', confidence: 93, region: { x: .1, y: .45, width: .54, height: .02 } },
+        { text: 'vHIT HIMP: CULL: Curvas normales Simetria: 47%', confidence: 92, region: { x: .1, y: .48, width: .5, height: .02 } },
+      ],
+    }
+    const fields = extractFields([reportPage], 'vestibular_and_reports')
+
+    expect(fields.find((field) => field.code === 'clinical_exam')?.rawValue).toBe('Se realizo examen clinico e instrumentado del sistema vestibular.')
+    expect(fields.find((field) => field.code === 'vibration_test')?.rawValue).toBe('(-)')
+    expect(fields.find((field) => field.code === 'vor_cancellation')?.rawValue).toBe('Normal')
+    expect(fields.find((field) => field.code === 'saccadic_precision')?.rawValue).toBe('Correcta')
+    expect(fields.find((field) => field.code === 'saccadic_velocity')?.rawValue).toBe('normal')
+    expect(fields.find((field) => field.code === 'curves_channels')?.rawValue).toBe('CULL: Curvas normales')
+  })
+
+  it('recupera Conducta aunque comparta una línea OCR con En suma', () => {
+    const reportPage: ExtractedPage = {
+      ...page('Informe vestibular sintetico\nEn suma\nConducta', 'vestibular_report'),
+      lines: [
+        { text: 'En suma: Hallazgo vestibular sintetico. Conducta: Rehabilitacion vestibular sintetica.', confidence: 94, region: { x: .1, y: .7, width: .78, height: .02 }, regionId: 'report_summary', passId: 'report_summary-original-2' },
+      ],
+    }
+    const fields = extractFields([reportPage], 'vestibular_and_reports')
+
+    expect(fields.find((field) => field.code === 'conclusion')?.rawValue).toBe('Hallazgo vestibular sintetico.')
+    expect(fields.find((field) => field.code === 'conduct')?.rawValue).toBe('Rehabilitacion vestibular sintetica.')
+  })
+
   it('lee panel BAP compacto y porcentajes ubicados por columna', () => {
     const bapPage: ExtractedPage = {
       ...page('Posturografía BAP\nPorcent. de condiciones\nTest de organización sensorial', 'posturography'),

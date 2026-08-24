@@ -2,9 +2,10 @@ import { parseLocaleNumber } from '../studies/normalization'
 import { posturographyFieldDefinitions, vestibularFieldDefinitions } from './catalog'
 import { findBapStructuredValue, validateBapFields } from './bapStructuredExtraction'
 import { findVestibularStructuredValue, validateVestibularFields } from './vestibularStructuredExtraction'
+import { deduplicateOcrSentences, sanitizeVestibularNarrative } from './vestibularNarrative'
 import type { ExtractedField, ExtractedPage, ExtractionFieldDefinition, IntakeKind, PageClassification, PatientMatchStatus, SourceRegion } from './types'
 
-export const EXTRACTOR_VERSION = 'onur-local-ocr-2.1'
+export const EXTRACTOR_VERSION = 'onur-local-ocr-2.2'
 
 function fold(value: string) {
   return value.toLocaleLowerCase('es-UY').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -119,9 +120,27 @@ function beginsAnotherField(text: string, definition: ExtractionFieldDefinition)
   return vestibularFieldDefinitions.some((candidate) => candidate.code !== definition.code && candidate.aliases.some((alias) => aliasAtStart(text, alias)))
 }
 
-function multilineValue(definition: ExtractionFieldDefinition, page: ExtractedPage): LocatedValue | null {
-  if (!multilineCodes.has(definition.code)) return null
-  const lines = withoutShortDuplicateLines(page)
+function accentTolerantAlias(alias: string) {
+  const variants: Record<string, string> = {
+    a: '[aáàäâ]', e: '[eéèëê]', i: '[iíìïî]', o: '[oóòöô]', u: '[uúùüû]', n: '[nñ]',
+  }
+  return fold(alias).split('').map((character) => character === ' ' ? '\\s+' : variants[character] ?? escaped(character)).join('')
+}
+
+function beforeEmbeddedField(value: string, definition: ExtractionFieldDefinition) {
+  let end = value.length
+  for (const candidate of vestibularFieldDefinitions) {
+    if (candidate.code === definition.code) continue
+    for (const alias of candidate.aliases) {
+      const pattern = new RegExp(`(?:^|[\\s.;,)])(?:\\d{1,2}[.)]\\s*)?${accentTolerantAlias(alias)}\\s*(?::|=)`, 'iu')
+      const match = pattern.exec(value)
+      if (match?.index !== undefined) end = Math.min(end, match.index)
+    }
+  }
+  return value.slice(0, end).replace(/[\s,\-–—]+$/, '').trim()
+}
+
+function multilineCandidate(definition: ExtractionFieldDefinition, lines: ExtractedPage['lines']): { located: LocatedValue; rank: number } | null {
   const anchorIndex = lines.findIndex((line) => definition.aliases.some((alias) => aliasAtStart(line.text, alias) || definition.code === 'clinical_exam' && fold(line.text).includes(fold(alias))))
   if (anchorIndex < 0) return null
   const anchor = lines[anchorIndex]
@@ -141,13 +160,29 @@ function multilineValue(definition: ExtractionFieldDefinition, page: ExtractedPa
     selected.push(line)
     previous = line
   }
-  const value = parts.join(' ').replace(/\s+/g, ' ').trim()
+  const joinedValue = beforeEmbeddedField(parts.join(' ').replace(/\s+/g, ' ').trim(), definition)
+  const value = definition.code === 'conclusion' || definition.code === 'conduct'
+    ? sanitizeVestibularNarrative(joinedValue, definition.code)
+    : deduplicateOcrSentences(joinedValue)
   if (!value) return null
-  return {
-    value,
-    confidence: Math.min(...selected.map((line) => line.confidence / 100)),
-    region: combinedRegion(selected),
+  const confidence = Math.min(...selected.map((line) => line.confidence / 100))
+  const expectedRegion = ['conclusion', 'conduct'].includes(definition.code) ? 'report_summary' : 'clinical_body'
+  const regionBonus = anchor.regionId === expectedRegion ? .12 : anchor.regionId === 'full_page' ? 0 : .04
+  return { located: { value, confidence, region: combinedRegion(selected) }, rank: confidence + regionBonus + Math.min(value.length, 240) / 4800 }
+}
+
+function multilineValue(definition: ExtractionFieldDefinition, page: ExtractedPage): LocatedValue | null {
+  if (!multilineCodes.has(definition.code)) return null
+  const lines = withoutShortDuplicateLines(page)
+  const groups = new Map<string, ExtractedPage['lines']>()
+  for (const line of lines) {
+    const key = line.passId ?? 'unscoped'
+    groups.set(key, [...(groups.get(key) ?? []), line])
   }
+  return [...groups.values()]
+    .map((group) => multilineCandidate(definition, group))
+    .filter((candidate): candidate is NonNullable<ReturnType<typeof multilineCandidate>> => Boolean(candidate))
+    .sort((first, second) => second.rank - first.rank)[0]?.located ?? null
 }
 
 function inferredDocumentType(definition: ExtractionFieldDefinition, page: ExtractedPage): LocatedValue | null {
@@ -311,7 +346,13 @@ function findDefinitionValue(definition: ExtractionFieldDefinition, page: Extrac
   }
   if (definition.studyType === 'vhit') {
     const structured = findVestibularStructuredValue(definition.code, page)
-    if (structured) return { value: structured.raw, confidence: structured.confidence, region: structured.region, structured }
+    if (structured) {
+      const bounded = beforeEmbeddedField(structured.raw, definition)
+      const cleanedStructured = bounded && bounded !== structured.raw && typeof structured.value === 'string'
+        ? { ...structured, raw: bounded, value: bounded, displayValue: bounded }
+        : structured
+      return { value: cleanedStructured.raw, confidence: cleanedStructured.confidence, region: cleanedStructured.region, structured: cleanedStructured }
+    }
   }
   const isBapGraphValue = /^condition_[1-6]$/.test(definition.code) || definition.code === 'composite_score' || ['sensory_somatosensory', 'sensory_visual', 'sensory_vestibular', 'visual_preference'].includes(definition.code)
   // Sólo se aplican coordenadas de las barras si el OCR reconoce ambos paneles
@@ -327,18 +368,21 @@ function findDefinitionValue(definition: ExtractionFieldDefinition, page: Extrac
   for (const line of page.lines) {
     for (const alias of definition.aliases) {
       const value = lineValue(line.text, alias)
-      if (value) return { value: compactCandidate(definition, value), confidence: line.confidence / 100, region: line.region }
+      const bounded = beforeEmbeddedField(value, definition)
+      if (bounded) return { value: compactCandidate(definition, bounded), confidence: line.confidence / 100, region: line.region }
     }
   }
   for (const textLine of page.text.split(/\r?\n/)) {
     for (const alias of definition.aliases) {
       const value = lineValue(textLine, alias)
-      if (value) return { value: compactCandidate(definition, value), confidence: page.classificationConfidence * .95, region: null }
+      const bounded = beforeEmbeddedField(value, definition)
+      if (bounded) return { value: compactCandidate(definition, bounded), confidence: page.classificationConfidence * .95, region: null }
     }
   }
   for (const alias of definition.aliases) {
     const value = lineValue(page.text, alias)
-    if (value) return { value: compactCandidate(definition, value), confidence: page.classificationConfidence * .8, region: null }
+    const bounded = beforeEmbeddedField(value, definition)
+    if (bounded) return { value: compactCandidate(definition, bounded), confidence: page.classificationConfidence * .8, region: null }
   }
   return positionalBapValue(definition, page) ?? inferredDocumentType(definition, page)
 }
