@@ -2,6 +2,7 @@ import {
   BarChart3,
   BookOpenCheck,
   BrainCircuit,
+  ChevronDown,
   ClipboardList,
   FileText,
   Globe2,
@@ -33,6 +34,7 @@ interface NavigationItem {
 export function ProfessionalShell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const accountRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const location = useLocation()
@@ -53,7 +55,8 @@ export function ProfessionalShell() {
       label: 'Estudios',
       to: '/app/estudios',
       icon: Upload,
-      children: [{ label: 'Sugerencias', to: '/app/sugerencias', icon: BookOpenCheck, badge: pendingSuggestions }],
+      badge: pendingSuggestions,
+      children: [{ label: 'Sugerencias', to: '/app/sugerencias', icon: BookOpenCheck }],
     },
     { label: 'Informes', to: '/app/informes', icon: FileText },
   ]
@@ -66,7 +69,6 @@ export function ProfessionalShell() {
   const currentSection = [...navigation].reverse().find((item) => location.pathname.startsWith(item.to))?.label ?? 'Inicio'
 
   const renderNavigationItem = (item: NavigationItem, nested = false) => {
-    const hasActiveChild = item.children?.some((child) => location.pathname.startsWith(child.to)) ?? false
     return (
       <NavLink
         key={item.to}
@@ -74,18 +76,16 @@ export function ProfessionalShell() {
         end={item.end}
         onClick={() => setMenuOpen(false)}
         className={({ isActive }) => {
-          const active = isActive || hasActiveChild
           return `group relative flex items-center gap-3 rounded-lg font-semibold transition-colors ${
             nested ? 'h-9 px-2.5 text-[12px]' : 'h-10 px-3 text-[13px]'
-          } ${active ? 'bg-[#FFF7E8] text-[#171717]' : 'text-[#747474] hover:bg-[#F7F6F4] hover:text-[#171717]'}`
+          } ${isActive ? 'bg-[#FFF7E8] text-[#171717]' : 'text-[#747474] hover:bg-[#F7F6F4] hover:text-[#171717]'}`
         }}
       >
         {({ isActive }) => {
-          const active = isActive || hasActiveChild
           return (
             <>
-              {active && !nested && <span className="absolute left-0 h-5 w-[3px] rounded-r-full bg-[#E49A02]" aria-hidden="true" />}
-              <item.icon aria-hidden="true" size={nested ? 15 : 17} strokeWidth={active ? 2.2 : 1.8} className={active ? 'text-[#A36B00]' : ''} />
+              {isActive && !nested && <span className="absolute left-0 h-5 w-[3px] rounded-r-full bg-[#E49A02]" aria-hidden="true" />}
+              <item.icon aria-hidden="true" size={nested ? 15 : 17} strokeWidth={isActive ? 2.2 : 1.8} className={isActive ? 'text-[#A36B00]' : ''} />
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
               {Boolean(item.badge) && (
                 <span
@@ -99,6 +99,44 @@ export function ProfessionalShell() {
           )
         }}
       </NavLink>
+    )
+  }
+
+  const renderNavigationGroup = (item: NavigationItem) => {
+    const groupActive = location.pathname.startsWith(item.to) || (item.children?.some((child) => location.pathname.startsWith(child.to)) ?? false)
+    const expanded = expandedGroups[item.to] ?? groupActive
+    const panelId = `navigation-group-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+    return (
+      <div key={item.to}>
+        <button
+          type="button"
+          onClick={() => setExpandedGroups((current) => ({ ...current, [item.to]: !expanded }))}
+          className={`group relative flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-[13px] font-semibold transition-colors ${
+            groupActive ? 'bg-[#FFF7E8] text-[#171717]' : 'text-[#747474] hover:bg-[#F7F6F4] hover:text-[#171717]'
+          }`}
+          aria-expanded={expanded}
+          aria-controls={panelId}
+        >
+          {groupActive && <span className="absolute left-0 h-5 w-[3px] rounded-r-full bg-[#E49A02]" aria-hidden="true" />}
+          <item.icon aria-hidden="true" size={17} strokeWidth={groupActive ? 2.2 : 1.8} className={groupActive ? 'text-[#A36B00]' : ''} />
+          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+          {Boolean(item.badge) && (
+            <span
+              className="grid min-w-5 place-items-center rounded-full bg-[#E49A02] px-1.5 py-0.5 text-[10px] font-black leading-4 text-white"
+              aria-label={`${item.badge} revisiones pendientes`}
+            >
+              {item.badge}
+            </span>
+          )}
+          <ChevronDown aria-hidden="true" size={15} className={`shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
+        {expanded && (
+          <div id={panelId} className="ml-5 mt-1 space-y-1 border-l border-[#E9E7E7] pl-2">
+            {renderNavigationItem({ ...item, label: item.label === 'Ejercicios' ? 'Crear ejercicio' : 'Todos los estudios', children: undefined, badge: undefined }, true)}
+            {item.children?.map((child) => renderNavigationItem(child, true))}
+          </div>
+        )}
+      </div>
     )
   }
 
@@ -143,14 +181,7 @@ export function ProfessionalShell() {
         <p className="mb-2 mt-8 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#A1A1A1]">Consultorio</p>
         <nav className="space-y-1" aria-label="Navegación principal">
           {primaryNavigation.map((item) => (
-            <div key={item.to}>
-              {renderNavigationItem(item)}
-              {item.children && (
-                <div className="ml-5 mt-1 space-y-1 border-l border-[#E9E7E7] pl-2">
-                  {item.children.map((child) => renderNavigationItem(child, true))}
-                </div>
-              )}
-            </div>
+            item.children ? renderNavigationGroup(item) : renderNavigationItem(item)
           ))}
 
           <p className="mb-2 mt-6 px-3 pt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[#A1A1A1]">Seguimiento</p>
