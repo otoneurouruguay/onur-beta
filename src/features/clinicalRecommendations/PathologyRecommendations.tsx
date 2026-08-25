@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Plus, ShieldAlert } from 'lucide-react'
+import { Activity, BookOpen, Check, Plus, ShieldAlert } from 'lucide-react'
 import { useState } from 'react'
 import { clinicalSources } from '../clinicalGeneration/catalog'
 import type { ExerciseTemplateRecord } from '../templates/repository'
@@ -7,6 +7,7 @@ import { pathologyRecommendations, type PathologyRecommendation } from './catalo
 interface PathologyRecommendationsProps {
   templates: ExerciseTemplateRecord[]
   onLoadTemplate: (template: ExerciseTemplateRecord, pathology: PathologyRecommendation) => void
+  selectedTemplateIds?: readonly string[]
 }
 
 const evidenceLabels: Record<PathologyRecommendation['evidence'], string> = {
@@ -16,7 +17,7 @@ const evidenceLabels: Record<PathologyRecommendation['evidence'], string> = {
   governance: 'Guía diagnóstica y de manejo',
 }
 
-export function PathologyRecommendations({ templates, onLoadTemplate }: PathologyRecommendationsProps) {
+export function PathologyRecommendations({ templates, onLoadTemplate, selectedTemplateIds = [] }: PathologyRecommendationsProps) {
   const [selectedId, setSelectedId] = useState('')
   const selected = pathologyRecommendations.find((pathology) => pathology.id === selectedId)
   const sources = selected
@@ -25,7 +26,7 @@ export function PathologyRecommendations({ templates, onLoadTemplate }: Patholog
 
   return <section className="overflow-hidden rounded-2xl border border-[#D9E7DF] bg-white">
     <div className="border-b border-[#D9E7DF] bg-[#F0F8F3] p-5 sm:p-6">
-      <div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#28613D] text-white"><Activity size={19}/></span><div><h2 className="text-base font-black text-[#173A26]">Orientación por patología</h2><p className="mt-1 max-w-3xl text-xs leading-5 text-[#47705A]">Elegí el cuadro clínico confirmado para ver componentes posibles de rehabilitación y cargar una plantilla. La selección organiza la bibliografía; no diagnostica ni fija la dosis.</p></div></div>
+      <div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#28613D] text-white"><Activity size={19}/></span><div><h2 className="text-base font-black text-[#173A26]">Orientación por patología</h2><p className="mt-1 max-w-3xl text-xs leading-5 text-[#47705A]">Elegí el cuadro clínico confirmado para ver componentes posibles de rehabilitación y sumar ejercicios a una sesión. La selección organiza la bibliografía; no diagnostica ni fija la dosis.</p></div></div>
       <label className="mt-5 block text-xs font-black text-[#173A26]">Patología o condición clínica<select aria-label="Patología o condición clínica" value={selectedId} onChange={(event) => setSelectedId(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-[#B9D9C5] bg-white px-4 text-sm text-[#173A26]"><option value="">Seleccionar…</option>{pathologyRecommendations.map((pathology) => <option key={pathology.id} value={pathology.id}>{pathology.label}</option>)}</select></label>
     </div>
 
@@ -38,7 +39,10 @@ export function PathologyRecommendations({ templates, onLoadTemplate }: Patholog
         return <article key={option.title} className="rounded-2xl border border-[#E9E7E7] p-4">
           <h4 className="text-sm font-black text-[#2F2F2F]">{option.title}</h4>
           <p className="mt-2 text-xs leading-5 text-[#747474]">{option.summary}</p>
-          {optionTemplates.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{optionTemplates.map((template) => <button key={template.id} type="button" onClick={() => onLoadTemplate(template, selected)} className="inline-flex items-center gap-1.5 rounded-xl border border-[#E8CE99] bg-[#FFF7E8] px-3 py-2 text-left text-[10px] font-black text-[#8A5B00]"><Plus size={13}/>{template.name}</button>)}</div>}
+          {optionTemplates.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{optionTemplates.map((template) => {
+            const added = selectedTemplateIds.includes(template.id)
+            return <button key={template.id} type="button" aria-pressed={added} onClick={() => onLoadTemplate(template, selected)} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-left text-[10px] font-black ${added ? 'border-[#9FC9AE] bg-[#F0F8F3] text-[#28613D]' : 'border-[#E8CE99] bg-[#FFF7E8] text-[#8A5B00]'}`}>{added ? <Check size={13}/> : <Plus size={13}/>} {added ? 'Agregado · ' : ''}{template.name}</button>
+          })}</div>}
         </article>
       })}</div>
 

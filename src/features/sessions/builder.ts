@@ -3,6 +3,20 @@ import type { SessionFormValues } from './schema'
 
 export const DEFAULT_SESSION_TITLE = 'Sesión vestíbulo-visual'
 
+export function sessionValuesFromExerciseSelection(exercises: ExerciseConfig[], availableFrom: string): SessionFormValues {
+  const requiresInPerson = exercises.some((exercise) => exercise.strobeEnabled || exercise.purpose === 'immersive_context' || exercise.displayMode === 'quest_browser')
+  return {
+    kind: 'exercise',
+    title: DEFAULT_SESSION_TITLE,
+    instructions: 'Realizar según las indicaciones brindadas por el profesional.',
+    mode: requiresInPerson ? 'in_person' : 'home',
+    treatmentCycleId: '',
+    availableFrom,
+    availableUntil: '',
+    exercises: exercises.map((exercise) => ({ ...exercise, selectionOrigin: exercise.selectionOrigin ?? 'manual' })),
+  }
+}
+
 function isUntouchedStarterExercise(exercise: ExerciseConfig) {
   return JSON.stringify(exercise) === JSON.stringify(defaultExerciseConfig)
 }

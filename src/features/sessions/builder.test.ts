@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyExercisePurpose } from '../exercise/compatibility'
 import { defaultExerciseConfig } from '../exercise/types'
-import { appendExerciseTemplate, DEFAULT_SESSION_TITLE } from './builder'
+import { appendExerciseTemplate, DEFAULT_SESSION_TITLE, sessionValuesFromExerciseSelection } from './builder'
 import type { SessionFormValues } from './schema'
 
 const baseValues = (): SessionFormValues => ({
@@ -54,5 +54,21 @@ describe('constructor de sesiones', () => {
       'Supermercado caminando',
     ])
     expect(third.selectedIndex).toBe(2)
+  })
+
+  it('transfiere toda la selección por patología a una sesión y conserva el orden', () => {
+    const values = sessionValuesFromExerciseSelection([
+      { ...defaultExerciseConfig, name: 'RVO x1' },
+      { ...defaultExerciseConfig, name: 'Equilibrio funcional', kind: 'guided_physical' },
+    ], '2026-08-25')
+
+    expect(values.exercises.map((exercise) => exercise.name)).toEqual(['RVO x1', 'Equilibrio funcional'])
+    expect(values.exercises.every((exercise) => exercise.selectionOrigin === 'manual')).toBe(true)
+    expect(values.mode).toBe('home')
+  })
+
+  it('fuerza modalidad presencial si la selección incluye una exposición reservada para clínica', () => {
+    const values = sessionValuesFromExerciseSelection([immersive('Mercado')], '2026-08-25')
+    expect(values.mode).toBe('in_person')
   })
 })

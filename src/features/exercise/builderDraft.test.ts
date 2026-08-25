@@ -14,8 +14,22 @@ function memoryStorage() {
 describe('borrador del constructor de ejercicios', () => {
   it('recupera la configuración después de desmontar la pantalla y permite descartarla', () => {
     const storage = memoryStorage()
-    writeExerciseBuilderDraft({ config: { ...defaultExerciseConfig, name: 'Trabajo en curso', rounds: 4 }, selectedTemplateId: 'template-rvo-bars' }, storage)
-    expect(readExerciseBuilderDraft(storage)).toMatchObject({ config: { name: 'Trabajo en curso', rounds: 4 }, selectedTemplateId: 'template-rvo-bars' })
+    writeExerciseBuilderDraft({
+      config: { ...defaultExerciseConfig, name: 'Trabajo en curso', rounds: 4 },
+      selectedTemplateId: 'template-rvo-bars',
+      pathologySelection: [
+        { templateId: 'template-rvo-bars', name: 'RVO x1', config: { ...defaultExerciseConfig, name: 'RVO x1' } },
+        { templateId: 'template-functional-weight-shifts', name: 'Transferencias', config: { ...defaultExerciseConfig, name: 'Transferencias', kind: 'guided_physical' } },
+      ],
+    }, storage)
+    expect(readExerciseBuilderDraft(storage)).toMatchObject({
+      config: { name: 'Trabajo en curso', rounds: 4 },
+      selectedTemplateId: 'template-rvo-bars',
+      pathologySelection: [
+        { templateId: 'template-rvo-bars', config: { name: 'RVO x1' } },
+        { templateId: 'template-functional-weight-shifts', config: { name: 'Transferencias' } },
+      ],
+    })
     clearExerciseBuilderDraft(storage)
     expect(storage.getItem(EXERCISE_BUILDER_DRAFT_KEY)).toBeNull()
   })
