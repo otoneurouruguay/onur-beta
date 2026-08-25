@@ -79,6 +79,7 @@ for (const marker of [
   'Actualizar y volver a intentar',
   'Patología o condición clínica',
   'Borrador recuperado automáticamente',
+  'Agregar a la selección',
   'Estroboscópicos · experimental',
   'Imágenes rápidas · cognitivo-visual',
   'Velocidad de seguimiento ocular',

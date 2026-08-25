@@ -32,6 +32,7 @@ Debe finalizar sin errores. El comando verifica:
 - [ ] **Favicon:** la pestaña debe mostrar el isotipo completo de Otoneuro, con el punto gris visible.
 - [ ] **Acceso profesional:** iniciar sesión y abrir Inicio, Pacientes, Sesiones, Ejercicios, Estudios, Evaluaciones e Informes; ninguna pantalla puede quedar indefinidamente en “Verificando acceso…”.
 - [ ] **Constructor clínico publicado:** en Ejercicios debe verse “Orientación por patología”, el selector con 11 patologías y las familias de imágenes rápidas y estroboscópicos experimentales.
+- [ ] **Biblioteca acumulativa:** elegir al menos dos ejercicios distintos de la biblioteca, usar “Agregar a la selección” en cada uno y confirmar que ambos permanecen en la lista, sin que el segundo reemplace al primero.
 - [ ] **Acceso domiciliario:** habilitar un paciente de prueba, ingresar con la credencial temporal y comprobar que el cambio de PIN es obligatorio.
 - [ ] **Aislamiento del PIN temporal:** intentar abrir `/paciente/hoy` antes de cambiar el PIN; debe volver a la creación de PIN.
 - [ ] **Datos reales:** Inicio y perfil no deben mostrar pacientes, horarios, adherencia, documentos o actividad demostrativa.
