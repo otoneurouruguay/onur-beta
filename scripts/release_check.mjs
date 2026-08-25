@@ -32,6 +32,25 @@ if (!reuseBuild) {
 }
 
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
+requireCheck(
+  packageJson.scripts?.dev === 'node scripts/dev_authenticated.mjs',
+  'La vista previa local no usa el arranque autenticado obligatorio.',
+)
+requireCheck(existsSync('scripts/dev_authenticated.mjs'), 'Falta el arranque autenticado para la vista previa local.')
+const authenticatedDevelopmentScript = readFileSync('scripts/dev_authenticated.mjs', 'utf8')
+for (const marker of [
+  'VITE_SUPABASE_URL: supabaseUrl',
+  'VITE_SUPABASE_ANON_KEY: supabaseAnonKey',
+  "'SUPABASE_SERVICE_ROLE_KEY'",
+  "'SUPABASE_DB_PASSWORD'",
+  "'PATIENT_AUTH_PEPPER'",
+  "'PROFESSIONAL_PASSWORD'",
+]) {
+  requireCheck(
+    authenticatedDevelopmentScript.includes(marker),
+    `El arranque local autenticado no contiene el control obligatorio: ${marker}.`,
+  )
+}
 const serviceWorkerPath = existsSync('dist/client/sw.js') ? 'dist/client/sw.js' : 'dist/sw.js'
 const clientPath = existsSync('dist/client') ? 'dist/client' : 'dist'
 requireCheck(existsSync(serviceWorkerPath), 'La compilación no generó sw.js.')
@@ -132,4 +151,4 @@ requireCheck(
 const exerciseHtml = await exerciseResponse.text()
 requireCheck(exerciseHtml.includes('id="root"'), 'La ruta profesional no entregó la aplicación ONUr.')
 
-console.log('\nChecklist técnico aprobado: acceso público y profundo, controles clínicos, borradores protegidos, caché autoactivable, identidad PWA, pruebas y compilación.')
+console.log('\nChecklist técnico aprobado: acceso público y profundo, vista previa autenticada, controles clínicos, borradores protegidos, caché autoactivable, identidad PWA, pruebas y compilación.')

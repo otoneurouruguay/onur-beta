@@ -14,6 +14,7 @@ Debe finalizar sin errores. El comando verifica:
 
 - tipos, lint y toda la suite de pruebas;
 - compilación autenticada de producción;
+- arranque local autenticado, con conversión segura de las variables públicas de Supabase;
 - coincidencia entre la versión de la app y el caché PWA;
 - activación inmediata del caché nuevo y toma de control de pestañas abiertas;
 - presencia de los controles clínicos y de recuperación de borradores;
@@ -21,6 +22,7 @@ Debe finalizar sin errores. El comando verifica:
 
 ## Regresiones de prioridad alta
 
+- [ ] **Vista previa local autenticada:** iniciar con `npm run dev`, abrir `/ingresar` y comprobar que el botón diga “Ingresar”; nunca “Acceso no disponible”. Iniciar sesión una vez en `127.0.0.1` y confirmar que `/app` no vuelve al login.
 - [ ] **Login estable:** escribir correo/usuario y contraseña/PIN, esperar al menos 90 segundos y comprobar que los campos, el foco y la pantalla no se reinician.
 - [ ] **Actualización segura:** una versión nueva se activa aunque haya una pestaña abierta; no queda una mezcla de HTML o archivos de versiones distintas y la pantalla no queda en blanco.
 - [ ] **Borrador durante actualización:** modificar un ejercicio, esperar la actualización y recargar; el borrador debe recuperarse automáticamente.
