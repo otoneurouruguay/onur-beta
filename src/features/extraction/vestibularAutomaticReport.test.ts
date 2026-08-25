@@ -41,4 +41,14 @@ describe('borrador literal vestibular', () => {
     expect(result?.conclusion).not.toMatch(/Cancelación|Conducta/i)
     expect(result?.rehabilitationSuggestion).toBe('Trabajo de VORx1 sintético.')
   })
+
+  it('tolera Comducta como error OCR sin mezclarla en la conclusión', () => {
+    const result = buildVestibularAutomaticReport([
+      field('conclusion', 'Hallazgo literal. Cancelación Comducta: Rehabilitación vestibular literal.'),
+      field('conduct', 'Rehabilitación vestibular literal.'),
+    ])
+
+    expect(result?.conclusion).toBe('Hallazgo literal.')
+    expect(result?.rehabilitationSuggestion).toBe('Rehabilitación vestibular literal.')
+  })
 })

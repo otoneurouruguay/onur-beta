@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   record: null as ExtractionReviewRecord | null,
   save: vi.fn(),
   confirm: vi.fn(),
+  reopen: vi.fn(),
 }))
 
 vi.mock('./hooks', () => ({
@@ -17,6 +18,7 @@ vi.mock('./hooks', () => ({
   useConfirmExtraction: () => ({ mutateAsync: mocks.confirm, isPending: false }),
   useManualExtraction: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDiscardExtraction: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useReopenExtraction: () => ({ mutateAsync: mocks.reopen, isPending: false }),
   useReplaceExtraction: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }))
 
@@ -62,6 +64,7 @@ describe('ClinicalExtractionReview automatic report draft', () => {
     mocks.record = record()
     mocks.save.mockReset().mockResolvedValue(undefined)
     mocks.confirm.mockReset().mockResolvedValue(undefined)
+    mocks.reopen.mockReset().mockResolvedValue(undefined)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
@@ -162,5 +165,17 @@ describe('ClinicalExtractionReview automatic report draft', () => {
       rehabilitationSuggestion: 'Trabajo de VORx1 x2 y propioceptivo.',
     })))
     expect(screen.getByRole('status')).toHaveTextContent('Borrador guardado.')
+  })
+
+  it('permite reabrir un borrador descartado y volver a editarlo', async () => {
+    mocks.record = { ...vestibularRecord(), status: 'discarded' }
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    expect(screen.getByRole('textbox', { name: 'Conclusión para confirmar' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Reabrir borrador' }))
+
+    await waitFor(() => expect(mocks.reopen).toHaveBeenCalledWith('synthetic-vestibular-job'))
+    expect(screen.getByRole('textbox', { name: 'Conclusión para confirmar' })).toBeEnabled()
+    expect(screen.getByRole('status')).toHaveTextContent('Borrador reabierto')
   })
 })

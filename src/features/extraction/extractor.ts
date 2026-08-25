@@ -5,7 +5,7 @@ import { findVestibularStructuredValue, validateVestibularFields } from './vesti
 import { deduplicateOcrSentences, sanitizeVestibularNarrative } from './vestibularNarrative'
 import type { ExtractedField, ExtractedPage, ExtractionFieldDefinition, IntakeKind, PageClassification, PatientMatchStatus, SourceRegion } from './types'
 
-export const EXTRACTOR_VERSION = 'onur-local-ocr-2.3'
+export const EXTRACTOR_VERSION = 'onur-local-ocr-2.4'
 
 function fold(value: string) {
   return value.toLocaleLowerCase('es-UY').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -54,8 +54,8 @@ const compactValueCodes = new Set([
 function compactCandidate(definition: ExtractionFieldDefinition, value: string) {
   const trimmed = value.trim()
   if (!trimmed || !compactValueCodes.has(definition.code) && !definition.conditionCode) return trimmed
-  if (definition.code === 'study_date') return trimmed.match(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/)?.[0] ?? trimmed
-  if (definition.code === 'study_time') return trimmed.match(/\b\d{1,2}:\d{2}(?::\d{2})?\b/)?.[0] ?? trimmed
+  if (definition.code === 'study_date') return trimmed.match(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/)?.[0] ?? ''
+  if (definition.code === 'study_time') return trimmed.match(/\b\d{1,2}:\d{2}(?::\d{2})?\b/)?.[0] ?? ''
   const literal = trimmed.match(/(?:no\s+aplica|no\s+registrado|n\/?a|n\/?r|∞|infinito)|[+-]?\s*(?:\d+(?:[.,]\d+)?|[.,]\d+)\s*(?:%|cm[²2]|mm[²2]|deg|°|hz|s|seg(?:undos?)?)?/i)?.[0]
   return literal?.replace(/\s+/g, ' ').trim() ?? trimmed
 }
@@ -141,16 +141,18 @@ function beforeEmbeddedField(value: string, definition: ExtractionFieldDefinitio
 }
 
 function multilineCandidate(definition: ExtractionFieldDefinition, lines: ExtractedPage['lines']): { located: LocatedValue; rank: number } | null {
-  const anchorIndex = lines.findIndex((line) => definition.aliases.some((alias) => aliasAtStart(line.text, alias) || definition.code === 'clinical_exam' && fold(line.text).includes(fold(alias))))
+  const conductFallback = (text: string) => definition.code === 'conduct' && /\brehabilitaci[oó]n\s+vestibular\b/iu.test(text)
+  const anchorIndex = lines.findIndex((line) => definition.aliases.some((alias) => aliasAtStart(line.text, alias) || definition.code === 'clinical_exam' && fold(line.text).includes(fold(alias))) || conductFallback(line.text))
   if (anchorIndex < 0) return null
   const anchor = lines[anchorIndex]
   const alias = definition.aliases.find((candidate) => aliasAtStart(anchor.text, candidate) || definition.code === 'clinical_exam' && fold(anchor.text).includes(fold(candidate)))
-  if (!alias) return null
+  if (!alias && !conductFallback(anchor.text)) return null
   const selected = [anchor]
   // En informes narrativos, "Se realizo examen clinico..." es una frase y no
   // una etiqueta. Se conserva completa para no devolver solo su cola.
-  const startsWithLabel = aliasAtStart(anchor.text, alias)
-  const parts = [startsWithLabel ? lineValue(anchor.text, alias) : anchor.text.trim()].filter(Boolean)
+  const startsWithLabel = alias ? aliasAtStart(anchor.text, alias) : false
+  const fallbackValue = anchor.text.replace(/^\s*[a-z]{0,8}cta\s*:\s*/iu, '').trim()
+  const parts = [alias && startsWithLabel ? lineValue(anchor.text, alias) : alias ? anchor.text.trim() : fallbackValue].filter(Boolean)
   let previous = anchor
   for (const line of lines.slice(anchorIndex + 1)) {
     const verticalGap = line.region.y - (previous.region.y + previous.region.height)
@@ -202,7 +204,7 @@ function structuredVhitValue(definition: ExtractionFieldDefinition, page: Extrac
   const source = fold(page.text).replace(/\s+/g, ' ')
   const numeric = '[0-2](?:[.,][0-9]{1,3})?'
   const patterns: Partial<Record<string, RegExp>> = {
-    gain_right: new RegExp(`(?:ganancia|gain|regresion)\\s*(?:derecha|right|od)\\s*[:=]?\\s*(${numeric})`, 'i'),
+    gain_right: new RegExp(`(?:(?:ganancia|gain|regresion)\\s*(?:derecha|right|od)|g\\.?\\s*od)\\s*[:=]?\\s*(${numeric})`, 'i'),
     gain_left: new RegExp(`(?:ganancia|gain|regresion)?\\s*(?:izquierda|left|oi)\\s*[:=]\\s*(${numeric})`, 'i'),
     symmetry: /(?:simetria|asimetria)\s*[:=]?\s*([0-9]+(?:[.,][0-9]+)?\s*%?(?:\s*[a-z]{1,12})?)/i,
     impulse_counts: /(?:impulse\s*(?:nr|number)|numero\s+de\s+impulsos|cantidad\s+de\s+impulsos)\s*[:=]?\s*([0-9]+(?:\s*[/|-]\s*[0-9]+|\s+[0-9]+)?)/i,

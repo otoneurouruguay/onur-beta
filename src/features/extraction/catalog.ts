@@ -89,7 +89,7 @@ const vestibular: ExtractionFieldDefinition[] = [
   { code: 'deep_sensation', label: 'Sensibilidad profunda', group: 'Examen', studyType: 'vhit', metricCode: 'deep_sensation_text', aliases: ['sensibilidad profunda'] },
   { code: 'reflexes', label: 'Reflejos', group: 'Examen', studyType: 'vhit', metricCode: 'reflexes_text', aliases: ['reflejos'] },
   { code: 'conclusion', label: 'Conclusión o En suma', group: 'Conclusión', studyType: 'vhit', metricCode: 'reported_conclusion_text', aliases: ['conclusion', 'en suma'] },
-  { code: 'conduct', label: 'Conducta', group: 'Conclusión', studyType: 'vhit', metricCode: 'conduct_text', aliases: ['conducta'] },
+  { code: 'conduct', label: 'Conducta', group: 'Conclusión', studyType: 'vhit', metricCode: 'conduct_text', aliases: ['conducta', 'comducta'] },
   { code: 'professional_observations', label: 'Observaciones profesionales', group: 'Conclusión', studyType: 'vhit', metricCode: 'professional_observations_text', aliases: ['observaciones profesionales', 'observaciones'] },
 ]
 

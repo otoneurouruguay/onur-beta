@@ -28,6 +28,7 @@ export interface VestibularLocatedValue {
 const gainPatterns: Record<string, RegExp[]> = {
   gain_right: [
     /(?:ganancia|gain|regresi[oó]n)\s*(?:derecha|right|od)\s*[:=]?\s*([0-2](?:[.,][0-9]{1,3})?)/iu,
+    /\bg\.?\s*od\s*[:=]?\s*([0-2](?:[.,][0-9]{1,3})?)/iu,
   ],
   gain_left: [
     /(?:ganancia|gain|regresi[oó]n)?\s*(?:izquierda|left|oi)\s*[:=]\s*([0-2](?:[.,][0-9]{1,3})?)/iu,
@@ -60,15 +61,15 @@ const gainPatterns: Record<string, RegExp[]> = {
 
 const numericPatterns: Record<string, RegExp[]> = {
   ...gainPatterns,
-  reported_age: [/\bedad\s*[:=]?\s*([0-9]{1,3})\b/iu],
+  reported_age: [/\bedad\s*[:=]?\s*([0-9]{1,3})\b/iu, /(?:paciente|nombre)\s*[:=]\s*[^;\n]{3,70}?\s+([0-9]{1,3})\s*a(?:ñ?os?)?\b/iu],
   symmetry: [/(?:simetr[ií]a|asimetr[ií]a)\s*[:=]?\s*([0-9]{1,3}(?:[.,][0-9]+)?\s*%?)/iu],
 }
 
 const textPatterns: Record<string, RegExp[]> = {
   study_date: [/(?:fecha\s+(?:del\s+)?estudio|fecha)\s*[:=]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/iu],
   study_time: [/(?:hora|time)\s*[:=]?\s*(\d{1,2}:\d{2}(?::\d{2})?)/iu],
-  patient_name: [/(?:paciente|nombre)\s*[:=]\s*([^|;]{3,70}?)(?=\s+(?:edad|id|documento|fecha\s+de\s+nacimiento)\b|$)/iu],
-  patient_id: [/(?:id|documento|c[eé]dula|ci|identificaci[oó]n)\s*[:=]\s*([a-z0-9.-]{4,30})/iu],
+  patient_name: [/(?:paciente|nombre)\s*[:=]\s*([^|;]{3,70}?)(?=\s+(?:[0-9]{1,3}\s*a(?:ñ?os?)?\b|c[i1l]\b|id\b|documento\b|c[eé]dula\b|identificaci[oó]n\b|edad\b|fecha\s+de\s+nacimiento\b)|$)/iu],
+  patient_id: [/(?:id|documento|c[eé]dula|c[i1l]|identificaci[oó]n)\s*[:=]\s*([a-z0-9.-]{4,30})/iu],
   impulse_counts: [/(?:impulse\s*(?:nr|number)|n[uú]mero\s+de\s+impulsos|cantidad\s+de\s+impulsos|impulsos)\s*[:=]?\s*([0-9]{1,3}(?:\s*[/|-]\s*[0-9]{1,3})?)/iu],
   head_velocity: [/(?:head\s+velocity|velocidad\s+(?:cef[aá]lica|de\s+cabeza|de\s+los\s+impulsos))\s*[:=]?\s*([^.;]{1,55})/iu],
   himp: [/\bhimp\b\s*[:=]?\s*([^.;]{1,100})/iu],
@@ -214,7 +215,7 @@ function markCrossCheck(field: ExtractedField | undefined, valid: boolean, warni
 
 export function validateVestibularFields(fields: ExtractedField[], pages: ExtractedPage[]) {
   const vestibularFields = fields.filter((field) => field.studyType === 'vhit')
-  const hasVhit = pages.some((page) => page.classification === 'vhit_graph' || page.template?.type === 'vhit_labeled') || vestibularFields.some((field) => ['gain_right', 'gain_left', 'impulse_counts'].includes(field.code) && Boolean(field.professionalValue.trim()))
+  const hasVhit = pages.some((page) => page.classification === 'vhit_graph' || page.template?.type === 'vhit_labeled')
   const hasNarrativeReport = pages.some((page) => page.classification === 'vestibular_report' || page.template?.type === 'vestibular_report')
   const required = new Set<string>(['document_type'])
   if (hasNarrativeReport) ['study_date', 'conclusion'].forEach((code) => required.add(code))

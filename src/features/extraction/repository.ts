@@ -96,10 +96,13 @@ function updateDemo(jobId: string, updater: (record: ExtractionReviewRecord) => 
 
 export async function saveExtractionReview(draft: ExtractionReviewRecord) {
   if (!isSupabaseConfigured || !supabase) { updateDemo(draft.id, (record) => ({ ...record, pages: draft.pages, fields: draft.fields, patientMatchStatus: draft.patientMatchStatus, professionalConclusion: draft.professionalConclusion, rehabilitationSuggestion: draft.rehabilitationSuggestion })); return }
-  const { error } = await supabase.rpc('save_document_extraction_review', { target_job_id: draft.id, review_payload: { patient_match_status: draft.patientMatchStatus, pages: draft.pages.map(pagePayload), fields: draft.fields.map(fieldPayload) } })
+  const { error } = await supabase.rpc('save_document_extraction_draft', {
+    target_job_id: draft.id,
+    review_payload: { patient_match_status: draft.patientMatchStatus, pages: draft.pages.map(pagePayload), fields: draft.fields.map(fieldPayload) },
+    target_professional_conclusion: draft.professionalConclusion,
+    target_rehabilitation_suggestion: draft.rehabilitationSuggestion,
+  })
   if (error) throw error
-  const { error: reportError } = await supabase.rpc('save_document_extraction_report', { target_job_id: draft.id, target_professional_conclusion: draft.professionalConclusion, target_rehabilitation_suggestion: draft.rehabilitationSuggestion })
-  if (reportError) throw reportError
 }
 
 export async function replaceExtractionCandidates(jobId: string, draft: LocalExtractionDraft) {
@@ -135,5 +138,11 @@ export async function markExtractionManual(jobId: string) {
 export async function discardExtraction(jobId: string) {
   if (!isSupabaseConfigured || !supabase) { updateDemo(jobId, (record) => ({ ...record, status: 'discarded' })); return }
   const { error } = await supabase.rpc('discard_document_extraction', { target_job_id: jobId })
+  if (error) throw error
+}
+
+export async function reopenExtraction(jobId: string) {
+  if (!isSupabaseConfigured || !supabase) { updateDemo(jobId, (record) => ({ ...record, status: 'review' })); return }
+  const { error } = await supabase.rpc('reopen_document_extraction', { target_job_id: jobId })
   if (error) throw error
 }

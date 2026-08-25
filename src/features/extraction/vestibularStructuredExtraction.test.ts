@@ -48,6 +48,24 @@ describe('extracción vestibular estructurada', () => {
     expect(field('himp')?.required).toBe(false)
   })
 
+  it('reconoce la notación local G OD/OI dentro de un informe narrativo', () => {
+    const fields = extractFields([page([
+      line('Fecha: 18/8/2026 Paciente: Valentina Mendez 33a CI:4475592-0', .05),
+      line('vHIT HIMP: CULL: Curvas normales Simetría: 47% G OD: 0.29 OI: 0.87', .2),
+      line('En suma: Hallazgo literal. Cancelación Comducta: Rehabilitación vestibular literal.', .7, 'report_summary-original-2'),
+    ], 'vestibular_report', { type: 'vestibular_report', confidence: .92, matchedSignals: 4, aspectRatio: .56 })], 'vestibular_and_reports')
+    const field = (code: string) => fields.find((candidate) => candidate.studyType === 'vhit' && candidate.code === code)
+
+    expect(field('patient_name')?.professionalValue).toBe('Valentina Mendez')
+    expect(field('reported_age')?.value).toBe(33)
+    expect(field('gain_right')).toMatchObject({ value: .29, professionalValue: '0.29' })
+    expect(field('gain_left')).toMatchObject({ value: .87, professionalValue: '0.87' })
+    expect(field('gain_right')?.required).toBe(false)
+    expect(field('saccades')).toMatchObject({ required: false, status: 'not_reported' })
+    expect(field('conclusion')?.professionalValue).toBe('Hallazgo literal.')
+    expect(field('conduct')?.professionalValue).toBe('Rehabilitación vestibular literal.')
+  })
+
   it('marca como inválida una ganancia fuera de rango y como conflicto dos lecturas discordantes', () => {
     const invalid = extractFields([page([
       line('vHIT HIMP: realizado Canales evaluados: horizontal', .1),
@@ -61,5 +79,15 @@ describe('extracción vestibular estructurada', () => {
       line('Ganancia derecha: 0,81', .2, 'vhit_metrics-threshold-3', 91),
     ], 'vhit_graph', { type: 'vhit_labeled', confidence: .9, matchedSignals: 4, aspectRatio: 1.5 })], 'vestibular_and_reports')
     expect(conflicting.find((field) => field.studyType === 'vhit' && field.code === 'gain_right')).toMatchObject({ status: 'conflicting' })
+  })
+
+  it('recupera la conducta cuando el OCR conserva solo el final de la etiqueta', () => {
+    const fields = extractFields([page([
+      line('Fecha: 18/8/2026', .05),
+      line('En suma: Hallazgo vestibular literal.', .68, 'report_summary-original-2'),
+      line('cta: Tiene indicado rehabilitación vestibular literal.', .74, 'report_summary-original-2'),
+    ], 'vestibular_report', { type: 'vestibular_report', confidence: .92, matchedSignals: 4, aspectRatio: .56 })], 'vestibular_and_reports')
+
+    expect(fields.find((field) => field.code === 'conduct')?.professionalValue).toBe('Tiene indicado rehabilitación vestibular literal.')
   })
 })

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { confirmExtraction, createExtractionDraft, discardExtraction, getExtractionForStudy, markExtractionManual, saveExtractionReview } from './repository'
+import { confirmExtraction, createExtractionDraft, discardExtraction, getExtractionForStudy, markExtractionManual, reopenExtraction, saveExtractionReview } from './repository'
 import type { LocalExtractionDraft } from './types'
 
 function draft(): LocalExtractionDraft {
@@ -37,5 +37,17 @@ describe('ciclo de extracción demo', () => {
     await discardExtraction(created.jobId)
     const review = await getExtractionForStudy(created.studyIds[0])
     expect(review).toMatchObject({ status: 'discarded', documentId: 'synthetic-document' })
+  })
+
+  it('reabre un borrador descartado y permite volver a guardarlo', async () => {
+    const created = await createExtractionDraft('synthetic-document', 'synthetic-patient', draft(), '2026-07-17', '', 'synthetic.pdf', 'application/pdf')
+    await discardExtraction(created.jobId)
+    await reopenExtraction(created.jobId)
+    const review = await getExtractionForStudy(created.studyIds[0])
+    expect(review?.status).toBe('review')
+    review!.professionalConclusion = 'Conclusión reabierta.'
+    review!.rehabilitationSuggestion = 'Sugerencia reabierta.'
+    await saveExtractionReview(review!)
+    expect(await getExtractionForStudy(created.studyIds[0])).toMatchObject({ professionalConclusion: 'Conclusión reabierta.', rehabilitationSuggestion: 'Sugerencia reabierta.' })
   })
 })

@@ -5,7 +5,7 @@ function fold(value: string) {
 }
 
 function labelPattern(section: VestibularNarrativeSection) {
-  const label = section === 'conclusion' ? '(?:en\\s+suma|conclusi[oó]n)' : 'conducta'
+  const label = section === 'conclusion' ? '(?:en\\s+suma|conclusi[oó]n)' : 'co[nm]ducta'
   // Sin dos puntos sólo se considera etiqueta cuando ocupa la línea completa.
   // Así, frases válidas como "Conclusión vestibular literal" o "Conducta
   // expectante" no pierden su primera palabra.
@@ -42,11 +42,11 @@ function beforeOtherSection(value: string, section: VestibularNarrativeSection) 
     if (match?.index !== undefined) end = Math.min(end, match.index)
   }
   const bounded = value.slice(0, end)
-  if (section !== 'conclusion' || end === value.length) return bounded
+  if (section !== 'conclusion') return bounded
   // Algunas pasadas OCR dejan solamente "Cancelación" (inicio de la etiqueta
   // "Cancelación del VOR") pegado justo antes de "Conducta:". Es un fragmento
   // estructural incompleto, no contenido clínico, y no debe cerrar la conclusión.
-  return bounded.replace(/(^|[.!?;]\s+)cancelaci[oó]n\s*$/iu, '$1').trimEnd()
+  return bounded.replace(/\bcancelaci[oó]n[\s:;,.-–—]*$/iu, '').trimEnd()
 }
 
 function informationScore(value: string) {
