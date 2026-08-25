@@ -148,6 +148,40 @@ describe('ClinicalExtractionReview automatic report draft', () => {
     expect(screen.getByText(/las curvas nunca se interpretan automáticamente/i)).toBeInTheDocument()
   })
 
+  it('confirma también los resultados vestibulares que antes quedaban ocultos y bloqueaban el guardado', async () => {
+    const current = vestibularRecord()
+    const hiddenClinicalFields = ['vhit_results', 'deep_sensation', 'reflexes'].map((code) => ({
+      ...current.fields[0],
+      clientId: `synthetic-${code}`,
+      code,
+      label: code,
+      required: false,
+      metricCode: `${code}_text`,
+      rawValue: 'Normal',
+      normalizedValue: 'Normal',
+      professionalValue: 'Normal',
+    }))
+    mocks.record = {
+      ...current,
+      fields: [...current.fields, ...hiddenClinicalFields],
+      professionalConclusion: 'Conclusión vestibular revisada.',
+      rehabilitationSuggestion: 'Rehabilitación vestibular revisada.',
+    }
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    expect(screen.getByRole('textbox', { name: 'vhit_results' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'deep_sensation' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'reflexes' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /confirmar y ver informe/i }))
+
+    await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({
+      fields: expect.arrayContaining(hiddenClinicalFields.map(({ clientId }) => expect.objectContaining({ clientId, confirmed: true }))),
+    })))
+    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledWith('synthetic-vestibular-job'))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('limpia Conducta de un borrador vestibular anterior sin reemplazar la rehabilitación editada', async () => {
     mocks.record = {
       ...vestibularRecord(),
