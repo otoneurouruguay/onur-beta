@@ -5,7 +5,7 @@ import { findVestibularStructuredValue, validateVestibularFields } from './vesti
 import { deduplicateOcrSentences, sanitizeVestibularNarrative } from './vestibularNarrative'
 import type { ExtractedField, ExtractedPage, ExtractionFieldDefinition, IntakeKind, PageClassification, PatientMatchStatus, SourceRegion } from './types'
 
-export const EXTRACTOR_VERSION = 'onur-local-ocr-2.4'
+export const EXTRACTOR_VERSION = 'onur-local-ocr-2.5'
 
 function fold(value: string) {
   return value.toLocaleLowerCase('es-UY').normalize('NFD').replace(/[\u0300-\u036f]/g, '')

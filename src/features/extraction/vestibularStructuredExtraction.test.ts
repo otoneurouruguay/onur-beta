@@ -90,4 +90,51 @@ describe('extracción vestibular estructurada', () => {
 
     expect(fields.find((field) => field.code === 'conduct')?.professionalValue).toBe('Tiene indicado rehabilitación vestibular literal.')
   })
+
+  it('combina una lectura parcial y otra completa de las mismas curvas sin marcar conflicto', () => {
+    const fields = extractFields([page([
+      line('Curva: normales', .2, 'full-original', 95),
+      line('vHIT HIMP: CCLL: Curva: normales Simetría: 47% G OD: 0.29 OI: 0.87', .2, 'vhit_metrics-threshold-3', 88),
+    ], 'vestibular_report', { type: 'vestibular_report', confidence: .92, matchedSignals: 4, aspectRatio: .56 })], 'vestibular_and_reports')
+
+    expect(fields.find((field) => field.code === 'curves_channels')).toMatchObject({
+      professionalValue: 'CCLL: Curva: normales',
+      status: 'detected',
+    })
+  })
+
+  it('mantiene el conflicto cuando las lecturas de curvas se contradicen', () => {
+    const fields = extractFields([page([
+      line('Curva: normales', .2, 'full-original', 94),
+      line('Curva: anormales', .2, 'vhit_metrics-threshold-3', 91),
+    ], 'vestibular_report', { type: 'vestibular_report', confidence: .92, matchedSignals: 4, aspectRatio: .56 })], 'vestibular_and_reports')
+
+    expect(fields.find((field) => field.code === 'curves_channels')?.status).toBe('conflicting')
+  })
+
+  it('no confunde el canal que sigue a vHIT HIMP con el resultado HIMP', () => {
+    const fields = extractFields([page([
+      line('HIMP: positivo a derecha', .15, 'full-original', 94),
+      line('HIMP: positivo a derecha', .15, 'clinical_body-original-2', 91),
+      line('vHIT HIMP: CCLL: Curva: normales Simetría: 47%', .2, 'vhit_metrics-threshold-3', 90),
+    ], 'vestibular_report', { type: 'vestibular_report', confidence: .92, matchedSignals: 4, aspectRatio: .56 })], 'vestibular_and_reports')
+
+    expect(fields.find((field) => field.code === 'himp')).toMatchObject({
+      professionalValue: 'positivo a derecha',
+      status: 'detected',
+    })
+  })
+
+  it('prioriza dos lecturas numéricas concordantes sobre una aislada', () => {
+    const fields = extractFields([page([
+      line('Simetría: 47%', .2, 'full-original', 93),
+      line('Simetría: 47%', .2, 'vhit_metrics-original-2', 89),
+      line('Simetría: 4', .2, 'vhit_metrics-threshold-3', 91),
+    ], 'vestibular_report', { type: 'vestibular_report', confidence: .92, matchedSignals: 4, aspectRatio: .56 })], 'vestibular_and_reports')
+
+    expect(fields.find((field) => field.code === 'symmetry')).toMatchObject({
+      value: 47,
+      status: 'detected',
+    })
+  })
 })

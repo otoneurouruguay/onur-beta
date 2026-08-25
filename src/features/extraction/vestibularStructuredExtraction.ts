@@ -75,7 +75,10 @@ const textPatterns: Record<string, RegExp[]> = {
   himp: [/\bhimp\b\s*[:=]?\s*([^.;]{1,100})/iu],
   shimp: [/\bshimp\b\s*[:=]?\s*([^.;]{1,100})/iu],
   saccades: [/(?:sacadas?\s+correctivas?|sacadas?|saccades?)\s*[:=]?\s*([^.;]{1,100})/iu, /\b((?:overt|covert)(?:[^.;]{0,80}))\b/iu],
-  curves_channels: [/(?:canales?\s+evaluados?|plano(?:s)?|curvas?)\s*[:=]\s*([^.;]{2,120})/iu, /\b((?:cull|ralp|larp)(?:[^.;]{0,100}))\b/iu],
+  curves_channels: [
+    /\b((?:ccll|cull|ralp|larp)(?:[^.;]{0,100}?))(?=\s+(?:simetr[ií]a|asimetr[ií]a|g\.?\s*od|oi|ganancia|sacadas?|impulsos?|head\s+velocity)\s*[:=]?|[.;]|$)/iu,
+    /(?:canales?\s+evaluados?|plano(?:s)?|curvas?)\s*[:=]\s*([^.;]{2,120}?)(?=\s+(?:simetr[ií]a|asimetr[ií]a|g\.?\s*od|oi|ganancia|sacadas?|impulsos?|head\s+velocity)\s*[:=]?|[.;]|$)/iu,
+  ],
   gain_method: [/(?:m[eé]todo\s+(?:de\s+)?ganancia|gain\s+method)\s*[:=]\s*([^.;]{2,70})/iu, /\b(regresi[oó]n)\b/iu, /\b((?:40|60|80)\s*ms)\b/iu],
   test_device: [/(?:equipo|dispositivo|software|versi[oó]n)\s*[:=]\s*([^.;]{2,100})/iu],
   calibration_quality: [/(?:calibraci[oó]n|artefactos?|calidad|interpretabilidad)\s*[:=]\s*([^.;]{2,120})/iu],
@@ -110,6 +113,43 @@ function evidenceKey(value: string | number) {
   return typeof value === 'number' ? value.toFixed(4) : fold(value).replace(/\s+/g, ' ').trim()
 }
 
+function curvesChannelsTokens(value: string | number) {
+  if (typeof value === 'number') return [String(value)]
+  const aliases: Record<string, string> = {
+    cull: 'ccll',
+    curvas: '',
+    curva: '',
+    canales: '',
+    canal: '',
+    normales: 'normal',
+    izquierdos: 'izquierdo',
+    izquierdas: 'izquierdo',
+    izquierda: 'izquierdo',
+    derechos: 'derecho',
+    derechas: 'derecho',
+    derecha: 'derecho',
+  }
+  return fold(value).match(/[a-z0-9]+/g)?.map((token) => aliases[token] ?? token).filter(Boolean) ?? []
+}
+
+function evidenceEquivalent(code: string, first: string | number, second: string | number) {
+  if (evidenceKey(first) === evidenceKey(second)) return true
+  if (code !== 'curves_channels' || typeof first === 'number' || typeof second === 'number') return false
+  const firstTokens = curvesChannelsTokens(first)
+  const secondTokens = curvesChannelsTokens(second)
+  if (!firstTokens.length || !secondTokens.length) return false
+  const firstNegated = firstTokens.includes('no') || firstTokens.includes('sin')
+  const secondNegated = secondTokens.includes('no') || secondTokens.includes('sin')
+  if (firstNegated !== secondNegated) return false
+  const shorter = firstTokens.length <= secondTokens.length ? firstTokens : secondTokens
+  const longer = new Set(firstTokens.length <= secondTokens.length ? secondTokens : firstTokens)
+  return shorter.every((token) => longer.has(token))
+}
+
+function evidenceInformation(code: string, item: VestibularEvidence) {
+  return code === 'curves_channels' ? curvesChannelsTokens(item.value).length * 1000 + item.raw.length : item.raw.length
+}
+
 function collectEvidence(code: string, page: ExtractedPage): VestibularEvidence[] {
   const patterns = numericPatterns[code] ?? textPatterns[code]
   if (!patterns) return []
@@ -119,6 +159,9 @@ function collectEvidence(code: string, page: ExtractedPage): VestibularEvidence[
       const match = pattern.exec(line.text)
       if (!match?.[1]) continue
       const raw = match[1].replace(/\s+/g, ' ').trim()
+      // En encabezados como "vHIT HIMP: CCLL: Curva...", HIMP identifica
+      // el protocolo y CCLL inicia otro campo; no es un resultado HIMP.
+      if (code === 'himp' && /^(?:ccll|cull|ralp|larp)\b/iu.test(raw)) continue
       let value: string | number = raw
       let displayValue = raw
       if (numericPatterns[code]) {
@@ -148,18 +191,28 @@ function rangeFor(code: string): [number, number] | null {
 
 function locatedFromEvidence(code: string, evidence: VestibularEvidence[]): VestibularLocatedValue | null {
   if (!evidence.length) return null
-  const grouped = new Map<string, VestibularEvidence[]>()
-  for (const item of evidence) grouped.set(evidenceKey(item.value), [...(grouped.get(evidenceKey(item.value)) ?? []), item])
-  const ranked = [...grouped.values()].sort((first, second) => {
+  const grouped: VestibularEvidence[][] = []
+  for (const item of evidence) {
+    const compatible = grouped.find((items) => items.some((candidate) => evidenceEquivalent(code, item.value, candidate.value)))
+    if (compatible) compatible.push(item)
+    else grouped.push([item])
+  }
+  const ranked = grouped.sort((first, second) => {
     const score = (items: VestibularEvidence[]) => Math.min(3, items.length) * .14 + Math.max(...items.map((item) => item.confidence))
     return score(second) - score(first)
   })
   const selectedGroup = ranked[0]
-  const selected = selectedGroup.sort((a, b) => b.confidence - a.confidence)[0]
-  const agreement = new Set(selectedGroup.map((item) => item.passId)).size > 1
+  const selected = selectedGroup.sort((a, b) => evidenceInformation(code, b) - evidenceInformation(code, a) || b.confidence - a.confidence)[0]
+  const selectedPassCount = new Set(selectedGroup.map((item) => item.passId)).size
+  const agreement = selectedPassCount > 1
   const range = rangeFor(code)
   const rangeValid = range && typeof selected.value === 'number' ? selected.value >= range[0] && selected.value <= range[1] : true
-  const competing = ranked[1]?.some((item) => item.confidence >= .72) && selected.confidence >= .72
+  const competingGroup = ranked[1]
+  const competingPassCount = competingGroup ? new Set(competingGroup.map((item) => item.passId)).size : 0
+  // Dos pasadas concordantes prevalecen sobre una lectura aislada; si ambas
+  // alternativas se repiten o ninguna tiene consenso, el conflicto se conserva.
+  const competing = competingGroup?.some((item) => item.confidence >= .72) && selected.confidence >= .72
+    && (!agreement || competingPassCount > 1)
   const warnings: string[] = []
   let status: ExtractedField['status'] = selected.confidence >= .80 || agreement ? 'detected' : 'needs_review'
   if (!rangeValid) {
