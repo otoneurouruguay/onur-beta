@@ -15,6 +15,7 @@ const labels: Record<string, string> = {
   accepted: 'Aceptada',
   edited: 'Editada',
   discarded: 'Descartada',
+  cancelled: 'Cancelado',
   ok: 'Correcto',
   review: 'Revisar',
   quarantine: 'Cuarentena',

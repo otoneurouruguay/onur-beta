@@ -36,6 +36,13 @@ Debe finalizar sin errores. El comando verifica:
 - [ ] **Historial de sesiones:** abrir una sesión finalizada desde el perfil, comprobar que se vean ejercicios, resultados y comentarios, y que la vista sea de solo lectura.
 - [ ] **Repetición domiciliaria:** duplicar o programar una sesión ya realizada; la nueva asignación debe conservar los ejercicios pero comenzar sin progreso, resultado ni estado finalizado.
 - [ ] **Acceso domiciliario:** habilitar un paciente de prueba, ingresar con la credencial temporal y comprobar que el cambio de PIN es obligatorio.
+- [ ] **DHI enviado al portal:** asignar un DHI inicial a un paciente de prueba y comprobar que aparece solamente en su portal, sin correo ni WhatsApp.
+- [ ] **Borrador DHI:** responder una parte desde el portal, usar “Guardar avance”, cerrar y volver a entrar; las mismas respuestas deben continuar marcadas.
+- [ ] **DHI domiciliario completo:** el botón “Enviar” permanece bloqueado hasta contestar los 25 ítems; al finalizar, el paciente ya no puede editar ni ve su puntaje, y el profesional ve total y subescalas.
+- [ ] **DHI presencial:** usar “Iniciar cuestionario” desde el perfil, completar los 25 ítems y verificar el resultado; si se interrumpe, “Continuar presencial” debe recuperar la asignación abierta.
+- [ ] **Comparación DHI:** completar un inicial y un final del mismo ciclo y versión; el perfil debe mostrar el cambio total y por subescala. Nunca mezclar ciclos ni formularios incompletos.
+- [ ] **Cancelación DHI:** cancelar una asignación pendiente; debe desaparecer del portal, quedar auditada y permitir una nueva asignación del mismo momento. Un resultado finalizado no se puede cancelar.
+- [ ] **Retiro del cuestionario anterior:** no deben aparecer el formulario propio de 18 preguntas, registros demostrativos ni su PDF descargable.
 - [ ] **Aislamiento del PIN temporal:** intentar abrir `/paciente/hoy` antes de cambiar el PIN; debe volver a la creación de PIN.
 - [ ] **Datos reales:** Inicio y perfil no deben mostrar pacientes, horarios, adherencia, documentos o actividad demostrativa.
 - [ ] **Borrado trazable:** eliminar el paciente de prueba y confirmar que desaparece de la lista y que su acceso deja de funcionar.

@@ -110,6 +110,16 @@ for (const marker of [
   'Ejercicios de la sesión',
   'Sin detalle individual',
   'Ver sesión',
+  'DHI_AR_25',
+  'Enviar al portal',
+  'Iniciar cuestionario',
+  'Guardar avance',
+  'Cuestionario enviado',
+  'Continuar presencial',
+  'Cancelar asignación',
+  'create_assessment_assignment',
+  'complete_assessment',
+  'cancel_assessment',
 ]) {
   requireCheck(compiledJavaScript.includes(marker), `La compilación no contiene el control obligatorio: ${marker}.`)
 }

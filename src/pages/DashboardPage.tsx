@@ -81,7 +81,7 @@ export function DashboardPage() {
   const weeklyCompleted = weeklyDue.filter((session) => session.status === 'completed').length
   const weeklyAdherence = weeklyDue.length ? Math.round((weeklyCompleted / weeklyDue.length) * 100) : null
   const pendingSuggestions = suggestions.filter((suggestion) => suggestion.status === 'pending')
-  const latestAssessment = [...assessments].sort((a, b) => b.assessmentDate.localeCompare(a.assessmentDate))[0]
+  const latestAssessment = [...assessments].sort((a, b) => (b.completedAt || b.assignedAt).localeCompare(a.completedAt || a.assignedAt))[0]
   const latestAssessmentPatient = patients.find((patient) => patient.id === latestAssessment?.patientId)
   const recentActivity = assignments
     .filter((session) => Boolean(session.completedAt) || ['completed', 'partial', 'revoked'].includes(session.status))
@@ -174,10 +174,10 @@ export function DashboardPage() {
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#A36B00]">Última evaluación</p>
           {latestAssessment ? <>
             <h2 className="mt-2 text-lg text-[#171717]">{latestAssessmentPatient?.fullName || latestAssessment.patientName}</h2>
-            <p className="mt-1 text-xs text-[#747474]">{assessmentPhaseLabels[latestAssessment.phase]} · {new Intl.DateTimeFormat('es-UY').format(new Date(`${latestAssessment.assessmentDate}T12:00:00`))}</p>
-            <p className="mt-6 font-['Poppins'] text-[32px] font-semibold text-[#171717]">{latestAssessment.totalScore}<span className="ml-1 text-base text-[#747474]"> puntos</span></p>
-            <p className="mt-2 text-xs leading-5 text-[#747474]">{latestAssessment.answeredCount} respuestas registradas. Valor descriptivo sin interpretación automática.</p>
-            <Link to={`/app/pacientes/${latestAssessment.patientId}`} className="mt-5 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#D9D6D2] text-xs font-semibold text-[#2F2F2F]">Ver ficha clínica <ChevronRight size={14}/></Link>
+            <p className="mt-1 text-xs text-[#747474]">{assessmentPhaseLabels[latestAssessment.phase]} · {new Intl.DateTimeFormat('es-UY').format(new Date(latestAssessment.completedAt || latestAssessment.assignedAt))}</p>
+            <p className="mt-6 font-['Poppins'] text-[32px] font-semibold text-[#171717]">{latestAssessment.totalScore === null ? latestAssessment.status === 'in_progress' ? 'En curso' : 'Pendiente' : `${latestAssessment.totalScore}/100`}</p>
+            <p className="mt-2 text-xs leading-5 text-[#747474]">DHI · {latestAssessment.answeredCount}/25 respuestas. Valor descriptivo sin interpretación automática.</p>
+            <Link to={`/app/pacientes/${latestAssessment.patientId}/evaluaciones/${latestAssessment.id}`} className="mt-5 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#D9D6D2] text-xs font-semibold text-[#2F2F2F]">Ver cuestionario <ChevronRight size={14}/></Link>
           </> : <p className="mt-5 rounded-xl bg-[#F7F6F4] p-4 text-sm text-[#747474]">Todavía no hay evaluaciones registradas.</p>}
         </article>
       </section>

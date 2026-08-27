@@ -141,8 +141,8 @@ export function PatientProfilePage() {
     })),
     ...assessments.map((assessment) => ({
       id: `assessment-${assessment.id}`,
-      date: `${assessment.assessmentDate}T12:00:00`,
-      label: `Evaluación ${assessmentPhaseLabels[assessment.phase].toLowerCase()} registrada`,
+      date: assessment.completedAt || assessment.assignedAt,
+      label: `DHI ${assessmentPhaseLabels[assessment.phase].toLowerCase()} ${assessment.status === 'completed' ? 'completado' : 'asignado'}`,
     })),
   ].filter((event) => Boolean(event.date)).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8)
 

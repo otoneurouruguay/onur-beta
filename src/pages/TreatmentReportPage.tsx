@@ -146,9 +146,9 @@ export function TreatmentReportPage() {
   const objectiveSentence = objectiveComparisonSentence(comparisonRows)
   const quantitativeRows = perceptionComparison ? [...comparisonRows, {
     key: 'perception',
-    label: 'Evaluación de percepción',
-    initial: `${perceptionComparison.initialComparableTotal}/${perceptionComparison.maximumScore}`,
-    final: `${perceptionComparison.finalComparableTotal}/${perceptionComparison.maximumScore}`,
+    label: 'DHI',
+    initial: `${perceptionComparison.initialTotal}/${perceptionComparison.maximumScore}`,
+    final: `${perceptionComparison.finalTotal}/${perceptionComparison.maximumScore}`,
   }] : comparisonRows
 
   const setNarrative = (field: keyof ClinicalReportNarratives, value: string) => setNarratives((current) => ({ ...current, [field]: value }))
@@ -195,7 +195,7 @@ export function TreatmentReportPage() {
       cycle: { id: selectedId, label: selectedCycle?.label ?? '', startedOn: selectedCycle?.startedOn ?? '', endedOn: selectedCycle?.endedOn ?? '', status: selectedCycle?.status ?? '' },
       sessions: cycleSessions.map(sessionReportSnapshotItem),
       documents: cycleDocuments.map((item) => ({ id: item.id, type: item.documentType, phase: item.cyclePhase, date: item.documentDate, filename: item.originalFilename, description: item.description })),
-      assessments: cycleAssessments.map((item) => ({ instrument: item.instrumentCode, version: item.instrumentVersion, phase: item.phase, date: item.assessmentDate, total: item.totalScore, answered: item.answeredCount, applicable: item.applicableCount })),
+      assessments: cycleAssessments.map((item) => ({ instrument: item.instrumentCode, version: item.instrumentVersion, phase: item.phase, date: item.assessmentDate, total: item.totalScore, answered: item.answeredCount, status: item.status, subscales: item.subscaleScores })),
       quantitativeComparison: quantitativeRows,
       clinicalEpisode,
     }

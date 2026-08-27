@@ -23,6 +23,7 @@ const tones: Record<string, string> = {
   interrupted: 'bg-[#fceced] text-[#a94952]',
   omitted: 'border border-[#DEDCD9] bg-[#F1EFEC] text-[#696969]',
   discarded: 'border border-[#DEDCD9] bg-[#F1EFEC] text-[#696969]',
+  cancelled: 'border border-[#DEDCD9] bg-[#F1EFEC] text-[#696969]',
   quarantine: 'bg-[#fceced] text-[#a94952]',
   blocked: 'bg-[#fceced] text-[#a94952]',
   not_applicable: 'border border-[#DEDCD9] bg-[#F1EFEC] text-[#696969]',

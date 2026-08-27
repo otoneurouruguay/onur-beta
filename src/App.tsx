@@ -23,12 +23,14 @@ const InPersonSessionPage = lazyWithRefresh('in-person-session', () => import('.
 const SessionsPage = lazyWithRefresh('sessions', () => import('./pages/SessionsPage').then((module) => ({ default: module.SessionsPage })))
 const QuestStationPage = lazyWithRefresh('quest-station', () => import('./pages/QuestStationPage').then((module) => ({ default: module.QuestStationPage })))
 const AssessmentFormPage = lazyWithRefresh('assessment-form', () => import('./pages/AssessmentFormPage').then((module) => ({ default: module.AssessmentFormPage })))
+const AssessmentResultPage = lazyWithRefresh('assessment-result', () => import('./pages/AssessmentResultPage').then((module) => ({ default: module.AssessmentResultPage })))
 const EvaluationsPage = lazyWithRefresh('evaluations', () => import('./pages/EvaluationsPage').then((module) => ({ default: module.EvaluationsPage })))
 const TreatmentReportPage = lazyWithRefresh('treatment-report', () => import('./pages/TreatmentReportPage').then((module) => ({ default: module.TreatmentReportPage })))
 const ReportsPage = lazyWithRefresh('reports', () => import('./pages/ReportsPage').then((module) => ({ default: module.ReportsPage })))
 const PatientAccessPage = lazyWithRefresh('patient-access', () => import('./pages/PatientAccessPage').then((module) => ({ default: module.PatientAccessPage })))
 const PatientsPage = lazyWithRefresh('patients', () => import('./pages/PatientsPage').then((module) => ({ default: module.PatientsPage })))
 const PatientTodayPage = lazyWithRefresh('patient-today', () => import('./pages/PatientTodayPage').then((module) => ({ default: module.PatientTodayPage })))
+const PatientAssessmentPage = lazyWithRefresh('patient-assessment', () => import('./pages/PatientAssessmentPage').then((module) => ({ default: module.PatientAssessmentPage })))
 const SuggestionsPage = lazyWithRefresh('suggestions', () => import('./pages/SuggestionsPage').then((module) => ({ default: module.SuggestionsPage })))
 const StudyReviewPage = lazyWithRefresh('study-review', () => import('./pages/StudyReviewPage').then((module) => ({ default: module.StudyReviewPage })))
 const StudyExtractionReportPage = lazyWithRefresh('study-extraction-report', () => import('./pages/StudyExtractionReportPage').then((module) => ({ default: module.StudyExtractionReportPage })))
@@ -73,6 +75,7 @@ const router = createBrowserRouter([
           { path: 'pacientes/:patientId/sesiones/:assignmentId/presencial', element: load(<InPersonSessionPage />) },
           { path: 'pacientes/:patientId/sesiones/:assignmentId', element: load(<SessionHistoryPage />) },
           { path: 'pacientes/:patientId/evaluaciones/nueva', element: load(<AssessmentFormPage />) },
+          { path: 'pacientes/:patientId/evaluaciones/:assessmentId', element: load(<AssessmentResultPage />) },
           { path: 'pacientes/:patientId/informe', element: load(<TreatmentReportPage />) },
           { path: 'pacientes/:patientId/acceso', element: load(<PatientAccessPage />) },
           { path: 'pacientes/:patientId', element: load(<PatientProfilePage />) },
@@ -91,6 +94,7 @@ const router = createBrowserRouter([
         ],
       },
       { path: '/paciente/hoy', element: <RequireRole role="patient">{load(<PatientTodayPage />)}</RequireRole> },
+      { path: '/paciente/cuestionarios/:assessmentId', element: <RequireRole role="patient">{load(<PatientAssessmentPage />)}</RequireRole> },
       { path: '/paciente/crear-pin', element: <RequireRole role="patient">{load(<PatientCreatePinPage />)}</RequireRole> },
       { path: '*', element: <Navigate to="/ingresar" replace /> },
     ],
