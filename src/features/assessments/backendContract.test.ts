@@ -21,6 +21,8 @@ describe('contrato seguro del flujo DHI', () => {
   })
 
   it('calcula el DHI en el servidor y separa el acceso profesional del domiciliario', () => {
+    expect(migration).not.toContain('jsonb_object_length')
+    expect(migration).toContain('select count(*) from jsonb_each')
     expect(migration).toContain('public.valid_dhi_responses(responses_input, true)')
     expect(migration).toContain("filter (where entry.key like 'P%')")
     expect(migration).toContain("filter (where entry.key like 'E%')")

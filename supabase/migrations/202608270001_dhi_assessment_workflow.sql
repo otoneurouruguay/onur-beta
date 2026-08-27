@@ -73,7 +73,10 @@ as $$
       or jsonb_typeof(entry.value) <> 'number'
       or entry.value::text not in ('0','2','4')
     )
-    and (not require_complete or jsonb_object_length(coalesce(responses_input, '{}'::jsonb)) = 25);
+    and (
+      not require_complete
+      or (select count(*) from jsonb_each(coalesce(responses_input, '{}'::jsonb))) = 25
+    );
 $$;
 
 revoke all on function public.valid_dhi_responses(jsonb, boolean) from public;
@@ -196,7 +199,7 @@ begin
 
   update public.patient_assessments assessment
   set responses = responses_input,
-      answered_count = jsonb_object_length(responses_input),
+      answered_count = (select count(*) from jsonb_each(responses_input)),
       status = 'in_progress',
       started_at = coalesce(assessment.started_at, now())
   where assessment.id = target_assessment_id

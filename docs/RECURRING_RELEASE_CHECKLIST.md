@@ -65,6 +65,7 @@ Debe finalizar sin errores. El comando verifica:
 ## Antes y después del despliegue
 
 - [ ] Revisar que Git incluya solo archivos intencionales y ningún secreto.
+- [ ] Ejecutar la migración contra el PostgreSQL remoto antes de desplegar el cliente; no asumir que una simulación de `db push` valida la disponibilidad de todas las funciones SQL.
 - [ ] Confirmar que migraciones y funciones de Supabase necesarias estén publicadas.
 - [ ] Publicar una versión guardada que corresponda exactamente al commit validado.
 - [ ] Confirmar que el sitio siga en modo público.
