@@ -71,8 +71,23 @@ requireCheck(
   digest(localPatientProfileModule) === digest(publishedPatientProfileModule),
   'El perfil del paciente publicado no coincide con la compilación validada.',
 )
-for (const marker of ['Repetir / programar', 'Serie programada', 'Días consecutivos']) {
+for (const marker of ['Repetir / programar', 'Serie programada', 'Días consecutivos', 'Datos del paciente', 'Notas privadas']) {
   requireCheck(publishedPatientProfileModule.toString('utf8').includes(marker), `La repetición de sesiones publicada no contiene: ${marker}.`)
+}
+
+const studyReviewModuleMatch = publishedMain.toString('utf8').match(/StudyReviewPage-[A-Za-z0-9_-]+\.js/)
+requireCheck(studyReviewModuleMatch, 'El paquete publicado no referencia la revisión de estudios.')
+const studyReviewModulePath = `/assets/${studyReviewModuleMatch[0]}`
+const localStudyReviewModulePath = `${clientPath}${studyReviewModulePath}`
+requireCheck(existsSync(localStudyReviewModulePath), `La compilación local no contiene ${studyReviewModulePath}.`)
+const localStudyReviewModule = readFileSync(localStudyReviewModulePath)
+const publishedStudyReviewModule = await fetchBytes(studyReviewModulePath)
+requireCheck(
+  digest(localStudyReviewModule) === digest(publishedStudyReviewModule),
+  'La revisión clínica publicada no coincide con la compilación validada.',
+)
+for (const marker of ['Conclusión transcripta para confirmar', 'Sugerencia clínica fundamentada para confirmar', 'Conducta original transcripta', 'Fuentes relevantes del catálogo']) {
+  requireCheck(publishedStudyReviewModule.toString('utf8').includes(marker), `La revisión clínica publicada no contiene: ${marker}.`)
 }
 
 const localServiceWorker = readFileSync(`${clientPath}/sw.js`)
@@ -86,4 +101,4 @@ requireCheck(
   `Producción no activó el caché de ${packageJson.version}.`,
 )
 
-console.log(`Publicación verificada: acceso, rutas profesionales, selector, repetición de sesiones, paquetes y caché ${packageJson.version}.`)
+console.log(`Publicación verificada: acceso, ciclos, ficha del paciente, sugerencias clínicas trazables, paquetes y caché ${packageJson.version}.`)

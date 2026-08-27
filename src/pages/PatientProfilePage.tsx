@@ -1,4 +1,4 @@
-import { CalendarDays, CalendarX2, ChevronLeft, ClipboardCheck, Copy, FileImage, FileText, IdCard, KeyRound, Pencil, PlayCircle, Plus, Trash2 } from 'lucide-react'
+import { CalendarDays, CalendarX2, ChevronLeft, ClipboardCheck, Copy, FileImage, FileText, Pencil, PlayCircle, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
@@ -8,6 +8,7 @@ import { RepeatSessionDialog } from '../components/RepeatSessionDialog'
 import { RetrospectiveSessionDialog } from '../components/RetrospectiveSessionDialog'
 import { StatusBadge } from '../components/StatusBadge'
 import { usePatient } from '../features/patients/hooks'
+import { PatientDetailsCard } from '../features/patients/PatientDetailsCard'
 import { useCancelSessionAssignment, useRecordRetrospectiveSession, useRepeatSessionAssignment, useRevokeSessionAssignment, useSessionAssignments, useTreatmentCycles } from '../features/sessions/hooks'
 import { canCancelSessionAssignment, canManageSessionAssignment, canRepeatSessionAssignment, canRevokeSessionAssignment, sessionDurationLabel, type SessionAssignmentRecord } from '../features/sessions/repository'
 import { groupSessionAssignments } from '../features/sessions/repetition'
@@ -184,6 +185,8 @@ export function PatientProfilePage() {
         }
       />
 
+      <PatientDetailsCard patient={patient} activeCycle={activeCycle} activePermissions={activePermissions}/>
+
       <Link to={`/app/pacientes/${patient.id}/episodio${activeCycle ? `?cycle=${activeCycle.id}` : ''}`} className="flex flex-col gap-5 rounded-2xl border border-[#D9E7DF] bg-[#F0F8F3] p-6 transition hover:border-[#9FC9AE] sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 gap-4"><span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-white text-[#28613D]"><ClipboardCheck size={23}/></span><div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#496451]">Clínica actual</p><h2 className="mt-2 text-xl font-black text-[#171717]">{activeEpisode ? pathologyLabel(activeEpisode.diagnosisCode) : 'Clínica pendiente de registro'}</h2><p className="mt-2 text-xs leading-5 text-[#496451]">{activeEpisode ? `${activeCycle?.label ?? 'Ciclo actual'} · ${activeEpisode.diagnosisSource || activeEpisode.measuredImpairments || 'Abrí el episodio para consultar la evaluación completa.'}` : activeCycle ? 'Registrá el diagnóstico o condición clínica del ciclo para verla apenas abras al paciente.' : 'Iniciá un ciclo y registrá el episodio clínico del paciente.'}</p></div></div>
         <div className="flex shrink-0 items-center gap-3">{activeEpisode && <StatusBadge status={activeEpisode.status}/>}<span className="text-xs font-black text-[#28613D]">{activeEpisode ? 'Ver episodio →' : 'Registrar clínica →'}</span></div>
@@ -200,26 +203,7 @@ export function PatientProfilePage() {
         {studiesPending ? <p className="mt-5 text-sm text-[#747474]">Cargando estudios…</p> : studiesError ? <p role="alert" className="mt-5 text-sm font-bold text-[#a94952]">No fue posible cargar los estudios del paciente.</p> : studyOverview.patientStudies.length === 0 ? <p className="mt-5 rounded-2xl bg-[#F7F6F4] p-4 text-sm text-[#747474]">Todavía no hay estudios ni informes cargados.</p> : <div className="mt-5 divide-y divide-[#E9E7E7]">{studyOverview.patientStudies.map((study) => <Link key={study.id} to={`/app/estudios/${study.id}/revisar`} className="flex flex-col gap-3 py-4 transition hover:bg-[#F7F6F4] sm:flex-row sm:items-center sm:justify-between sm:px-3"><div className="min-w-0"><p className="text-sm font-black text-[#2F2F2F]">{study.studyType === 'posturography' ? `Posturografía${study.cyclePhase !== 'unspecified' ? ` · ${cycleStudyPhaseLabels[study.cyclePhase]}` : ''}` : 'Informe vestibular / vHIT'}</p><p className="mt-1 truncate text-xs text-[#747474]">{study.performedAt.slice(0, 10)} · {study.sourceFilename}{study.treatmentCycleId === activeCycle?.id ? ' · ciclo actual' : ''}</p></div><div className="flex items-center gap-3"><StatusBadge status={study.status}/><span className="text-xs font-black text-[#E49A02]">Ver →</span></div></Link>)}</div>}
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[0.72fr_1.28fr]">
-        <article className="rounded-2xl border border-[#E9E7E7] bg-white p-6">
-          <div className="flex items-center gap-4">
-            <span className="grid size-16 place-items-center rounded-2xl bg-[#FFF7E8] text-lg font-black text-[#A36B00]">{patient.initials}</span>
-            <div>
-              <StatusBadge status={patient.status} />
-              <p className="mt-2 text-xs text-[#747474]">Acceso al portal: <strong>{patient.portalAccess === 'enabled' ? 'habilitado' : 'deshabilitado'}</strong></p>
-            </div>
-          </div>
-          <dl className="mt-7 space-y-4 text-sm">
-            <div className="flex justify-between gap-4 border-b border-[#E9E7E7] pb-4"><dt className="inline-flex items-center gap-2 text-[#747474]"><IdCard size={15}/> Cédula</dt><dd className="font-black text-[#2F2F2F]">{patient.documentNumber || 'Sin registrar'}</dd></div>
-            <div className="flex justify-between gap-4 border-b border-[#E9E7E7] pb-4"><dt className="text-[#747474]">Ciclo actual</dt><dd className="font-black text-[#2F2F2F]">{activeCycle?.label ?? 'Sin ciclo activo'}</dd></div>
-            <div className="flex justify-between gap-4 border-b border-[#E9E7E7] pb-4"><dt className="text-[#747474]">Mutualista</dt><dd className="font-black text-[#2F2F2F]">{patient.insurer}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-[#747474]">Permisos activos</dt><dd className="font-black text-[#2F2F2F]">{activePermissions} {activePermissions === 1 ? 'documento' : 'documentos'}</dd></div>
-          </dl>
-          <Link to={`/app/pacientes/${patient.id}/acceso`} className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#E9E7E7] px-4 py-3 text-sm font-black text-[#2F2F2F]">
-            <KeyRound size={17} /> {patient.portalAccess === 'enabled' ? 'Gestionar acceso domiciliario' : 'Habilitar acceso domiciliario'}
-          </Link>
-        </article>
-
+      <section>
         <div className="grid gap-5 sm:grid-cols-2">
           <article className="rounded-2xl border border-[#E9E7E7] bg-white p-6">
             <CalendarDays className="text-[#E49A02]" size={22} />

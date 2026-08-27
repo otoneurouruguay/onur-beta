@@ -83,7 +83,7 @@ describe('ClinicalExtractionReview automatic report draft', () => {
     fireEvent.click(screen.getByRole('button', { name: /regenerar desde parámetros/i }))
     expect(window.confirm).toHaveBeenCalled()
     expect((conclusion as HTMLTextAreaElement).value).toContain('70 a 79 años')
-    expect(screen.getByText('Comparaciones utilizadas')).toBeInTheDocument()
+    expect(screen.getByText('Hallazgos y comparaciones utilizadas')).toBeInTheDocument()
     expect(screen.queryByText(/fuentes internas seguras/i)).not.toBeInTheDocument()
     expect(conclusion).not.toHaveValue(expect.stringContaining('Este borrador'))
     expect(suggestion).not.toHaveValue(expect.stringContaining('Borrador para revisión profesional'))
@@ -138,14 +138,30 @@ describe('ClinicalExtractionReview automatic report draft', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Todos los valores clínicos presentes deben estar confirmados.'))
   })
 
-  it('recupera literalmente En suma y Conducta en informes vestibulares', async () => {
+  it('separa la conclusión transcripta, la conducta original y la sugerencia fundamentada', async () => {
     mocks.record = vestibularRecord()
     render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
 
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Conclusión para confirmar' })).toHaveValue('Conclusión vestibular literal sintética.'))
-    expect(screen.getByRole('textbox', { name: 'Sugerencia de rehabilitación para confirmar' })).toHaveValue('Conducta literal sintética.')
-    expect(screen.getByRole('button', { name: 'Recuperar texto del informe' })).toBeEnabled()
+    expect(screen.getByRole('textbox', { name: 'Sugerencia de rehabilitación para confirmar' })).not.toHaveValue('Conducta literal sintética.')
+    expect((screen.getByRole('textbox', { name: 'Sugerencia de rehabilitación para confirmar' }) as HTMLTextAreaElement).value).toContain('diagnóstico funcional')
+    expect(screen.getByText('Conducta literal sintética.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Actualizar transcripción y sugerencia' })).toBeEnabled()
+    expect(screen.getByText('Fuentes relevantes del catálogo')).toBeInTheDocument()
     expect(screen.getByText(/las curvas nunca se interpretan automáticamente/i)).toBeInTheDocument()
+  })
+
+  it('preserva un informe confirmado anterior y muestra la nueva sugerencia como vista previa', () => {
+    mocks.record = {
+      ...vestibularRecord(),
+      status: 'confirmed',
+      professionalConclusion: 'Conclusión vestibular literal sintética.',
+      rehabilitationSuggestion: 'Conducta literal sintética.',
+    }
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    expect(screen.getByText(/informe histórico con formato anterior/i)).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Sugerencia de rehabilitación para confirmar' })).toHaveValue('Conducta literal sintética.')
   })
 
   it('confirma también los resultados vestibulares que antes quedaban ocultos y bloqueaban el guardado', async () => {

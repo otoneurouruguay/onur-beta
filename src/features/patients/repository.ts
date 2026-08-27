@@ -73,11 +73,99 @@ function fromRow(row: Record<string, unknown>): PatientRecord {
   }
 }
 
+interface PatientCycleSummaryRow {
+  patient_id: unknown
+  label: unknown
+  started_on: unknown
+}
+
+interface PatientPortalSummaryRow {
+  patient_id: unknown
+  enabled: unknown
+  username_normalized?: unknown
+}
+
+interface PatientAssignmentSummaryRow {
+  patient_id: unknown
+  available_from: unknown
+  available_until?: unknown
+  status: unknown
+  session_plans?: unknown
+}
+
+interface PatientPrivateSummaryRow {
+  patient_id: unknown
+  document_number?: unknown
+}
+
+function relatedPlanTitle(value: unknown) {
+  const plan = Array.isArray(value) ? value[0] : value
+  return plan && typeof plan === 'object' && 'title' in plan ? String(plan.title ?? '') : ''
+}
+
+/** Une la ficha con sus relaciones clínicas para que la lista no muestre
+ * marcadores fijos que contradigan el perfil del paciente. */
+export function enrichPatientSummaries(
+  patients: PatientRecord[],
+  relations: {
+    cycles?: PatientCycleSummaryRow[] | null
+    portals?: PatientPortalSummaryRow[] | null
+    assignments?: PatientAssignmentSummaryRow[] | null
+    privateNotes?: PatientPrivateSummaryRow[] | null
+  },
+  now = new Date(),
+) {
+  const nowIso = now.toISOString()
+  return patients.map((patient) => {
+    const activeCycle = (relations.cycles ?? [])
+      .filter((cycle) => String(cycle.patient_id) === patient.id)
+      .sort((first, second) => String(second.started_on).localeCompare(String(first.started_on)))[0]
+    const portal = (relations.portals ?? []).find((item) => String(item.patient_id) === patient.id)
+    const privateNote = (relations.privateNotes ?? []).find((item) => String(item.patient_id) === patient.id)
+    const activeAssignment = (relations.assignments ?? [])
+      .filter((assignment) => {
+        if (String(assignment.patient_id) !== patient.id || !['assigned', 'started'].includes(String(assignment.status))) return false
+        const from = String(assignment.available_from ?? '')
+        const until = String(assignment.available_until ?? '')
+        return Boolean(from) && from <= nowIso && (!until || until >= nowIso)
+      })
+      .sort((first, second) => {
+        const statusOrder = Number(String(second.status) === 'started') - Number(String(first.status) === 'started')
+        return statusOrder || String(first.available_from).localeCompare(String(second.available_from))
+      })[0]
+
+    return {
+      ...patient,
+      cycleLabel: activeCycle ? `${String(activeCycle.label)} · Activo` : 'Sin ciclo activo',
+      portalAccess: portal?.enabled ? 'enabled' as const : 'disabled' as const,
+      username: portal?.enabled ? String(portal.username_normalized ?? patient.username) : patient.username,
+      documentNumber: String(privateNote?.document_number ?? patient.documentNumber),
+      todaySession: activeAssignment ? relatedPlanTitle(activeAssignment.session_plans) || 'Sesión asignada' : null,
+    }
+  })
+}
+
 export async function listPatients(): Promise<PatientRecord[]> {
   if (!isSupabaseConfigured || !supabase) return readDemo()
   const { data, error } = await supabase.from('patients').select('*').order('full_name')
   if (error) throw error
-  return (data ?? []).map((row) => fromRow(row))
+  const patients = (data ?? []).map((row) => fromRow(row))
+  if (!patients.length) return patients
+  const patientIds = patients.map((patient) => patient.id)
+  const [cyclesResult, portalsResult, assignmentsResult, privateNotesResult] = await Promise.all([
+    supabase.from('treatment_cycles').select('patient_id,label,started_on').in('patient_id', patientIds).eq('status', 'active').order('started_on', { ascending: false }),
+    supabase.from('patient_portal_accounts').select('patient_id,enabled,username_normalized').in('patient_id', patientIds),
+    supabase.from('session_assignments').select('patient_id,available_from,available_until,status,session_plans(title)').in('patient_id', patientIds).in('status', ['assigned', 'started']),
+    supabase.from('patient_private_notes').select('patient_id,document_number').in('patient_id', patientIds),
+  ])
+  const relationError = cyclesResult.error ?? portalsResult.error ?? assignmentsResult.error ?? privateNotesResult.error
+  if (relationError) throw relationError
+  return enrichPatientSummaries(patients, {
+    cycles: cyclesResult.data,
+    portals: portalsResult.data,
+    assignments: assignmentsResult.data,
+    privateNotes: privateNotesResult.data,
+  })
 }
 
 export async function getPatient(id: string): Promise<PatientRecord | null> {

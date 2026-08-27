@@ -99,6 +99,13 @@ for (const marker of [
   'Días consecutivos',
   'Serie programada',
   'repeat_session_assignment_as_home',
+  'Datos del paciente',
+  'N.º de afiliado',
+  'session_plans(title)',
+  'Conclusión transcripta para confirmar',
+  'Sugerencia clínica fundamentada para confirmar',
+  'Conducta original transcripta',
+  'Fuentes relevantes del catálogo',
 ]) {
   requireCheck(compiledJavaScript.includes(marker), `La compilación no contiene el control obligatorio: ${marker}.`)
 }
