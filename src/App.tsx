@@ -18,6 +18,7 @@ const PatientFormPage = lazyWithRefresh('patient-form', () => import('./pages/Pa
 const TreatmentCycleFormPage = lazyWithRefresh('treatment-cycle-form', () => import('./pages/TreatmentCycleFormPage').then((module) => ({ default: module.TreatmentCycleFormPage })))
 const ClinicalEpisodePage = lazyWithRefresh('clinical-episode', () => import('./pages/ClinicalEpisodePage').then((module) => ({ default: module.ClinicalEpisodePage })))
 const SessionBuilderPage = lazyWithRefresh('session-builder', () => import('./pages/SessionBuilderPage').then((module) => ({ default: module.SessionBuilderPage })))
+const SessionHistoryPage = lazyWithRefresh('session-history', () => import('./pages/SessionHistoryPage').then((module) => ({ default: module.SessionHistoryPage })))
 const InPersonSessionPage = lazyWithRefresh('in-person-session', () => import('./pages/InPersonSessionPage').then((module) => ({ default: module.InPersonSessionPage })))
 const SessionsPage = lazyWithRefresh('sessions', () => import('./pages/SessionsPage').then((module) => ({ default: module.SessionsPage })))
 const QuestStationPage = lazyWithRefresh('quest-station', () => import('./pages/QuestStationPage').then((module) => ({ default: module.QuestStationPage })))
@@ -70,6 +71,7 @@ const router = createBrowserRouter([
           { path: 'pacientes/:patientId/sesiones/nueva', element: load(<SessionBuilderPage />) },
           { path: 'pacientes/:patientId/sesiones/:assignmentId/editar', element: load(<SessionBuilderPage />) },
           { path: 'pacientes/:patientId/sesiones/:assignmentId/presencial', element: load(<InPersonSessionPage />) },
+          { path: 'pacientes/:patientId/sesiones/:assignmentId', element: load(<SessionHistoryPage />) },
           { path: 'pacientes/:patientId/evaluaciones/nueva', element: load(<AssessmentFormPage />) },
           { path: 'pacientes/:patientId/informe', element: load(<TreatmentReportPage />) },
           { path: 'pacientes/:patientId/acceso', element: load(<PatientAccessPage />) },

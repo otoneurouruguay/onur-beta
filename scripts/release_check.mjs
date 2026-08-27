@@ -106,6 +106,10 @@ for (const marker of [
   'Sugerencia clínica fundamentada para confirmar',
   'Conducta original transcripta',
   'Fuentes relevantes del catálogo',
+  'Historial clínico de solo lectura',
+  'Ejercicios de la sesión',
+  'Sin detalle individual',
+  'Ver sesión',
 ]) {
   requireCheck(compiledJavaScript.includes(marker), `La compilación no contiene el control obligatorio: ${marker}.`)
 }

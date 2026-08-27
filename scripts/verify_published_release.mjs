@@ -71,8 +71,23 @@ requireCheck(
   digest(localPatientProfileModule) === digest(publishedPatientProfileModule),
   'El perfil del paciente publicado no coincide con la compilación validada.',
 )
-for (const marker of ['Repetir / programar', 'Serie programada', 'Días consecutivos', 'Datos del paciente', 'Notas privadas']) {
+for (const marker of ['Repetir / programar', 'Serie programada', 'Días consecutivos', 'Datos del paciente', 'Notas privadas', 'Ver sesión']) {
   requireCheck(publishedPatientProfileModule.toString('utf8').includes(marker), `La repetición de sesiones publicada no contiene: ${marker}.`)
+}
+
+const sessionHistoryModuleMatch = publishedMain.toString('utf8').match(/SessionHistoryPage-[A-Za-z0-9_-]+\.js/)
+requireCheck(sessionHistoryModuleMatch, 'El paquete publicado no referencia el historial de sesiones.')
+const sessionHistoryModulePath = `/assets/${sessionHistoryModuleMatch[0]}`
+const localSessionHistoryModulePath = `${clientPath}${sessionHistoryModulePath}`
+requireCheck(existsSync(localSessionHistoryModulePath), `La compilación local no contiene ${sessionHistoryModulePath}.`)
+const localSessionHistoryModule = readFileSync(localSessionHistoryModulePath)
+const publishedSessionHistoryModule = await fetchBytes(sessionHistoryModulePath)
+requireCheck(
+  digest(localSessionHistoryModule) === digest(publishedSessionHistoryModule),
+  'El historial de sesiones publicado no coincide con la compilación validada.',
+)
+for (const marker of ['Historial clínico de solo lectura', 'Ejercicios de la sesión', 'Resultado general', 'Comentarios', 'Sin detalle individual']) {
+  requireCheck(publishedSessionHistoryModule.toString('utf8').includes(marker), `El historial de sesiones publicado no contiene: ${marker}.`)
 }
 
 const studyReviewModuleMatch = publishedMain.toString('utf8').match(/StudyReviewPage-[A-Za-z0-9_-]+\.js/)
@@ -101,4 +116,4 @@ requireCheck(
   `Producción no activó el caché de ${packageJson.version}.`,
 )
 
-console.log(`Publicación verificada: acceso, ciclos, ficha del paciente, sugerencias clínicas trazables, paquetes y caché ${packageJson.version}.`)
+console.log(`Publicación verificada: acceso, ciclos, ficha del paciente, historial de sesiones, sugerencias clínicas trazables, paquetes y caché ${packageJson.version}.`)
