@@ -28,6 +28,8 @@ describe('respuesta domiciliaria del DHI', () => {
     renderPage()
     expect(screen.getByRole('heading', { name: /Dizziness Handicap Inventory/i })).toBeInTheDocument()
     expect(screen.getAllByRole('radio')).toHaveLength(75)
+    expect(screen.queryByText(/4 puntos/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/2 puntos/i)).not.toBeInTheDocument()
     fireEvent.click(screen.getAllByRole('radio')[1])
     fireEvent.click(screen.getByRole('button', { name: /guardar avance/i }))
     await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ id:'assessment-1', responses:expect.objectContaining({ P1:2 }) })))

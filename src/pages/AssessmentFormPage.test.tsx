@@ -36,6 +36,7 @@ describe('asignación profesional de cuestionarios DHI', () => {
     renderPage('/app/pacientes/patient-1/evaluaciones/nueva?mode=in_person&phase=final')
     expect(screen.getByRole('heading', { name: 'Iniciar cuestionario presencial' })).toBeInTheDocument()
     expect(screen.getAllByRole('radio')).toHaveLength(75)
+    expect(screen.getAllByText('4 puntos')).toHaveLength(25)
     const radios = screen.getAllByRole('radio')
     for (let index = 0; index < radios.length; index += 3) fireEvent.click(radios[index])
     fireEvent.click(screen.getByRole('button', { name: /finalizar y calcular/i }))

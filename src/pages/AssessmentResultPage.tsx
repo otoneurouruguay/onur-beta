@@ -44,6 +44,6 @@ export function AssessmentResultPage() {
       </div>}
       {actionError && <p role="alert" className="mt-4 rounded-xl bg-[#FCECED] p-4 text-sm font-bold text-[#A94952]">{actionError}</p>}
     </section>
-    {assessment.status === 'completed' && <AssessmentQuestionnaire instrument={instrument} responses={assessment.responses} readOnly/>}
+    {assessment.status === 'completed' && <AssessmentQuestionnaire instrument={instrument} responses={assessment.responses} readOnly showOptionScores/>}
   </div>
 }

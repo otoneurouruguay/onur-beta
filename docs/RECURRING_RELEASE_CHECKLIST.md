@@ -38,7 +38,7 @@ Debe finalizar sin errores. El comando verifica:
 - [ ] **Acceso domiciliario:** habilitar un paciente de prueba, ingresar con la credencial temporal y comprobar que el cambio de PIN es obligatorio.
 - [ ] **DHI enviado al portal:** asignar un DHI inicial a un paciente de prueba y comprobar que aparece solamente en su portal, sin correo ni WhatsApp.
 - [ ] **Borrador DHI:** responder una parte desde el portal, usar “Guardar avance”, cerrar y volver a entrar; las mismas respuestas deben continuar marcadas.
-- [ ] **DHI domiciliario completo:** el botón “Enviar” permanece bloqueado hasta contestar los 25 ítems; al finalizar, el paciente ya no puede editar ni ve su puntaje, y el profesional ve total y subescalas.
+- [ ] **DHI domiciliario completo:** el paciente nunca ve puntos por opción, total ni subescalas; el botón “Enviar” permanece bloqueado hasta contestar los 25 ítems. Al finalizar ya no puede editar, mientras que el profesional ve el resultado completo y cada respuesta.
 - [ ] **DHI presencial:** usar “Iniciar cuestionario” desde el perfil, completar los 25 ítems y verificar el resultado; si se interrumpe, “Continuar presencial” debe recuperar la asignación abierta.
 - [ ] **Comparación DHI:** completar un inicial y un final del mismo ciclo y versión; el perfil debe mostrar el cambio total y por subescala. Nunca mezclar ciclos ni formularios incompletos.
 - [ ] **Cancelación DHI:** cancelar una asignación pendiente; debe desaparecer del portal, quedar auditada y permitir una nueva asignación del mismo momento. Un resultado finalizado no se puede cancelar.

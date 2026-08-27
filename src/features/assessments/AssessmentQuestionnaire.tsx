@@ -10,11 +10,13 @@ export function AssessmentQuestionnaire({
   responses,
   onChange,
   readOnly = false,
+  showOptionScores = false,
 }: {
   instrument: AssessmentInstrument
   responses: AssessmentResponseMap
   onChange?: (responses: AssessmentResponseMap) => void
   readOnly?: boolean
+  showOptionScores?: boolean
 }) {
   let previousDomain = ''
   return <div className="space-y-4">
@@ -38,7 +40,7 @@ export function AssessmentQuestionnaire({
                 onChange={() => onChange?.({ ...responses, [question.id]: option.value })}
               />
               <span className="block text-sm font-black">{option.label}</span>
-              {!readOnly && <span className="mt-1 block text-[10px] font-normal">{option.value} puntos</span>}
+              {showOptionScores && <span className="mt-1 block text-[10px] font-normal">{option.value} puntos</span>}
             </label>)}
           </div>
         </fieldset>
