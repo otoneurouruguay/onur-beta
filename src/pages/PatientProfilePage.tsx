@@ -4,11 +4,13 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { RevokeSessionDialog } from '../components/RevokeSessionDialog'
 import { CancelSessionDialog } from '../components/CancelSessionDialog'
+import { RepeatSessionDialog } from '../components/RepeatSessionDialog'
 import { RetrospectiveSessionDialog } from '../components/RetrospectiveSessionDialog'
 import { StatusBadge } from '../components/StatusBadge'
 import { usePatient } from '../features/patients/hooks'
-import { useCancelSessionAssignment, useDuplicateInPersonAssignment, useRecordRetrospectiveSession, useRevokeSessionAssignment, useSessionAssignments, useTreatmentCycles } from '../features/sessions/hooks'
-import { canCancelSessionAssignment, canManageSessionAssignment, canRevokeSessionAssignment, sessionDurationLabel, type SessionAssignmentRecord } from '../features/sessions/repository'
+import { useCancelSessionAssignment, useRecordRetrospectiveSession, useRepeatSessionAssignment, useRevokeSessionAssignment, useSessionAssignments, useTreatmentCycles } from '../features/sessions/hooks'
+import { canCancelSessionAssignment, canManageSessionAssignment, canRepeatSessionAssignment, canRevokeSessionAssignment, sessionDurationLabel, type SessionAssignmentRecord } from '../features/sessions/repository'
+import { groupSessionAssignments } from '../features/sessions/repetition'
 import { PatientDocumentsPanel } from '../features/documents/PatientDocumentsPanel'
 import { usePatientDocuments } from '../features/documents/hooks'
 import { cycleStudyPhaseLabels } from '../features/documents/types'
@@ -49,7 +51,7 @@ export function PatientProfilePage() {
   const { data: assessments = [] } = usePatientAssessments(patientId ?? '')
   const { data: clinicalEpisodes = [] } = useClinicalEpisodes(patientId ?? '')
   const { data: studies = [], isPending: studiesPending, error: studiesError } = useClinicalStudies()
-  const duplicateAssignment = useDuplicateInPersonAssignment(patientId ?? '')
+  const repeatAssignment = useRepeatSessionAssignment(patientId ?? '')
   const revokeAssignment = useRevokeSessionAssignment(patientId ?? '')
   const retrospectiveCompletion = useRecordRetrospectiveSession(patientId ?? '')
   const cancelAssignment = useCancelSessionAssignment(patientId ?? '')
@@ -58,9 +60,12 @@ export function PatientProfilePage() {
   const [pendingRevocation, setPendingRevocation] = useState<SessionAssignmentRecord | null>(null)
   const [pendingRetrospective, setPendingRetrospective] = useState<SessionAssignmentRecord | null>(null)
   const [pendingCancellation, setPendingCancellation] = useState<SessionAssignmentRecord | null>(null)
+  const [pendingRepeat, setPendingRepeat] = useState<SessionAssignmentRecord | null>(null)
   const activeCycle = cycles.find((cycle) => cycle.status === 'active')
   const activeEpisode = clinicalEpisodes.find((episode) => episode.treatmentCycleId === activeCycle?.id)
-  const activeAssignment = assignments.find((assignment) => assignment.status === 'assigned' || assignment.status === 'started')
+  const now = new Date().toISOString()
+  const activeAssignment = assignments.find((assignment) => assignment.status === 'started' || (assignment.status === 'assigned' && assignment.availableFrom <= now && (!assignment.availableUntil || assignment.availableUntil >= now)))
+  const assignmentGroups = groupSessionAssignments(assignments)
   const activePermissions = documents.filter((document) => document.sharedWithPatient).length
   const studyOverview = buildPatientStudyOverview(studies, patientId ?? '', activeCycle?.id ?? '')
 
@@ -70,14 +75,15 @@ export function PatientProfilePage() {
     return <p className="text-sm text-[#747474]">Paciente no encontrado.</p>
   }
 
-  const duplicateAsHome = async (assignment: (typeof assignments)[number]) => {
+  const repeatAsHome = async (assignment: SessionAssignmentRecord, input: { dates: string[]; seriesId: string }) => {
     try {
       setActionError('')
-      await duplicateAssignment.mutateAsync(assignment)
-      setActionNotice('Se creó una asignación domiciliaria separada.')
-    } catch {
+      const createdIds = await repeatAssignment.mutateAsync({ assignment, ...input })
+      setPendingRepeat(null)
+      setActionNotice(createdIds.length === 1 ? 'Se programó una nueva sesión domiciliaria desde cero.' : `Se programaron ${createdIds.length} sesiones domiciliarias independientes.`)
+    } catch (error) {
       setActionNotice('')
-      setActionError('No fue posible duplicar la asignación como domiciliaria.')
+      setActionError(error instanceof Error ? error.message : 'No fue posible programar la repetición domiciliaria.')
     }
   }
 
@@ -106,19 +112,27 @@ export function PatientProfilePage() {
   }
 
   const timelineEvents = [
-    ...assignments.map((assignment) => ({
-      id: `session-${assignment.id}`,
-      date: assignment.completedAt || assignment.revokedAt || assignment.createdAt,
-      label: assignment.status === 'completed'
-        ? `Sesión completada: ${assignment.title}`
-        : assignment.status === 'omitted'
-          ? `Sesión cancelada: ${assignment.title}`
-        : assignment.status === 'partial'
-          ? `Sesión parcial: ${assignment.title}`
-          : assignment.status === 'revoked'
-            ? `Sesión anulada: ${assignment.title}`
-            : `Sesión asignada: ${assignment.title}`,
-    })),
+    ...assignmentGroups.map((group) => {
+      const assignment = group.assignments[0]
+      if (group.seriesId) return {
+        id: group.id,
+        date: [...group.assignments].sort((first, second) => second.createdAt.localeCompare(first.createdAt))[0].createdAt,
+        label: `Serie programada: ${assignment.title} · ${group.expectedCount} sesiones`,
+      }
+      return {
+        id: `session-${assignment.id}`,
+        date: assignment.completedAt || assignment.revokedAt || assignment.createdAt,
+        label: assignment.status === 'completed'
+          ? `Sesión completada: ${assignment.title}`
+          : assignment.status === 'omitted'
+            ? `Sesión cancelada: ${assignment.title}`
+          : assignment.status === 'partial'
+            ? `Sesión parcial: ${assignment.title}`
+            : assignment.status === 'revoked'
+              ? `Sesión anulada: ${assignment.title}`
+              : `Sesión asignada: ${assignment.title}`,
+      }
+    }),
     ...documents.map((document) => ({
       id: `document-${document.id}`,
       date: document.createdAt || `${document.documentDate}T12:00:00`,
@@ -222,7 +236,16 @@ export function PatientProfilePage() {
           </article>
           <article className="rounded-2xl border border-[#E9E7E7] bg-white p-6 sm:col-span-2">
             <div className="flex items-center justify-between gap-4"><h2 className="text-lg font-black text-[#171717]">Sesiones asignadas</h2><Link to={`/app/pacientes/${patient.id}/sesiones/nueva`} className="text-xs font-black text-[#E49A02]">Nueva sesión</Link></div>
-            <div className="mt-5 divide-y divide-[#E9E7E7]">{assignments.length===0?<p className="py-4 text-sm text-[#747474]">Todavía no hay sesiones.</p>:assignments.map((assignment) => {
+            <div className="mt-5 divide-y divide-[#E9E7E7]">{assignments.length===0?<p className="py-4 text-sm text-[#747474]">Todavía no hay sesiones.</p>:assignmentGroups.map((group) => group.seriesId ? <div key={group.id} className="py-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-black text-[#2F2F2F]">{group.assignments[0].title}</p><span className="rounded-full bg-[#FFF1D5] px-2 py-1 text-[9px] font-black uppercase text-[#8A5B00]">Serie programada</span></div><p className="mt-1 text-xs text-[#747474]">{group.expectedCount} fechas · {group.realizedCount} de {group.expectedCount} realizadas · {(group.assignments[0].availableFrom).slice(0,10)} a {(group.assignments.at(-1)?.availableFrom ?? group.assignments[0].availableFrom).slice(0,10)}</p></div><button type="button" disabled={repeatAssignment.isPending} onClick={()=>{setActionError('');setPendingRepeat(group.assignments[0])}} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#E9E7E7] bg-white px-3 py-2 text-xs font-black text-[#2F2F2F] disabled:opacity-60"><Copy size={14}/> Repetir / programar</button></div>
+              <details className="mt-4 rounded-2xl bg-[#F7F6F4] px-4"><summary className="cursor-pointer py-3 text-xs font-black text-[#8A5B00]">Ver las {group.assignments.length} fechas y sus resultados</summary><div className="divide-y divide-[#DEDCD9]">{group.assignments.map((assignment) => {
+                const canFinishPast = ['assigned', 'started'].includes(assignment.status) && assignment.availableFrom.slice(0, 10) < new Date().toISOString().slice(0, 10)
+                return <div key={assignment.id} className={`flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between ${assignment.status==='revoked'?'opacity-60 grayscale':''}`}>
+                  <div className="min-w-0"><p className="text-xs font-black text-[#2F2F2F]">Fecha {assignment.repeatSeriesPosition ?? 1} de {assignment.repeatSeriesSize ?? group.expectedCount} · {assignment.availableFrom.slice(0,10)}</p>{assignment.patientComment&&<p className="mt-2 text-xs leading-5 text-[#747474]"><strong>Comentario del paciente:</strong> {assignment.patientComment}</p>}{assignment.status==='revoked'?<p className="mt-2 rounded-xl bg-[#F1EFEC] px-3 py-2 text-[11px] font-bold leading-5 text-[#5E5E5E]">Motivo de anulación: {assignment.revokedReason || 'Sin motivo disponible.'}</p>:assignment.status==='omitted'?<p className="mt-2 rounded-xl bg-[#FFF7E8] px-3 py-2 text-[11px] font-bold leading-5 text-[#8A5B00]">Motivo de cancelación: {assignment.cancellationReason || 'Sin motivo estructurado.'}</p>:!canManageSessionAssignment(assignment)&&<p className="mt-1 text-[11px] font-bold text-[#8A5B00]">Historial protegido: esta fecha ya registra actividad.</p>}</div>
+                  <div className="flex flex-wrap items-center gap-2"><StatusBadge status={assignment.status}/>{canFinishPast&&<button type="button" onClick={()=>{setActionError('');setPendingRetrospective(assignment)}} className="inline-flex items-center gap-2 rounded-xl border border-[#B9D9C5] bg-[#F0F8F3] px-3 py-2 text-xs font-black text-[#28613D]"><ClipboardCheck size={14}/> Marcar como finalizada</button>}{canManageSessionAssignment(assignment)&&<Link to={`/app/pacientes/${patient.id}/sesiones/${assignment.id}/editar`} className="inline-flex items-center gap-2 rounded-xl border border-[#E9E7E7] bg-white px-3 py-2 text-xs font-black text-[#2F2F2F]"><Pencil size={14}/> Editar</Link>}{canCancelSessionAssignment(assignment)&&<button type="button" onClick={()=>{setActionError('');setPendingCancellation(assignment)}} className="inline-flex items-center gap-2 rounded-xl border border-[#E8CE99] bg-white px-3 py-2 text-xs font-black text-[#8A5B00]"><CalendarX2 size={14}/> No realizada</button>}{canRevokeSessionAssignment(assignment)&&<button type="button" onClick={()=>{setActionError('');setPendingRevocation(assignment)}} className="inline-flex items-center gap-2 rounded-xl border border-[#DEDCD9] bg-white px-3 py-2 text-xs font-black text-[#696969]"><Trash2 size={14}/> Anular</button>}</div>
+                </div>
+              })}</div></details>
+            </div> : group.assignments.map((assignment) => {
               const canFinishPast = ['assigned', 'started'].includes(assignment.status) && assignment.availableFrom.slice(0, 10) < new Date().toISOString().slice(0, 10)
               return <div key={assignment.id} className={`flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between ${assignment.status==='revoked'?'opacity-60 grayscale':''}`}>
                 <div className="min-w-0">
@@ -232,9 +255,9 @@ export function PatientProfilePage() {
                   {assignment.patientComment&&<p className="mt-2 text-xs leading-5 text-[#747474]"><strong>Comentario del paciente:</strong> {assignment.patientComment}</p>}
                   {assignment.status==='revoked'?<p className="mt-2 rounded-xl bg-[#F1EFEC] px-3 py-2 text-[11px] font-bold leading-5 text-[#5E5E5E]">Motivo de anulación: {assignment.revokedReason || 'Sin motivo disponible en el registro anterior.'}{assignment.revokedAt?` · ${new Date(assignment.revokedAt).toLocaleString('es-UY')}`:''}</p>:assignment.status==='omitted'?<p className="mt-2 rounded-xl bg-[#FFF7E8] px-3 py-2 text-[11px] font-bold leading-5 text-[#8A5B00]">Motivo de cancelación: {assignment.cancellationReason || 'Sin motivo estructurado en el registro anterior.'}</p>:!canManageSessionAssignment(assignment)&&<p className="mt-1 text-[11px] font-bold text-[#8A5B00]">Historial protegido: la sesión ya registra actividad.</p>}
                 </div>
-                <div className="flex flex-wrap items-center gap-2"><StatusBadge status={assignment.status}/>{canFinishPast&&<button type="button" onClick={()=>{setActionError('');setPendingRetrospective(assignment)}} className="inline-flex items-center gap-2 rounded-xl border border-[#B9D9C5] bg-[#F0F8F3] px-3 py-2 text-xs font-black text-[#28613D]"><ClipboardCheck size={14}/> Marcar como finalizada</button>}{canManageSessionAssignment(assignment)&&<Link to={`/app/pacientes/${patient.id}/sesiones/${assignment.id}/editar`} className="inline-flex items-center gap-2 rounded-xl border border-[#E9E7E7] bg-white px-3 py-2 text-xs font-black text-[#2F2F2F]"><Pencil size={14}/> Editar</Link>}{canCancelSessionAssignment(assignment)&&<button type="button" onClick={()=>{setActionError('');setPendingCancellation(assignment)}} className="inline-flex items-center gap-2 rounded-xl border border-[#E8CE99] bg-white px-3 py-2 text-xs font-black text-[#8A5B00]"><CalendarX2 size={14}/> No realizada</button>}{canRevokeSessionAssignment(assignment)&&<button type="button" onClick={()=>{setActionError('');setPendingRevocation(assignment)}} className="inline-flex items-center gap-2 rounded-xl border border-[#DEDCD9] bg-white px-3 py-2 text-xs font-black text-[#696969]"><Trash2 size={14}/> Anular</button>}{assignment.mode==='in_person'&&['assigned','started'].includes(assignment.status)&&<Link to={`/app/pacientes/${patient.id}/sesiones/${assignment.id}/presencial`} className="inline-flex items-center gap-2 rounded-xl bg-[#E49A02] px-3 py-2 text-xs font-black text-white"><PlayCircle size={15}/>{assignment.kind==='free_note'?'Registrar sesión':assignment.status==='started'?'Reanudar desde el principio':'Comenzar sesión presencial'}</Link>}{assignment.mode==='in_person'&&assignment.kind!=='free_note'&&assignment.status!=='revoked'&&<button type="button" disabled={duplicateAssignment.isPending} onClick={()=>void duplicateAsHome(assignment)} className="inline-flex items-center gap-2 rounded-xl border border-[#E9E7E7] bg-white px-3 py-2 text-xs font-black text-[#2F2F2F] disabled:opacity-60"><Copy size={14}/> {duplicateAssignment.isPending?'Duplicando…':'Duplicar como domiciliaria'}</button>}</div>
+                <div className="flex flex-wrap items-center gap-2"><StatusBadge status={assignment.status}/>{canFinishPast&&<button type="button" onClick={()=>{setActionError('');setPendingRetrospective(assignment)}} className="inline-flex items-center gap-2 rounded-xl border border-[#B9D9C5] bg-[#F0F8F3] px-3 py-2 text-xs font-black text-[#28613D]"><ClipboardCheck size={14}/> Marcar como finalizada</button>}{canManageSessionAssignment(assignment)&&<Link to={`/app/pacientes/${patient.id}/sesiones/${assignment.id}/editar`} className="inline-flex items-center gap-2 rounded-xl border border-[#E9E7E7] bg-white px-3 py-2 text-xs font-black text-[#2F2F2F]"><Pencil size={14}/> Editar</Link>}{canCancelSessionAssignment(assignment)&&<button type="button" onClick={()=>{setActionError('');setPendingCancellation(assignment)}} className="inline-flex items-center gap-2 rounded-xl border border-[#E8CE99] bg-white px-3 py-2 text-xs font-black text-[#8A5B00]"><CalendarX2 size={14}/> No realizada</button>}{canRevokeSessionAssignment(assignment)&&<button type="button" onClick={()=>{setActionError('');setPendingRevocation(assignment)}} className="inline-flex items-center gap-2 rounded-xl border border-[#DEDCD9] bg-white px-3 py-2 text-xs font-black text-[#696969]"><Trash2 size={14}/> Anular</button>}{assignment.mode==='in_person'&&['assigned','started'].includes(assignment.status)&&<Link to={`/app/pacientes/${patient.id}/sesiones/${assignment.id}/presencial`} className="inline-flex items-center gap-2 rounded-xl bg-[#E49A02] px-3 py-2 text-xs font-black text-white"><PlayCircle size={15}/>{assignment.kind==='free_note'?'Registrar sesión':assignment.status==='started'?'Reanudar desde el principio':'Comenzar sesión presencial'}</Link>}{canRepeatSessionAssignment(assignment)&&<button type="button" disabled={repeatAssignment.isPending} onClick={()=>{setActionError('');setPendingRepeat(assignment)}} className="inline-flex items-center gap-2 rounded-xl border border-[#E9E7E7] bg-white px-3 py-2 text-xs font-black text-[#2F2F2F] disabled:opacity-60"><Copy size={14}/> Repetir / programar</button>}</div>
               </div>
-            })}</div>
+            }) )}</div>
           </article>
           <PatientDocumentsPanel patientId={patient.id}/>
           <PatientAssessmentsPanel patientId={patient.id} cycleId={activeCycle?.id??''}/>
@@ -255,6 +278,7 @@ export function PatientProfilePage() {
       {pendingRevocation && <RevokeSessionDialog sessionTitle={pendingRevocation.title} isPending={revokeAssignment.isPending} error={actionError} onCancel={()=>{if(!revokeAssignment.isPending){setPendingRevocation(null);setActionError('')}}} onConfirm={(reason)=>void revoke(pendingRevocation,reason)}/>}
       {pendingRetrospective && <RetrospectiveSessionDialog assignment={pendingRetrospective} isPending={retrospectiveCompletion.isPending} error={actionError} onCancel={()=>{if(!retrospectiveCompletion.isPending){setPendingRetrospective(null);setActionError('')}}} onConfirm={(details)=>void completeRetrospectively(pendingRetrospective,details)}/>}
       {pendingCancellation && <CancelSessionDialog sessionTitle={pendingCancellation.title} isPending={cancelAssignment.isPending} error={actionError} onClose={()=>{if(!cancelAssignment.isPending){setPendingCancellation(null);setActionError('')}}} onConfirm={(reason)=>void cancelPlannedSession(pendingCancellation,reason)}/>}
+      {pendingRepeat && <RepeatSessionDialog sessionTitle={pendingRepeat.title} isPending={repeatAssignment.isPending} error={actionError} onCancel={()=>{if(!repeatAssignment.isPending){setPendingRepeat(null);setActionError('')}}} onConfirm={(input)=>void repeatAsHome(pendingRepeat,input)}/>}
     </div>
   )
 }

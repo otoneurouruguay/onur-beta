@@ -3,6 +3,7 @@ import { defaultExerciseConfig, normalizeExerciseConfig, type ExerciseConfig } f
 import { getPatient } from '../patients/repository'
 import type { CycleFormValues, RetrospectiveSessionValues, SessionFormValues } from './schema'
 import { analyzeSessionSequence, VR_BOX_TRANSITION_SECONDS } from './sequence'
+import { validateRepetitionDates } from './repetition'
 
 export type CycleStatus = 'active' | 'paused' | 'completed'
 export type AssignmentStatus = 'assigned' | 'started' | 'completed' | 'partial' | 'interrupted' | 'omitted' | 'revoked'
@@ -80,6 +81,16 @@ export interface SessionAssignmentRecord {
   cancelledAt?: string
   cancelledBy?: string
   cancellationReason?: string
+  repeatSeriesId?: string
+  repeatSeriesPosition?: number
+  repeatSeriesSize?: number
+  repeatSourceAssignmentId?: string
+}
+
+export interface RepeatSessionAssignmentInput {
+  assignment: SessionAssignmentRecord
+  dates: string[]
+  seriesId: string
 }
 
 export interface RetrospectiveCompletionInput {
@@ -161,7 +172,7 @@ function assignmentFromRow(row:Record<string,unknown>):SessionAssignmentRecord {
   const executions=(row.session_executions??[]) as Record<string,unknown>[]
   const execution=[...executions].sort((a,b)=>String(b.created_at??b.started_at??'').localeCompare(String(a.created_at??a.started_at??'')))[0]
   const definition=(plan.plan_definition??{}) as {kind?:'exercise'|'free_note';mode?:'home'|'in_person';exercises?:ExerciseConfig[]}
-  return {id:String(row.id),patientId:String(row.patient_id),patientName:String(patient.full_name??''),treatmentCycleId:String(row.treatment_cycle_id??''),sessionPlanId:String(row.session_plan_id),title:String(plan.title??'Sesión'),instructions:String(plan.instructions??''),kind:definition.kind??'exercise',mode:definition.mode??'home',exercises:(definition.exercises??[]).map(exercise=>normalizeExerciseConfig(exercise,0)),availableFrom:String(row.available_from),availableUntil:String(row.available_until??''),status:row.status as AssignmentStatus,createdAt:String(row.created_at),activeSeconds:Number(execution?.active_seconds??0),completedAt:String(execution?.finished_at??''),initialDiscomfort:execution?.initial_discomfort==null?null:Number(execution.initial_discomfort),peakDiscomfort:execution?.peak_discomfort==null?null:Number(execution.peak_discomfort),finalDiscomfort:execution?.final_discomfort==null?null:Number(execution.final_discomfort),recoveryMinutes:execution?.recovery_minutes==null?null:Number(execution.recovery_minutes),delayedResponse:String(execution?.delayed_response??''),progressionDecision:String(execution?.progression_decision??''),perceivedDifficulty:execution?.perceived_difficulty==null?null:Number(execution.perceived_difficulty),patientComment:String(execution?.patient_comment??''),professionalObservation:String(execution?.professional_observation??''),supervised:Boolean(execution?.supervised),operatedBy:String(execution?.operated_by??''),eventLog:Array.isArray(execution?.event_log)?execution.event_log as SessionEventLogEntry[]:[],revokedAt:String(row.revoked_at??''),revokedBy:String(row.revoked_by??''),revokedReason:String(row.revoked_reason??''),registeredRetrospectively:Boolean(row.registered_retrospectively),actualPerformedAt:String(row.actual_performed_at??''),retrospectiveRecordedAt:String(row.retrospective_recorded_at??''),retrospectiveRecordedBy:String(row.retrospective_recorded_by??''),retrospectiveWithoutMetrics:Boolean(row.retrospective_without_metrics),retrospectiveDevice:(row.retrospective_device??undefined) as RetrospectiveSessionValues['device']|undefined,cancelledAt:String(row.cancelled_at??''),cancelledBy:String(row.cancelled_by??''),cancellationReason:String(row.cancellation_reason??'')}
+  return {id:String(row.id),patientId:String(row.patient_id),patientName:String(patient.full_name??''),treatmentCycleId:String(row.treatment_cycle_id??''),sessionPlanId:String(row.session_plan_id),title:String(plan.title??'Sesión'),instructions:String(plan.instructions??''),kind:definition.kind??'exercise',mode:definition.mode??'home',exercises:(definition.exercises??[]).map(exercise=>normalizeExerciseConfig(exercise,0)),availableFrom:String(row.available_from),availableUntil:String(row.available_until??''),status:row.status as AssignmentStatus,createdAt:String(row.created_at),activeSeconds:Number(execution?.active_seconds??0),completedAt:String(execution?.finished_at??''),initialDiscomfort:execution?.initial_discomfort==null?null:Number(execution.initial_discomfort),peakDiscomfort:execution?.peak_discomfort==null?null:Number(execution.peak_discomfort),finalDiscomfort:execution?.final_discomfort==null?null:Number(execution.final_discomfort),recoveryMinutes:execution?.recovery_minutes==null?null:Number(execution.recovery_minutes),delayedResponse:String(execution?.delayed_response??''),progressionDecision:String(execution?.progression_decision??''),perceivedDifficulty:execution?.perceived_difficulty==null?null:Number(execution.perceived_difficulty),patientComment:String(execution?.patient_comment??''),professionalObservation:String(execution?.professional_observation??''),supervised:Boolean(execution?.supervised),operatedBy:String(execution?.operated_by??''),eventLog:Array.isArray(execution?.event_log)?execution.event_log as SessionEventLogEntry[]:[],revokedAt:String(row.revoked_at??''),revokedBy:String(row.revoked_by??''),revokedReason:String(row.revoked_reason??''),registeredRetrospectively:Boolean(row.registered_retrospectively),actualPerformedAt:String(row.actual_performed_at??''),retrospectiveRecordedAt:String(row.retrospective_recorded_at??''),retrospectiveRecordedBy:String(row.retrospective_recorded_by??''),retrospectiveWithoutMetrics:Boolean(row.retrospective_without_metrics),retrospectiveDevice:(row.retrospective_device??undefined) as RetrospectiveSessionValues['device']|undefined,cancelledAt:String(row.cancelled_at??''),cancelledBy:String(row.cancelled_by??''),cancellationReason:String(row.cancellation_reason??''),repeatSeriesId:String(row.repeat_series_id??''),repeatSeriesPosition:row.repeat_series_position==null?undefined:Number(row.repeat_series_position),repeatSeriesSize:row.repeat_series_size==null?undefined:Number(row.repeat_series_size),repeatSourceAssignmentId:String(row.repeat_source_assignment_id??'')}
 }
 
 export async function listTreatmentCycles(patientId:string):Promise<TreatmentCycleRecord[]> {
@@ -198,6 +209,10 @@ export function canRevokeSessionAssignment(assignment: Pick<SessionAssignmentRec
 
 export function canCancelSessionAssignment(assignment: Pick<SessionAssignmentRecord, 'status'>) {
   return assignment.status === 'assigned' || assignment.status === 'started'
+}
+
+export function canRepeatSessionAssignment(assignment: Pick<SessionAssignmentRecord, 'kind' | 'status' | 'exercises'>) {
+  return assignment.kind !== 'free_note' && assignment.status !== 'revoked' && assignment.exercises.length > 0
 }
 
 export async function cancelSessionAssignment(assignment: SessionAssignmentRecord, reason: string): Promise<void> {
@@ -395,6 +410,69 @@ export async function duplicateInPersonAssignmentAsHome(assignment:SessionAssign
   if(assignment.kind==='free_note')throw new Error('Una sesión libre presencial no se duplica como domiciliaria.')
   if(!isSupabaseConfigured||!supabase){const duplicated:SessionAssignmentRecord={...assignment,id:crypto.randomUUID(),sessionPlanId:crypto.randomUUID(),title:`${assignment.title} (domiciliaria)`,mode:'home',availableFrom:new Date().toISOString(),availableUntil:'',status:'assigned',createdAt:new Date().toISOString(),activeSeconds:0,completedAt:'',initialDiscomfort:null,finalDiscomfort:null,perceivedDifficulty:null,patientComment:'',professionalObservation:'',supervised:false,operatedBy:''};write(ASSIGNMENTS_KEY,[duplicated,...readAssignments()]);return duplicated.id}
   const {data,error}=await supabase.rpc('duplicate_in_person_assignment_as_home',{target_assignment_id:assignment.id});if(error)throw error;return String(data)
+}
+
+export async function repeatSessionAssignmentAsHome(input: RepeatSessionAssignmentInput) {
+  const { assignment, dates, seriesId } = input
+  if (!canRepeatSessionAssignment(assignment)) throw new Error('Esta sesión no se puede repetir como domiciliaria.')
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(seriesId)) throw new Error('La solicitud de repetición no es válida.')
+  const dateError = validateRepetitionDates(dates)
+  if (dateError) throw new Error(dateError)
+
+  if (!isSupabaseConfigured || !supabase) {
+    const all = readAssignments()
+    const existing = all.filter((item) => item.repeatSeriesId === seriesId)
+    if (existing.length > 0) return existing.sort((first, second) => (first.repeatSeriesPosition ?? 0) - (second.repeatSeriesPosition ?? 0)).map((item) => item.id)
+
+    const current = all.find((item) => item.id === assignment.id && item.patientId === assignment.patientId)
+    if (!current || !canRepeatSessionAssignment(current)) throw new Error('La sesión original ya no está disponible para repetir.')
+    const createdAt = new Date().toISOString()
+    const repeated = dates.map((date, index): SessionAssignmentRecord => ({
+      id: crypto.randomUUID(),
+      patientId: current.patientId,
+      patientName: current.patientName,
+      treatmentCycleId: current.treatmentCycleId,
+      sessionPlanId: crypto.randomUUID(),
+      title: current.title,
+      instructions: current.instructions,
+      kind: 'exercise',
+      mode: 'home',
+      exercises: structuredClone(current.exercises),
+      availableFrom: new Date(`${date}T00:00:00`).toISOString(),
+      availableUntil: new Date(`${date}T23:59:59.999`).toISOString(),
+      status: 'assigned',
+      createdAt,
+      activeSeconds: 0,
+      completedAt: '',
+      initialDiscomfort: null,
+      peakDiscomfort: null,
+      finalDiscomfort: null,
+      recoveryMinutes: null,
+      delayedResponse: '',
+      progressionDecision: '',
+      perceivedDifficulty: null,
+      patientComment: '',
+      professionalObservation: '',
+      supervised: false,
+      operatedBy: '',
+      eventLog: [],
+      repeatSeriesId: seriesId,
+      repeatSeriesPosition: index + 1,
+      repeatSeriesSize: dates.length,
+      repeatSourceAssignmentId: current.id,
+    }))
+    write(ASSIGNMENTS_KEY, [...repeated, ...all])
+    return repeated.map((item) => item.id)
+  }
+
+  const { data, error } = await supabase.rpc('repeat_session_assignment_as_home', {
+    target_assignment_id: assignment.id,
+    scheduled_dates_input: dates,
+    repetition_series_id_input: seriesId,
+  })
+  if (error) throw error
+  if (!Array.isArray(data) || data.length !== dates.length) throw new Error('La serie no devolvió todas las sesiones esperadas.')
+  return data.map(String)
 }
 
 export function sessionDurationSeconds(session:SessionAssignmentRecord){if(session.kind==='free_note')return 0;const phases=session.exercises.flatMap(exercise=>Array.from({length:exercise.rounds},()=>exercise));const exerciseAndRest=phases.reduce((total,exercise,index)=>total+(exercise.doseMode==='time'?exercise.durationSeconds:0)+(index<phases.length-1?exercise.restSeconds:0),0);return exerciseAndRest+analyzeSessionSequence(session.exercises).visorChanges*VR_BOX_TRANSITION_SECONDS}

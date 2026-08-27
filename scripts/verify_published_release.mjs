@@ -60,6 +60,21 @@ requireCheck(
   'El selector de patologías no está presente en la versión publicada.',
 )
 
+const patientProfileModuleMatch = publishedMain.toString('utf8').match(/PatientProfilePage-[A-Za-z0-9_-]+\.js/)
+requireCheck(patientProfileModuleMatch, 'El paquete publicado no referencia el perfil del paciente.')
+const patientProfileModulePath = `/assets/${patientProfileModuleMatch[0]}`
+const localPatientProfileModulePath = `${clientPath}${patientProfileModulePath}`
+requireCheck(existsSync(localPatientProfileModulePath), `La compilación local no contiene ${patientProfileModulePath}.`)
+const localPatientProfileModule = readFileSync(localPatientProfileModulePath)
+const publishedPatientProfileModule = await fetchBytes(patientProfileModulePath)
+requireCheck(
+  digest(localPatientProfileModule) === digest(publishedPatientProfileModule),
+  'El perfil del paciente publicado no coincide con la compilación validada.',
+)
+for (const marker of ['Repetir / programar', 'Serie programada', 'Días consecutivos']) {
+  requireCheck(publishedPatientProfileModule.toString('utf8').includes(marker), `La repetición de sesiones publicada no contiene: ${marker}.`)
+}
+
 const localServiceWorker = readFileSync(`${clientPath}/sw.js`)
 const publishedServiceWorker = await fetchBytes('/sw.js')
 requireCheck(
@@ -71,4 +86,4 @@ requireCheck(
   `Producción no activó el caché de ${packageJson.version}.`,
 )
 
-console.log(`Publicación verificada: acceso, ruta profesional, selector, paquete principal y caché ${packageJson.version}.`)
+console.log(`Publicación verificada: acceso, rutas profesionales, selector, repetición de sesiones, paquetes y caché ${packageJson.version}.`)

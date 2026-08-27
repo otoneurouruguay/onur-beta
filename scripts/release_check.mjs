@@ -95,6 +95,10 @@ for (const marker of [
   'Ya existe una posturografía',
   'si corresponde.',
   'complete_supervised_in_person_session_v2',
+  'Repetir / programar',
+  'Días consecutivos',
+  'Serie programada',
+  'repeat_session_assignment_as_home',
 ]) {
   requireCheck(compiledJavaScript.includes(marker), `La compilación no contiene el control obligatorio: ${marker}.`)
 }
