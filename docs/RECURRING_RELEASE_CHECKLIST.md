@@ -33,6 +33,8 @@ Debe finalizar sin errores. El comando verifica:
 - [ ] **Acceso profesional:** iniciar sesión y abrir Inicio, Pacientes, Sesiones, Ejercicios, Estudios, Evaluaciones e Informes; ninguna pantalla puede quedar indefinidamente en “Verificando acceso…”.
 - [ ] **Constructor clínico publicado:** en Ejercicios debe verse “Orientación por patología”, el selector con 11 patologías y las familias de imágenes rápidas y estroboscópicos experimentales.
 - [ ] **Biblioteca acumulativa:** elegir al menos dos ejercicios distintos de la biblioteca, usar “Agregar a la selección” en cada uno y confirmar que ambos permanecen en la lista, sin que el segundo reemplace al primero.
+- [ ] **Historial de sesiones:** abrir una sesión finalizada desde el perfil, comprobar que se vean ejercicios, resultados y comentarios, y que la vista sea de solo lectura.
+- [ ] **Repetición domiciliaria:** duplicar o programar una sesión ya realizada; la nueva asignación debe conservar los ejercicios pero comenzar sin progreso, resultado ni estado finalizado.
 - [ ] **Acceso domiciliario:** habilitar un paciente de prueba, ingresar con la credencial temporal y comprobar que el cambio de PIN es obligatorio.
 - [ ] **Aislamiento del PIN temporal:** intentar abrir `/paciente/hoy` antes de cambiar el PIN; debe volver a la creación de PIN.
 - [ ] **Datos reales:** Inicio y perfil no deben mostrar pacientes, horarios, adherencia, documentos o actividad demostrativa.
@@ -45,6 +47,10 @@ Debe finalizar sin errores. El comando verifica:
 - [ ] Las evaluaciones visibles para el paciente aparecen en el portal domiciliario.
 - [ ] Crear o editar un paciente conserva CI, acceso domiciliario y demás datos clínicos.
 - [ ] Confirmar una posturografía genera el informe aunque el lector haya conservado metadatos auxiliares sin métrica, como “Estado del estudio”.
+- [ ] Un vHIT narrativo fotografiado se clasifica como informe, no como página de curvas, aunque mencione HIMP, SHIMP, ganancias y simetría.
+- [ ] El OCR de vHIT conserva negaciones y continuaciones clínicas: no debe truncar antecedentes, motivo, síntomas, conclusión ni conducta en expresiones como “de una”, “no” o después de “Cancelación del VOR”.
+- [ ] El OCR separa campos vecinos (por ejemplo, test vibracional y cancelación del VOR) y normaliza grados como `30°` sin convertirlos en porcentaje.
+- [ ] Un informe confirmado conserva su historial; las mejoras del lector reprocesan únicamente cargas nuevas o borradores pendientes de revisión.
 - [ ] Si falla el guardado o la confirmación de un estudio, la interfaz muestra el motivo devuelto por el servidor y no solo un error genérico.
 - [ ] Los cambios hechos en parámetros de VR se reflejan en la reproducción.
 - [ ] Los controles de video VR se ocultan durante la reproducción y reaparecen al tocar la pantalla.

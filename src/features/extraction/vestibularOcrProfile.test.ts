@@ -10,4 +10,9 @@ describe('detector de plantillas vestibulares', () => {
   it('no fuerza una plantilla con texto clínico insuficiente', () => {
     expect(detectVestibularTemplate('Paciente derivado para control', 1000, 1400)).toMatchObject({ type: 'generic', detected: false })
   })
+
+  it('prioriza el informe narrativo vertical aunque contenga métricas vHIT', () => {
+    const text = 'Informe vestibular Examen clínico Supresión visual Pruebas posicionales En suma Conducta vHIT HIMP SHIMP Ganancia Sacadas CCLL'
+    expect(detectVestibularTemplate(text, 900, 1600)).toMatchObject({ type: 'vestibular_report', detected: true })
+  })
 })

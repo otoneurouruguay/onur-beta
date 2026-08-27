@@ -46,6 +46,8 @@ export function detectVestibularTemplate(text: string, width: number, height: nu
     /conducta|observaciones/,
   ].filter((pattern) => pattern.test(source)).length
 
+  const narrativePage = reportSignals >= 3 && aspectRatio < 1
+  if (narrativePage) return { type: 'vestibular_report', detected: true, confidence: Math.min(.97, .63 + reportSignals * .06), matchedSignals: reportSignals, aspectRatio }
   const compactVhitGraph = /\bvhit\b/.test(source) && /ganancia|\bgain\b|regresion/.test(source) && aspectRatio >= 1.1
   if ((vhitSignals >= 3 || compactVhitGraph) && vhitSignals >= reportSignals) return { type: 'vhit_labeled', detected: true, confidence: Math.min(.98, .62 + vhitSignals * .055), matchedSignals: vhitSignals, aspectRatio }
   if (reportSignals >= 2) return { type: 'vestibular_report', detected: true, confidence: Math.min(.97, .63 + reportSignals * .06), matchedSignals: reportSignals, aspectRatio }

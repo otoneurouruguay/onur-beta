@@ -46,7 +46,7 @@ function beforeOtherSection(value: string, section: VestibularNarrativeSection) 
   // Algunas pasadas OCR dejan solamente "Cancelación" (inicio de la etiqueta
   // "Cancelación del VOR") pegado justo antes de "Conducta:". Es un fragmento
   // estructural incompleto, no contenido clínico, y no debe cerrar la conclusión.
-  return bounded.replace(/\bcancelaci[oó]n[\s:;,.-–—]*$/iu, '').trimEnd()
+  return bounded.replace(/\bcancelaci[oó]n[\s:;,.\-–—]*$/iu, '').trimEnd()
 }
 
 function informationScore(value: string) {

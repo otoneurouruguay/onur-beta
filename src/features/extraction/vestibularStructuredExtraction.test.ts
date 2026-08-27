@@ -137,4 +137,47 @@ describe('extracción vestibular estructurada', () => {
       status: 'detected',
     })
   })
+
+  it('conserva narrativas completas, negaciones y campos contiguos de un informe vHIT', () => {
+    const fields = extractFields([page([
+      line('AF: antecedente familiar sintético. AP: antecedente personal sintético. MC. Síndrome vestibular sintético de un día de evolución, de una', .18, 'clinical_body-original-2', 89),
+      line('hora de duración. Imagen complementaria normal.', .23, 'clinical_body-original-2', 88),
+      line('1) HIMP: positivo a derecha', .29, 'clinical_body-original-2', 94),
+      line('5) Sistema de Fijación: Normal SF a 30%: No nistagmos', .39, 'clinical_body-original-2', 92),
+      line('8) Test vibracional: (-) Cancelación del VOR: Normal', .48, 'clinical_body-original-2', 93),
+      line('En suma: Hallazgo vestibular sintético. Sistemas oculomotores normales.', .68, 'report_summary-original-2', 92),
+      line('Cancelación del VOR normal.', .73, 'report_summary-original-2', 91),
+      line('Conducta: Rehabilitación vestibular sintética y utilizar ayuda técnica.', .78, 'report_summary-original-2', 91),
+    ], 'vestibular_report', { type: 'vestibular_report', confidence: .92, matchedSignals: 5, aspectRatio: .56 })], 'vestibular_and_reports')
+    const field = (code: string) => fields.find((candidate) => candidate.studyType === 'vhit' && candidate.code === code)
+    expect(field('history')?.professionalValue).toContain('antecedente familiar sintético')
+    expect(field('history')?.professionalValue).toContain('Imagen complementaria normal.')
+    expect(field('referral_reason')?.professionalValue).toContain('Síndrome vestibular sintético')
+    expect(field('referral_reason')?.professionalValue).toContain('hora de duración')
+    expect(field('fixation_system')).toMatchObject({ rawValue: 'Normal SF a 30%: No nistagmos', professionalValue: 'Normal SF a 30°: No nistagmos' })
+    expect(field('vibration_test')?.professionalValue).toBe('(-)')
+    expect(field('vor_cancellation')?.professionalValue).toBe('Normal')
+    expect(field('conclusion')?.professionalValue).toContain('Cancelación del VOR normal.')
+    expect(field('conduct')?.professionalValue).toContain('utilizar ayuda técnica')
+  })
+
+  it('no pierde la negación cuando síntomas aparece dentro de antecedentes', () => {
+    const fields = extractFields([page([
+      line('AF: antecedente sintético. AP: inestabilidad, no vértigo, no síntomas', .2, 'clinical_body-original-2', 90),
+      line('cocleares. Audiometría sintética bilateral.', .25, 'clinical_body-original-2', 89),
+      line('1) HIMP: sacadas bilaterales', .31, 'clinical_body-original-2', 93),
+    ], 'vestibular_report', { type: 'vestibular_report', confidence: .92, matchedSignals: 4, aspectRatio: .56 })], 'vestibular_and_reports')
+
+    expect(fields.find((field) => field.code === 'symptoms')?.professionalValue).toBe('no síntomas cocleares. Audiometría sintética bilateral.')
+  })
+
+  it('marca como incompleta una narrativa que termina en un conector', () => {
+    const fields = extractFields([page([
+      line('Antecedentes: cuadro vestibular sintético de una', .2, 'clinical_body-original-2', 96),
+    ], 'vestibular_report', { type: 'vestibular_report', confidence: .92, matchedSignals: 4, aspectRatio: .56 })], 'vestibular_and_reports')
+    const history = fields.find((field) => field.code === 'history')
+
+    expect(history?.status).toBe('needs_review')
+    expect(history?.warnings).toContain('La lectura termina en una frase incompleta; revisá el recorte antes de confirmar.')
+  })
 })

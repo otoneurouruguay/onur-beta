@@ -5,7 +5,7 @@ import { findVestibularStructuredValue, validateVestibularFields } from './vesti
 import { deduplicateOcrSentences, sanitizeVestibularNarrative } from './vestibularNarrative'
 import type { ExtractedField, ExtractedPage, ExtractionFieldDefinition, IntakeKind, PageClassification, PatientMatchStatus, SourceRegion } from './types'
 
-export const EXTRACTOR_VERSION = 'onur-local-ocr-2.5'
+export const EXTRACTOR_VERSION = 'onur-local-ocr-2.6'
 
 function fold(value: string) {
   return value.toLocaleLowerCase('es-UY').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -35,6 +35,13 @@ function lineValue(text: string, alias: string) {
   const foldedText = fold(text)
   const foldedAlias = fold(alias)
   const escapedAlias = foldedAlias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  if (foldedAlias === 'mc') {
+    const match = /\bmc\s*(?:[:.=\-–—]\s*|\s+)(.*)$/iu.exec(foldedText)
+    if (match?.[1] && match.index !== undefined) {
+      const valueStart = match.index + match[0].length - match[1].length
+      return text.slice(valueStart).trim()
+    }
+  }
   for (const pattern of [`${escapedAlias}\\s*(?::|=|-)\\s*(.*)$`, `${escapedAlias}\\s+(.+)$`]) {
     const match = foldedText.match(new RegExp(pattern, 'iu'))
     if (!match || match.index === undefined) continue
@@ -117,7 +124,14 @@ function combinedRegion(lines: ExtractedPage['lines']): SourceRegion | null {
 }
 
 function beginsAnotherField(text: string, definition: ExtractionFieldDefinition) {
-  return vestibularFieldDefinitions.some((candidate) => candidate.code !== definition.code && candidate.aliases.some((alias) => aliasAtStart(text, alias)))
+  if (definition.code === 'conclusion') {
+    return vestibularFieldDefinitions.some((candidate) => ['conduct', 'professional_observations'].includes(candidate.code)
+      && candidate.aliases.some((alias) => aliasAtStart(text, alias)))
+  }
+  return vestibularFieldDefinitions.some((candidate) => candidate.code !== definition.code && candidate.aliases.some((alias) => {
+    if (!aliasAtStart(text, alias)) return false
+    return new RegExp(`^\\s*(?:\\d{1,2}[.)]\\s*)?${accentTolerantAlias(alias)}\\s*(?::|=|[-–—])`, 'iu').test(text)
+  }))
 }
 
 function accentTolerantAlias(alias: string) {
@@ -162,6 +176,17 @@ function multilineCandidate(definition: ExtractionFieldDefinition, lines: Extrac
     selected.push(line)
     previous = line
   }
+  if (definition.code === 'conclusion') {
+    const explicitVorSentence = lines.slice(anchorIndex + 1).find((line) => (
+      line.region.y - anchor.region.y <= .22
+      && /^\s*cancelaci[oó]n\s+del\s+vor\b/iu.test(line.text)
+      && !selected.includes(line)
+    ))
+    if (explicitVorSentence) {
+      parts.push(explicitVorSentence.text.trim())
+      selected.push(explicitVorSentence)
+    }
+  }
   const joinedValue = beforeEmbeddedField(parts.join(' ').replace(/\s+/g, ' ').trim(), definition)
   const value = definition.code === 'conclusion' || definition.code === 'conduct'
     ? sanitizeVestibularNarrative(joinedValue, definition.code)
@@ -170,7 +195,42 @@ function multilineCandidate(definition: ExtractionFieldDefinition, lines: Extrac
   const confidence = Math.min(...selected.map((line) => line.confidence / 100))
   const expectedRegion = ['conclusion', 'conduct'].includes(definition.code) ? 'report_summary' : 'clinical_body'
   const regionBonus = anchor.regionId === expectedRegion ? .12 : anchor.regionId === 'full_page' ? 0 : .04
-  return { located: { value, confidence, region: combinedRegion(selected) }, rank: confidence + regionBonus + Math.min(value.length, 240) / 4800 }
+  const informativeWords = new Set(fold(value).match(/[a-z0-9]{3,}/g) ?? []).size
+  const completenessBonus = Math.min(informativeWords, 45) * .012 + Math.min(value.length, 500) / 5000
+  return { located: { value, confidence, region: combinedRegion(selected) }, rank: confidence * .72 + regionBonus + completenessBonus }
+}
+
+function inlineNarrativeCandidate(definition: ExtractionFieldDefinition, lines: ExtractedPage['lines']): LocatedValue | null {
+  if (!['referral_reason', 'symptoms'].includes(definition.code)) return null
+  const candidates: Array<{ located: LocatedValue; rank: number }> = []
+  for (let anchorIndex = 0; anchorIndex < lines.length; anchorIndex += 1) {
+    const anchor = lines[anchorIndex]
+    const pattern = definition.code === 'referral_reason'
+      ? /\bmc\s*(?:[:.=\-–—]\s*|\s+)(.*)$/iu
+      : /\b((?:no|sin)\s+)?s[ií]ntomas?\b\s*(?:[:.=\-–—]\s*|\s+)?(.*)$/iu
+    const match = pattern.exec(anchor.text)
+    if (!match) continue
+    const selected = [anchor]
+    const firstPart = definition.code === 'referral_reason'
+      ? match[1]?.trim() ?? ''
+      : `${match[1] ?? ''}síntomas${match[2]?.trim() ? ` ${match[2].trim()}` : ''}`.trim()
+    const parts = [firstPart].filter(Boolean)
+    let previous = anchor
+    for (const line of lines.slice(anchorIndex + 1)) {
+      const verticalGap = line.region.y - (previous.region.y + previous.region.height)
+      if (line.region.y - anchor.region.y > .16 || verticalGap > .035) break
+      if (/^\s*\d{1,2}[.)]\s+/.test(line.text) || beginsAnotherField(line.text, definition)) break
+      parts.push(line.text.trim())
+      selected.push(line)
+      previous = line
+    }
+    const value = deduplicateOcrSentences(beforeEmbeddedField(parts.join(' ').replace(/\s+/g, ' ').trim(), definition))
+    if (!value) continue
+    const confidence = Math.min(...selected.map((line) => line.confidence / 100))
+    const informativeWords = new Set(fold(value).match(/[a-z0-9]{3,}/g) ?? []).size
+    candidates.push({ located: { value, confidence, region: combinedRegion(selected) }, rank: confidence * .72 + Math.min(informativeWords, 35) * .014 + Math.min(value.length, 400) / 5000 })
+  }
+  return candidates.sort((first, second) => second.rank - first.rank)[0]?.located ?? null
 }
 
 function multilineValue(definition: ExtractionFieldDefinition, page: ExtractedPage): LocatedValue | null {
@@ -185,6 +245,17 @@ function multilineValue(definition: ExtractionFieldDefinition, page: ExtractedPa
     .map((group) => multilineCandidate(definition, group))
     .filter((candidate): candidate is NonNullable<ReturnType<typeof multilineCandidate>> => Boolean(candidate))
     .sort((first, second) => second.rank - first.rank)[0]?.located ?? null
+}
+
+function normalizedVestibularText(definition: ExtractionFieldDefinition, value: string) {
+  if (definition.code !== 'fixation_system') return value.trim()
+  return value.replace(/\b(sf\s+a\s*30)\s*%/iu, '$1°').trim()
+}
+
+function suspiciousNarrativeEnding(definition: ExtractionFieldDefinition, value: string) {
+  if (!['history', 'symptoms', 'referral_reason', 'conclusion', 'conduct'].includes(definition.code)) return false
+  const source = fold(value).trim()
+  return /(?:[,;:]|\b(?:de\s+una?|de\s+un|para\s+la|para\s+el|con|sin|no|y|o|que))$/u.test(source)
 }
 
 function inferredDocumentType(definition: ExtractionFieldDefinition, page: ExtractedPage): LocatedValue | null {
@@ -367,6 +438,8 @@ function findDefinitionValue(definition: ExtractionFieldDefinition, page: Extrac
   if (vhit) return vhit
   const block = multilineValue(definition, page)
   if (block) return block
+  const inlineNarrative = inlineNarrativeCandidate(definition, withoutShortDuplicateLines(page))
+  if (inlineNarrative) return inlineNarrative
   for (const line of page.lines) {
     for (const alias of definition.aliases) {
       const value = lineValue(line.text, alias)
@@ -399,19 +472,27 @@ export function extractFields(pages: ExtractedPage[], intakeKind: IntakeKind): E
     const value = found?.found?.value ?? ''
     const confidence = found?.found?.confidence ?? 0
     const structured = found?.found?.structured
-    const normalized = structured ? structured.value === null ? '' : String(structured.value) : normalizedValue(value)
+    const reviewedValue = definition.studyType === 'vhit' ? normalizedVestibularText(definition, value) : value
+    const normalized = structured ? structured.value === null ? '' : String(structured.value) : normalizedValue(reviewedValue)
     const semanticValue = structured?.value ?? (normalized && Number.isFinite(Number(normalized)) ? Number(normalized) : normalized || null)
-    const status = structured?.status ?? (!value ? 'not_reported' : confidence >= .82 ? 'detected' : 'needs_review')
+    const automaticTextCorrection = Boolean(value && reviewedValue !== value)
+    const suspiciousEnding = suspiciousNarrativeEnding(definition, reviewedValue)
+    const status = suspiciousEnding ? 'needs_review' : structured?.status ?? (!value ? 'not_reported' : confidence >= .82 ? 'detected' : 'needs_review')
+    const warnings = [
+      ...(structured?.warnings ?? (!value && definition.required ? ['El parámetro obligatorio no fue informado o no pudo leerse.'] : [])),
+      ...(automaticTextCorrection ? ['Se corrigió una confusión tipográfica inequívoca del OCR; verificá el símbolo contra el original.'] : []),
+      ...(suspiciousEnding ? ['La lectura termina en una frase incompleta; revisá el recorte antes de confirmar.'] : []),
+    ]
     return {
       clientId: crypto.randomUUID(), code: definition.code, label: definition.label, group: definition.group,
       studyType: definition.studyType, required: Boolean(definition.required), metricCode: definition.metricCode ?? '',
       rawValue: value, normalizedValue: normalized, unitCode: definition.unitCode ?? '', conditionCode: definition.conditionCode ?? '', side: definition.side ?? '',
       pageNumber: found?.page.pageNumber ?? (relevantPages[0]?.pageNumber ?? 1), region: found?.found?.region as SourceRegion | null ?? null,
       confidence, status, extractorMethod: 'local_ocr' as const,
-      extractorVersion: EXTRACTOR_VERSION, professionalValue: structured?.displayValue ?? value, confirmed: false,
+      extractorVersion: EXTRACTOR_VERSION, professionalValue: structured?.displayValue ?? reviewedValue, confirmed: false,
       value: semanticValue,
-      displayValue: structured?.displayValue ?? value,
-      warnings: structured?.warnings ?? (!value && definition.required ? ['El parámetro obligatorio no fue informado o no pudo leerse.'] : []),
+      displayValue: structured?.displayValue ?? reviewedValue,
+      warnings,
       validation: structured?.validation ?? { rangeValid: null, crossCheckValid: null, multiPassAgreement: null },
       source: { page: found?.page.pageNumber ?? (relevantPages[0]?.pageNumber ?? 1), regionId: structured?.regionId ?? 'generic_page', normalizedBbox: found?.found?.region ?? null, method: structured?.method ?? 'ocr_original' },
       candidates: structured?.candidates ?? (value ? [{ raw: value, value: semanticValue, confidence, method: 'ocr_original' }] : []),
