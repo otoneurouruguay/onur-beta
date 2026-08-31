@@ -59,6 +59,9 @@ requireCheck(
   publishedExerciseModule.toString('utf8').includes('Patología o condición clínica'),
   'El selector de patologías no está presente en la versión publicada.',
 )
+for (const marker of ['Buscar por nombre, objetivo o consigna', 'Filtrar por dispositivo', 'Filtrar por patología o protocolo', 'Los filtros sólo cambian la biblioteca visible']) {
+  requireCheck(publishedExerciseModule.toString('utf8').includes(marker), `La biblioteca publicada no contiene: ${marker}.`)
+}
 const exerciseEditorModuleMatch = publishedExerciseModule.toString('utf8').match(/grouping-[A-Za-z0-9_-]+\.js/)
 requireCheck(exerciseEditorModuleMatch, 'El constructor publicado no referencia el editor compartido de ejercicios.')
 const exerciseEditorModulePath = `/assets/${exerciseEditorModuleMatch[0]}`

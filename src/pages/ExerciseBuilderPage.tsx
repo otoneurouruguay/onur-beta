@@ -12,6 +12,8 @@ import { readSessionBuilderDraft, sessionBuilderDraftKey, writeSessionBuilderDra
 import { SessionExerciseEditor } from '../features/sessions/SessionExerciseEditor'
 import { useDeleteExerciseTemplate, useExerciseTemplates, useSaveExerciseTemplate } from '../features/templates/hooks'
 import { groupExerciseTemplates } from '../features/templates/grouping'
+import { ExerciseTemplateFilters } from '../features/templates/ExerciseTemplateFilters'
+import { defaultExerciseTemplateFilters, filterExerciseTemplates } from '../features/templates/filtering'
 import { getImmersiveScenario } from '../features/immersive/catalog'
 
 function doseLabel(config: ExerciseConfig) {
@@ -30,13 +32,17 @@ export function ExerciseBuilderPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState(requestedScenario ? `template-immersive-${requestedScenario.id}` : recoveredDraft?.selectedTemplateId ?? '')
   const [pathologySelection, setPathologySelection] = useState(recoveredDraft?.pathologySelection ?? [])
   const [selectedPatientId, setSelectedPatientId] = useState('')
+  const [libraryFilters, setLibraryFilters] = useState(defaultExerciseTemplateFilters)
   const { data: templates = [] } = useExerciseTemplates()
   const { data: patients = [] } = usePatients()
   const saveTemplate = useSaveExerciseTemplate()
   const deleteTemplate = useDeleteExerciseTemplate()
   const compatibility = analyzeExerciseCompatibility(config)
-  const templateGroups = groupExerciseTemplates(templates)
+  const filteredTemplates = filterExerciseTemplates(templates, libraryFilters)
+  const templateGroups = groupExerciseTemplates(filteredTemplates)
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId)
+  const selectedTemplateIsVisible = filteredTemplates.some((template) => template.id === selectedTemplateId)
+  const librarySelectValue = selectedTemplateIsVisible ? selectedTemplateId : ''
   const selectedTemplateIndex = pathologySelection.findIndex((item) => item.templateId === selectedTemplateId)
 
   useEffect(() => {
@@ -119,6 +125,19 @@ export function ExerciseBuilderPage() {
 
       {notice && <p className="rounded-2xl bg-[#FFF7E8] px-4 py-3 text-sm font-bold text-[#A36B00]">{notice}</p>}
 
+      <section className="rounded-2xl border border-[#E9E7E7] bg-white p-5" aria-labelledby="exercise-library-title">
+        <div className="flex items-start gap-2"><FolderOpen size={18} className="mt-0.5 shrink-0 text-[#E49A02]"/><div><h2 id="exercise-library-title" className="text-sm font-black text-[#171717]">Biblioteca de ejercicios</h2><p className="mt-1 text-xs leading-5 text-[#747474]">Buscá y filtrá la biblioteca antes de elegir un ejercicio. Después podés revisarlo y sumarlo a la selección de la sesión.</p></div></div>
+        <ExerciseTemplateFilters filters={libraryFilters} resultCount={filteredTemplates.length} totalCount={templates.length} onChange={setLibraryFilters}/>
+        {filteredTemplates.length > 0 ? <>
+          <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <label className="text-xs font-black text-[#2F2F2F]">Elegir plantilla<select aria-label="Elegir plantilla" value={librarySelectValue} onChange={(event) => loadLibraryTemplate(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-[#E9E7E7] bg-white px-4 text-sm"><option value="">Seleccionar…</option>{templateGroups.map((group) => <optgroup key={group.id} label={group.label}>{group.templates.map((template) => <option key={template.id} value={template.id}>{template.config.clinicalProtocol === 'pppd' ? `Nivel ${template.config.progressionLevel} · ` : ''}{template.name.replace(/^PPPD · (Habituación visual|Optocinético|Funcional) · /, '')}</option>)}</optgroup>)}</select></label>
+            {selectedTemplate && <div className="self-end rounded-2xl bg-[#F7F6F4] px-4 py-3"><p className="text-[10px] font-black text-[#2F2F2F]">{doseLabel(selectedTemplate.config)} × {selectedTemplate.config.rounds}</p><p className="mt-1 text-[10px] text-[#747474]">{selectedTemplate.config.advanceMode === 'manual' ? 'Avance manual' : 'Avance automático'}</p></div>}
+          </div>
+          {selectedTemplate && !selectedTemplateIsVisible && <p className="mt-3 rounded-xl border border-[#E5D7B8] bg-[#FFF9ED] px-3 py-2 text-xs leading-5 text-[#8A5B00]">El ejercicio que estabas editando sigue abierto, aunque no coincide con los filtros actuales. La selección de la sesión no fue modificada.</p>}
+          {selectedTemplate && <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center"><button type="button" disabled={selectedTemplateIndex >= 0} onClick={() => addTemplateToSelection(selectedTemplate, 'la biblioteca', config)} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#28613D] px-4 py-3 text-xs font-black text-white disabled:cursor-default disabled:bg-[#D9E7DF] disabled:text-[#28613D] sm:w-auto">{selectedTemplateIndex >= 0 ? <Check size={16}/> : <ListPlus size={16}/>} {selectedTemplateIndex >= 0 ? 'Ya está en la selección' : 'Agregar a la selección'}</button>{!selectedTemplate.id.startsWith('template-') && <button type="button" onClick={async () => { await deleteTemplate.mutateAsync(selectedTemplate.id); setPathologySelection((current) => current.filter((item) => item.templateId !== selectedTemplate.id)); setSelectedTemplateId(''); setConfig(defaultExerciseConfig); setNotice('Plantilla eliminada.') }} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#eccfd2] px-3 py-2 text-xs font-black text-[#a94952]"><Trash2 size={15}/> Eliminar plantilla seleccionada</button>}</div>}
+        </> : <div className="mt-4 rounded-2xl border border-dashed border-[#D8D4CC] bg-[#FAF9F7] p-6 text-center"><p className="text-sm font-black text-[#2F2F2F]">No hay ejercicios que coincidan</p><p className="mt-1 text-xs leading-5 text-[#747474]">Probá con menos filtros o con otra palabra.</p><button type="button" onClick={() => setLibraryFilters(defaultExerciseTemplateFilters)} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#E5D7B8] bg-white px-4 py-2.5 text-xs font-black text-[#A36B00]">Limpiar filtros y mostrar toda la biblioteca</button></div>}
+      </section>
+
       <PathologyRecommendations templates={templates} selectedTemplateIds={pathologySelection.map((item) => item.templateId)} onLoadTemplate={(template, pathology) => addTemplateToSelection(template, pathology.label)}/>
 
       <section className={`rounded-2xl border p-5 sm:p-6 ${pathologySelection.length > 0 ? 'border-[#B9D9C5] bg-[#F0F8F3]' : 'border-[#E9E7E7] bg-white'}`} aria-labelledby="pathology-selection-title">
@@ -127,15 +146,6 @@ export function ExerciseBuilderPage() {
           <ol aria-label="Ejercicios seleccionados para la sesión" className="mt-5 grid gap-3 lg:grid-cols-2">{pathologySelection.map((item, index) => <li key={item.templateId} className={`rounded-2xl border bg-white p-4 ${selectedTemplateId === item.templateId ? 'border-[#E49A02] ring-2 ring-[#E49A02]/10' : 'border-[#D9E7DF]'}`}><button type="button" onClick={() => { setSelectedTemplateId(item.templateId); setConfig({ ...item.config }); setNotice(`Ejercicio ${index + 1} seleccionado para editar.`) }} className="w-full text-left"><span className="text-[10px] font-black uppercase tracking-[.12em] text-[#28613D]">Ejercicio {index + 1}</span><p className="mt-2 text-sm font-black text-[#2F2F2F]">{item.config.name}</p><p className="mt-1 text-xs text-[#747474]">{doseLabel(item.config)} × {item.config.rounds} · {item.config.advanceMode === 'manual' ? 'avance manual' : 'avance automático'}</p></button><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={index === 0} onClick={() => movePathologyTemplate(index, -1)} className="rounded-xl border border-[#E9E7E7] p-2 disabled:opacity-30" aria-label={`Mover antes ${item.config.name}`}><ArrowUp size={15}/></button><button type="button" disabled={index === pathologySelection.length - 1} onClick={() => movePathologyTemplate(index, 1)} className="rounded-xl border border-[#E9E7E7] p-2 disabled:opacity-30" aria-label={`Mover después ${item.config.name}`}><ArrowDown size={15}/></button><button type="button" onClick={() => removePathologyTemplate(item.templateId)} className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-[#eccfd2] px-3 py-2 text-[10px] font-black text-[#a94952]"><Trash2 size={14}/> Quitar</button></div></li>)}</ol>
           <div className="mt-5 grid gap-3 rounded-2xl border border-[#B9D9C5] bg-white p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"><label className="text-xs font-black text-[#173A26]">Paciente<select aria-label="Paciente para la selección" value={selectedPatientId} onChange={(event) => setSelectedPatientId(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-[#B9D9C5] bg-white px-4 text-sm"><option value="">Seleccionar paciente…</option>{patients.map((patient) => <option key={patient.id} value={patient.id}>{patient.fullName}</option>)}</select></label><button type="button" disabled={!selectedPatientId} onClick={preparePatientSession} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#28613D] px-5 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-45"><UserPlus size={17}/> Preparar sesión con los {pathologySelection.length}</button></div>
         </>}
-      </section>
-
-      <section className="rounded-2xl border border-[#E9E7E7] bg-white p-5">
-        <div className="flex items-start gap-2"><FolderOpen size={18} className="mt-0.5 shrink-0 text-[#E49A02]"/><div><h2 className="text-sm font-black text-[#171717]">Biblioteca de ejercicios</h2><p className="mt-1 text-xs leading-5 text-[#747474]">Elegí un ejercicio, revisá su configuración y sumalo a la selección de la sesión.</p></div></div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <label className="text-xs font-black text-[#2F2F2F]">Elegir plantilla<select value={selectedTemplateId} onChange={(event) => loadLibraryTemplate(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-[#E9E7E7] bg-white px-4 text-sm"><option value="">Seleccionar…</option>{templateGroups.map((group) => <optgroup key={group.id} label={group.label}>{group.templates.map((template) => <option key={template.id} value={template.id}>{template.config.clinicalProtocol === 'pppd' ? `Nivel ${template.config.progressionLevel} · ` : ''}{template.name.replace(/^PPPD · (Habituación visual|Optocinético|Funcional) · /, '')}</option>)}</optgroup>)}</select></label>
-          {selectedTemplate && <div className="self-end rounded-2xl bg-[#F7F6F4] px-4 py-3"><p className="text-[10px] font-black text-[#2F2F2F]">{doseLabel(selectedTemplate.config)} × {selectedTemplate.config.rounds}</p><p className="mt-1 text-[10px] text-[#747474]">{selectedTemplate.config.advanceMode === 'manual' ? 'Avance manual' : 'Avance automático'}</p></div>}
-        </div>
-        {selectedTemplate && <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center"><button type="button" disabled={selectedTemplateIndex >= 0} onClick={() => addTemplateToSelection(selectedTemplate, 'la biblioteca', config)} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#28613D] px-4 py-3 text-xs font-black text-white disabled:cursor-default disabled:bg-[#D9E7DF] disabled:text-[#28613D] sm:w-auto">{selectedTemplateIndex >= 0 ? <Check size={16}/> : <ListPlus size={16}/>} {selectedTemplateIndex >= 0 ? 'Ya está en la selección' : 'Agregar a la selección'}</button>{!selectedTemplate.id.startsWith('template-') && <button type="button" onClick={async () => { await deleteTemplate.mutateAsync(selectedTemplate.id); setPathologySelection((current) => current.filter((item) => item.templateId !== selectedTemplate.id)); setSelectedTemplateId(''); setConfig(defaultExerciseConfig); setNotice('Plantilla eliminada.') }} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#eccfd2] px-3 py-2 text-xs font-black text-[#a94952]"><Trash2 size={15}/> Eliminar plantilla seleccionada</button>}</div>}
       </section>
 
       <SessionExerciseEditor config={config} isFirst onChange={updateConfig}/>

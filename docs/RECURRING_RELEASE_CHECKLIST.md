@@ -33,6 +33,7 @@ Debe finalizar sin errores. El comando verifica:
 - [ ] **Acceso profesional:** iniciar sesión y abrir Inicio, Pacientes, Sesiones, Ejercicios, Estudios, Evaluaciones e Informes; ninguna pantalla puede quedar indefinidamente en “Verificando acceso…”.
 - [ ] **Constructor clínico publicado:** en Ejercicios debe verse “Orientación por patología”, el selector con 11 patologías y las familias de imágenes rápidas y estroboscópicos experimentales.
 - [ ] **Biblioteca acumulativa:** elegir al menos dos ejercicios distintos de la biblioteca, usar “Agregar a la selección” en cada uno y confirmar que ambos permanecen en la lista, sin que el segundo reemplace al primero.
+- [ ] **Buscador y filtros de ejercicios:** combinar búsqueda con objetivo, dispositivo, modalidad, patología/protocolo, dosis y tipo de estímulo; limpiar los filtros y confirmar que ningún ejercicio ya agregado desaparece ni cambia de orden.
 - [ ] **Constructor legible:** orientación por patología, capas 360°, ajuste óptico Cardboard, plan logístico y fuentes deben abrirse y cerrarse sin perder datos; compatibilidad, advertencias y dosis permanecen visibles.
 - [ ] **Notas recordatorias:** crear más de una nota opcional, editar y archivar una; deben verse arriba del perfil correcto, permanecer privadas y no incorporarse a sesiones, evaluaciones ni informes.
 - [ ] **Historial de sesiones:** abrir una sesión finalizada desde el perfil, comprobar que se vean ejercicios, resultados y comentarios, y que la vista sea de solo lectura.
