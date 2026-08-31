@@ -59,8 +59,19 @@ requireCheck(
   publishedExerciseModule.toString('utf8').includes('Patología o condición clínica'),
   'El selector de patologías no está presente en la versión publicada.',
 )
+const exerciseEditorModuleMatch = publishedExerciseModule.toString('utf8').match(/grouping-[A-Za-z0-9_-]+\.js/)
+requireCheck(exerciseEditorModuleMatch, 'El constructor publicado no referencia el editor compartido de ejercicios.')
+const exerciseEditorModulePath = `/assets/${exerciseEditorModuleMatch[0]}`
+const localExerciseEditorModulePath = `${clientPath}${exerciseEditorModulePath}`
+requireCheck(existsSync(localExerciseEditorModulePath), `La compilación local no contiene ${exerciseEditorModulePath}.`)
+const localExerciseEditorModule = readFileSync(localExerciseEditorModulePath)
+const publishedExerciseEditorModule = await fetchBytes(exerciseEditorModulePath)
+requireCheck(
+  digest(localExerciseEditorModule) === digest(publishedExerciseEditorModule),
+  'El editor compartido de ejercicios publicado no coincide con la compilación validada.',
+)
 for (const marker of ['Ajuste óptico avanzado del teléfono y visor', 'Fundamento, límites y fuentes']) {
-  requireCheck(publishedExerciseModule.toString('utf8').includes(marker), `El constructor publicado no contiene: ${marker}.`)
+  requireCheck(publishedExerciseEditorModule.toString('utf8').includes(marker), `El editor de ejercicios publicado no contiene: ${marker}.`)
 }
 
 const patientProfileModuleMatch = publishedMain.toString('utf8').match(/PatientProfilePage-[A-Za-z0-9_-]+\.js/)
