@@ -59,6 +59,9 @@ requireCheck(
   publishedExerciseModule.toString('utf8').includes('Patología o condición clínica'),
   'El selector de patologías no está presente en la versión publicada.',
 )
+for (const marker of ['Ajuste óptico avanzado del teléfono y visor', 'Fundamento, límites y fuentes']) {
+  requireCheck(publishedExerciseModule.toString('utf8').includes(marker), `El constructor publicado no contiene: ${marker}.`)
+}
 
 const patientProfileModuleMatch = publishedMain.toString('utf8').match(/PatientProfilePage-[A-Za-z0-9_-]+\.js/)
 requireCheck(patientProfileModuleMatch, 'El paquete publicado no referencia el perfil del paciente.')
@@ -71,7 +74,7 @@ requireCheck(
   digest(localPatientProfileModule) === digest(publishedPatientProfileModule),
   'El perfil del paciente publicado no coincide con la compilación validada.',
 )
-for (const marker of ['Repetir / programar', 'Serie programada', 'Días consecutivos', 'Datos del paciente', 'Notas privadas', 'Ver sesión']) {
+for (const marker of ['Repetir / programar', 'Serie programada', 'Días consecutivos', 'Datos del paciente', 'Notas privadas', 'Notas recordatorias', 'Ayuda memoria privada y opcional', 'Ver sesión']) {
   requireCheck(publishedPatientProfileModule.toString('utf8').includes(marker), `La repetición de sesiones publicada no contiene: ${marker}.`)
 }
 

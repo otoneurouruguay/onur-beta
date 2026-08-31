@@ -23,6 +23,7 @@ import { pathologyLabel } from '../features/clinicalEpisodes/catalog'
 import { useClinicalStudies } from '../features/studies/hooks'
 import { buildPatientStudyOverview } from '../features/studies/patientOverview'
 import type { ClinicalStudySummary } from '../features/studies/types'
+import { PatientReminderNotesPanel } from '../features/patientNotes/PatientReminderNotesPanel'
 
 function PosturographySlot({ phase, study, patientId, cycleId }: { phase: 'initial' | 'final'; study?: ClinicalStudySummary; patientId: string; cycleId: string }) {
   const title = `POSTUROGRAFÍA ${phase === 'initial' ? 'INICIAL' : 'FINAL'}`
@@ -184,6 +185,8 @@ export function PatientProfilePage() {
           </>
         }
       />
+
+      <PatientReminderNotesPanel patientId={patient.id}/>
 
       <PatientDetailsCard patient={patient} activeCycle={activeCycle} activePermissions={activePermissions}/>
 

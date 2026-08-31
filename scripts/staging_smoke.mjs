@@ -70,6 +70,16 @@ try{
   const other=assertNoError(await foreignProfessional.from('patients').insert({professional_id:created.foreignProfessionalUserId,full_name:'Paciente Aislado Staging',status:'active'}).select().single(),'crear segundo paciente')
   created.otherPatientId=other.id
 
+  const reminder=assertNoError(await professional.from('patient_reminder_notes').insert({patient_id:created.patientId,body:'Recordatorio ficticio para próxima sesión',created_by:created.professionalUserId,updated_by:created.professionalUserId}).select('id,body').single(),'crear nota recordatoria')
+  const foreignReminders=assertNoError(await foreignProfessional.from('patient_reminder_notes').select('id').eq('id',reminder.id),'aislar nota recordatoria')
+  assert(foreignReminders.length===0,'Un profesional ajeno pudo ver una nota recordatoria.')
+  const editedReminder=assertNoError(await professional.from('patient_reminder_notes').update({body:'Recordatorio ficticio editado',updated_by:created.professionalUserId}).eq('id',reminder.id).select('body').single(),'editar nota recordatoria')
+  assert(editedReminder.body==='Recordatorio ficticio editado','La edición de la nota recordatoria no quedó guardada.')
+  assertNoError(await professional.from('patient_reminder_notes').update({archived_at:new Date().toISOString(),archived_by:created.professionalUserId,updated_by:created.professionalUserId}).eq('id',reminder.id),'archivar nota recordatoria')
+  const activeReminders=assertNoError(await professional.from('patient_reminder_notes').select('id').eq('id',reminder.id).is('archived_at',null),'ocultar nota archivada')
+  assert(activeReminders.length===0,'Una nota archivada continuó visible como activa.')
+  log('notas recordatorias privadas, editables y archivables')
+
   const accountResult=await professional.functions.invoke('create-patient-account',{body:{patient_id:created.patientId,username,temporary_ci:temporaryCi}})
   assertNoError(accountResult,'crear cuenta paciente')
   const account=assertNoError(await admin.from('patient_portal_accounts').select('auth_user_id').eq('patient_id',created.patientId).single(),'leer cuenta paciente')
