@@ -13,9 +13,11 @@ export interface ExerciseTemplateRecord {
 
 const STORAGE_KEY = 'onur-demo-exercise-templates-v1'
 const SEED_VERSION_KEY = 'onur-demo-exercise-templates-seed-version'
-const SEED_VERSION = '7'
+const SEED_VERSION = '9'
 const seedDate = '2026-07-20T00:00:00.000Z'
 const expandedSeedDate = '2026-08-11T00:00:00.000Z'
+const visualMotionSeedDate = '2026-08-31T00:00:00.000Z'
+const visualMotionExpandedSeedDate = '2026-09-01T00:00:00.000Z'
 
 const rvoX2Horizontal = {
   ...applyExercisePurpose(defaultExerciseConfig, 'gaze_stabilization_x2'),
@@ -115,6 +117,102 @@ const generalTemplates: ExerciseTemplateRecord[] = [
       name: 'Optocinético · barras lentas', backgroundType: 'bars', backgroundDirection: 'left',
       backgroundSpeed: 20, stripeWidth: 82, durationSeconds: 20, rounds: 1, restSeconds: 40,
     }, createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+  {
+    id: 'template-visual-motion-fixation-low', name: 'Fijación · fondo móvil suave',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'visual_motion_fixation'),
+      name: 'Fijación · fondo móvil suave',
+      patientInstruction: 'Sentado, mantené la cabeza quieta y el blanco central nítido mientras se mueven lentamente las barras del fondo.',
+      targetImpairment: 'Tolerancia a movimiento visual conservando una referencia central',
+      clinicalRationale: 'Combina fijación central con movimiento periférico del campo visual; no es RVO x1 ni estimulación optocinética pura.',
+      clinicalDoseNote: 'Exposición inicial breve definida por el profesional; registrar malestar y tiempo de recuperación.',
+      clinicalProgressionNote: 'Cambiar una sola variable: duración, velocidad, tamaño del patrón, contraste o postura.',
+      clinicalRegressionNote: 'Reducir duración o velocidad, aumentar el tamaño del patrón y volver a posición sentada.',
+      progressionCriteria: 'Avanzar solo si conserva el blanco nítido, mantiene la cabeza quieta y recupera dentro de la ventana acordada.',
+      stopCriteria: 'Pausar ante diplopía, cefalea intensa, náusea marcada, síntomas neurológicos nuevos o malestar por encima del techo definido.',
+      posture: 'seated', surface: 'firm', backgroundType: 'bars', backgroundDirection: 'left',
+      backgroundSpeed: 15, backgroundRampSeconds: 2, backgroundCoveragePercent: 75, backgroundContrastPercent: 60,
+      stripeWidth: 88, objectEnabled: true, objectMode: 'fixed', objectSize: 34,
+      durationSeconds: 20, rounds: 1, restSeconds: 40,
+    }, createdAt: visualMotionSeedDate, updatedAt: visualMotionSeedDate,
+  },
+  {
+    id: 'template-pursuit-structured-background', name: 'Seguimiento · fondo estructurado inmóvil',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'smooth_pursuit'),
+      name: 'Seguimiento · fondo estructurado inmóvil',
+      patientInstruction: 'Sentado, mantené la cabeza quieta y seguí el blanco únicamente con los ojos. El damero del fondo permanece inmóvil.',
+      targetImpairment: 'Seguimiento ocular ante mayor complejidad visual estática',
+      clinicalRationale: 'Agrega estructura visual sin movimiento de fondo; continúa siendo seguimiento ocular y no una tarea de conflicto visual móvil.',
+      clinicalDoseNote: 'Comenzar con un bloque breve y velocidad baja; registrar claridad del blanco y respuesta sintomática.',
+      clinicalProgressionNote: 'Aumentar primero una sola variable del blanco: duración, amplitud o velocidad.',
+      clinicalRegressionNote: 'Volver a fondo sólido, menor amplitud o menor velocidad del blanco.',
+      progressionCriteria: 'Avanzar solo si sigue el blanco sin mover la cabeza y recupera dentro de la ventana acordada.',
+      stopCriteria: 'Pausar ante diplopía, cefalea intensa, náusea marcada, síntomas neurológicos nuevos o malestar por encima del techo definido.',
+      posture: 'seated', surface: 'firm', backgroundType: 'checkerboard', backgroundDirection: 'right',
+      backgroundSpeed: 0, backgroundCoveragePercent: 100, backgroundContrastPercent: 35,
+      stripeWidth: 92, foregroundColor: '#A8AAA8', backgroundColor: '#F4F2EE',
+      objectEnabled: true, objectMode: 'tracking', objectDirection: 'horizontal', objectSpeedHz: 0.2, objectAmplitude: 24,
+      durationSeconds: 30, rounds: 1, restSeconds: 30,
+    }, createdAt: visualMotionSeedDate, updatedAt: visualMotionSeedDate,
+  },
+  {
+    id: 'template-visual-motion-oscillating-low', name: 'Movimiento visual · oscilación suave',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'visual_habituation'),
+      name: 'Movimiento visual · oscilación suave',
+      patientInstruction: 'Sentado y con la cabeza quieta, mirá al centro de la pantalla mientras las barras se desplazan suavemente de un lado al otro.',
+      targetImpairment: 'Tolerancia inicial a movimiento visual horizontal reversible',
+      clinicalRationale: 'Presenta movimiento oscilante sin blanco superpuesto y evita la deriva continua de una estimulación unidireccional.',
+      clinicalDoseNote: 'Comenzar con una exposición breve; registrar malestar, recuperación y respuesta tardía.',
+      clinicalProgressionNote: 'Cambiar una sola variable: duración, amplitud, frecuencia, cobertura o contraste.',
+      clinicalRegressionNote: 'Reducir amplitud, cobertura, contraste o duración y mantener posición sentada.',
+      progressionCriteria: 'Avanzar sólo si mantiene la cabeza quieta y recupera dentro de la ventana acordada.',
+      stopCriteria: 'Pausar ante diplopía, cefalea intensa, náusea marcada, síntomas neurológicos nuevos o malestar por encima del techo definido.',
+      backgroundType: 'bars', backgroundDirection: 'right', backgroundMotionMode: 'oscillating',
+      backgroundFrequencyHz: 0.15, backgroundAmplitudePercent: 15, backgroundRampSeconds: 2,
+      backgroundCoveragePercent: 65, backgroundContrastPercent: 45, stripeWidth: 90,
+      durationSeconds: 20, rounds: 1, restSeconds: 40,
+    }, createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+  {
+    id: 'template-pursuit-counterphase-low', name: 'Seguimiento · contrafase suave',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'pursuit_visual_conflict'),
+      name: 'Seguimiento · contrafase suave',
+      patientInstruction: 'Sentado y con la cabeza quieta, seguí solamente el blanco con los ojos mientras el fondo se mueve en el sentido opuesto.',
+      targetImpairment: 'Tolerancia a seguimiento ocular con conflicto visual sincronizado',
+      clinicalRationale: 'El blanco y el fondo comparten eje y frecuencia, pero se desplazan en contrafase; es una tarea combinada y no seguimiento aislado.',
+      clinicalDoseNote: 'Usar sólo después de comprobar seguimiento aislado y tolerancia a fondo móvil por separado.',
+      clinicalProgressionNote: 'Aumentar una sola variable y conservar sincronía: duración, amplitud, cobertura o contraste.',
+      clinicalRegressionNote: 'Volver a fondo estático o separar el seguimiento y la habituación en dos ejercicios.',
+      progressionCriteria: 'Avanzar si sigue el blanco sin mover la cabeza ni perderlo y recupera dentro de la ventana acordada.',
+      stopCriteria: 'Pausar si pierde reiteradamente el blanco, aparece diplopía, náusea marcada o supera el techo definido.',
+      backgroundType: 'bars', backgroundDirection: 'right', backgroundMotionMode: 'oscillating',
+      backgroundFrequencyHz: 0.2, backgroundAmplitudePercent: 18, backgroundRampSeconds: 2,
+      backgroundCoveragePercent: 70, backgroundContrastPercent: 45, stripeWidth: 92,
+      targetBackgroundRelation: 'counter_phase', objectDirection: 'horizontal', objectSpeedHz: 0.2, objectAmplitude: 20,
+      durationSeconds: 20, rounds: 1, restSeconds: 45,
+    }, createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+  {
+    id: 'template-optic-flow-expansion-low', name: 'Flujo óptico · expansión suave',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'optic_flow'),
+      name: 'Flujo óptico · expansión suave',
+      patientInstruction: 'Sentado y con la cabeza quieta, mirá al centro mientras los puntos se expanden lentamente hacia la periferia.',
+      targetImpairment: 'Tolerancia inicial a flujo óptico radial de expansión',
+      clinicalRationale: 'Simula una señal visual radial de avance sin presentarla como optocinético lineal, marcha virtual ni escenario 360°.',
+      clinicalDoseNote: 'Comenzar con baja velocidad, cobertura parcial y exposición breve.',
+      clinicalProgressionNote: 'Aumentar una sola variable: duración, velocidad, cobertura o contraste.',
+      clinicalRegressionNote: 'Reducir cobertura, contraste, velocidad o duración.',
+      progressionCriteria: 'Avanzar si mantiene cabeza quieta, postura estable y recuperación dentro de la ventana acordada.',
+      stopCriteria: 'Pausar ante inestabilidad marcada, náusea, cefalea intensa, oscilopsia persistente o síntomas neurológicos nuevos.',
+      backgroundDirection: 'toward', backgroundSpeed: 25, backgroundRampSeconds: 2,
+      backgroundCoveragePercent: 70, backgroundContrastPercent: 45, stripeWidth: 42,
+      durationSeconds: 20, rounds: 1, restSeconds: 45,
+    }, createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
   },
   {
     id: 'template-habituation-low', name: 'Habituación visual · damero lento',

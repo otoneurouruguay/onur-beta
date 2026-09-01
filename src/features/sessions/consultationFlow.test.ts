@@ -17,7 +17,7 @@ import {
 import { validateSession, type SessionFormValues } from './schema'
 
 function visualFor(
-  purpose: 'optokinetic' | 'saccades',
+  purpose: 'optokinetic' | 'optic_flow' | 'saccades' | 'smooth_pursuit' | 'visual_motion_fixation' | 'pursuit_visual_conflict' | 'visual_habituation',
   overrides: Partial<typeof defaultExerciseConfig> = {},
 ) {
   return { ...applyExercisePurpose(defaultExerciseConfig, purpose), ...overrides }
@@ -25,6 +25,38 @@ function visualFor(
 
 describe('simulación integral de una consulta nueva', () => {
   beforeEach(() => localStorage.clear())
+
+  it.each(['standard', 'vr_box', 'quest_browser'] as const)('admite una batería visual no redundante completa en %s', (displayMode) => {
+    const headset = displayMode !== 'standard'
+    const common = {
+      displayMode,
+      doseMode: 'time' as const,
+      advanceMode: headset ? 'automatic' as const : 'manual' as const,
+      posture: 'seated' as const,
+      surface: 'firm' as const,
+      supervision: 'direct_clinician' as const,
+      durationSeconds: 20,
+      rounds: 1,
+      restSeconds: 20,
+    }
+    const exercises = [
+      visualFor('visual_motion_fixation', common),
+      visualFor('smooth_pursuit', { ...common, backgroundType: 'checkerboard', backgroundSpeed: 0 }),
+      visualFor('visual_habituation', { ...common, backgroundType: 'bars', backgroundDirection: 'right', backgroundMotionMode: 'oscillating', backgroundFrequencyHz: 0.15, backgroundAmplitudePercent: 15 }),
+      visualFor('pursuit_visual_conflict', { ...common, backgroundType: 'bars', backgroundDirection: 'right', backgroundMotionMode: 'oscillating', backgroundFrequencyHz: 0.2, objectSpeedHz: 0.2, targetBackgroundRelation: 'counter_phase' }),
+      visualFor('optic_flow', common),
+    ]
+    const values: SessionFormValues = {
+      title: `Batería visual ${displayMode}`,
+      instructions: 'Prueba sintética de compatibilidad multidispositivo.',
+      mode: 'in_person',
+      treatmentCycleId: 'cycle-synthetic',
+      availableFrom: '2026-09-01',
+      availableUntil: '',
+      exercises,
+    }
+    expect(validateSession(values)).toEqual({})
+  })
 
   it('recorre alta, ciclo, sesiones multidispositivo, ejecución, cierre e historial protegido', async () => {
     const { patient } = await createPatient({

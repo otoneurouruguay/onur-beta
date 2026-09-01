@@ -18,6 +18,7 @@ const templates = [
   template('template-pppd', 'PPPD · habituación', { purpose: 'visual_habituation', clinicalProtocol: 'pppd', backgroundType: 'bars', backgroundSpeed: 25 }),
   template('template-cardboard', 'Seguimiento Cardboard', { purpose: 'smooth_pursuit', displayMode: 'vr_box', cardboardEnabled: true, objectMode: 'tracking' }),
   template('template-functional', 'Marcha guiada', { kind: 'guided_physical', purpose: 'guided_functional', doseMode: 'repetitions', objectEnabled: false }),
+  template('template-oscillating', 'Fondo oscilante', { purpose: 'visual_habituation', backgroundType: 'bars', backgroundSpeed: 0, backgroundMotionMode: 'oscillating', backgroundFrequencyHz: 0.2, backgroundAmplitudePercent: 20 }),
   template('personal-1', 'Plantilla del consultorio', { purpose: 'custom_free' }),
 ]
 
@@ -41,6 +42,11 @@ describe('exercise template filtering', () => {
     expect(filterExerciseTemplates(templates, { ...defaultExerciseTemplateFilters, protocol: 'pppd' }).map((item) => item.id)).toEqual(['template-pppd'])
     expect(filterExerciseTemplates(templates, { ...defaultExerciseTemplateFilters, stimulus: 'physical', dose: 'repetitions' }).map((item) => item.id)).toEqual(['template-functional'])
     expect(filterExerciseTemplates(templates, { ...defaultExerciseTemplateFilters, protocol: 'personal' }).map((item) => item.id)).toEqual(['personal-1'])
+  })
+
+  it('reconoce como móvil un fondo oscilante aunque su velocidad continua sea cero', () => {
+    const result = filterExerciseTemplates(templates, { ...defaultExerciseTemplateFilters, stimulus: 'moving_background' })
+    expect(result.map((item) => item.id)).toEqual(expect.arrayContaining(['template-pppd', 'template-oscillating']))
   })
 
   it('detecta y restablece filtros activos', () => {

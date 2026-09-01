@@ -1,15 +1,18 @@
 import type { CardboardViewerProfile } from './cardboardViewerProfiles'
 
-export type BackgroundType = 'solid' | 'bars' | 'spiral' | 'checkerboard' | 'dots'
+export type BackgroundType = 'solid' | 'bars' | 'spiral' | 'checkerboard' | 'dots' | 'radial_flow'
+export type BackgroundMotionMode = 'continuous' | 'oscillating'
 export type LinearMotionDirection = 'left' | 'right' | 'up' | 'down' | 'up_left' | 'up_right' | 'down_left' | 'down_right'
-export type MotionDirection = LinearMotionDirection | 'clockwise' | 'counterclockwise'
+export type RadialMotionDirection = 'toward' | 'away'
+export type MotionDirection = LinearMotionDirection | 'clockwise' | 'counterclockwise' | RadialMotionDirection
+export type TargetBackgroundRelation = 'independent' | 'in_phase' | 'counter_phase'
 export type ObjectMode = 'fixed' | 'tracking' | 'saccades'
 export type ObjectDirection = 'horizontal' | 'vertical' | 'diagonal_down' | 'diagonal_up'
 export type SaccadePattern = ObjectDirection | 'random'
 export type ExerciseDisplayMode = 'standard' | 'vr_box' | 'quest_browser'
 export type PreparationSeconds = 0 | 5 | 10 | 20
 export type ExerciseKind = 'visual_stimulus' | 'guided_physical'
-export type ExercisePurpose = 'gaze_stabilization' | 'gaze_stabilization_x2' | 'gaze_substitution_remembered' | 'smooth_pursuit' | 'saccades' | 'optokinetic' | 'visual_habituation' | 'immersive_context' | 'cognitive_visual' | 'guided_functional' | 'custom_free'
+export type ExercisePurpose = 'gaze_stabilization' | 'gaze_stabilization_x2' | 'gaze_substitution_remembered' | 'smooth_pursuit' | 'visual_motion_fixation' | 'pursuit_visual_conflict' | 'saccades' | 'optokinetic' | 'optic_flow' | 'visual_habituation' | 'immersive_context' | 'cognitive_visual' | 'guided_functional' | 'custom_free'
 export type ExerciseDoseMode = 'time' | 'repetitions'
 export type ExerciseAdvanceMode = 'automatic' | 'manual'
 export type ExercisePosture = 'seated' | 'standing' | 'walking'
@@ -92,6 +95,13 @@ export interface ExerciseConfig {
   backgroundType: BackgroundType
   backgroundDirection: MotionDirection
   backgroundSpeed: number
+  backgroundMotionMode: BackgroundMotionMode
+  backgroundFrequencyHz: number
+  backgroundAmplitudePercent: number
+  backgroundRampSeconds: number
+  backgroundCoveragePercent: number
+  backgroundContrastPercent: number
+  targetBackgroundRelation: TargetBackgroundRelation
   stripeWidth: number
   foregroundColor: string
   backgroundColor: string
@@ -144,6 +154,13 @@ export const defaultExerciseConfig: ExerciseConfig = {
   backgroundType: 'solid',
   backgroundDirection: 'left',
   backgroundSpeed: 0,
+  backgroundMotionMode: 'continuous',
+  backgroundFrequencyHz: 0.25,
+  backgroundAmplitudePercent: 25,
+  backgroundRampSeconds: 0,
+  backgroundCoveragePercent: 100,
+  backgroundContrastPercent: 100,
+  targetBackgroundRelation: 'independent',
   stripeWidth: 54,
   foregroundColor: '#0a1214',
   backgroundColor: '#F7F6F4',
@@ -184,8 +201,17 @@ export function inferExercisePurpose(config: Partial<ExerciseConfig>): ExerciseP
   if (config.kind === 'guided_physical') return 'guided_functional'
   if (config.objectMode === 'tracking') return 'smooth_pursuit'
   if (config.objectMode === 'saccades') return 'saccades'
-  if (config.backgroundType && config.backgroundType !== 'solid' && Number(config.backgroundSpeed) > 0) return 'optokinetic'
+  if (isBackgroundMotionActive(config)) return 'optokinetic'
   return 'gaze_stabilization'
+}
+
+export function isBackgroundMotionActive(config: Partial<ExerciseConfig>) {
+  if (!config.backgroundType || config.backgroundType === 'solid') return false
+  if (config.backgroundMotionMode === 'oscillating') {
+    return Number(config.backgroundFrequencyHz ?? defaultExerciseConfig.backgroundFrequencyHz) > 0
+      && Number(config.backgroundAmplitudePercent ?? defaultExerciseConfig.backgroundAmplitudePercent) > 0
+  }
+  return Number(config.backgroundSpeed) > 0
 }
 
 export function normalizeExerciseConfig(config: Partial<ExerciseConfig>, legacyPreparationSeconds: PreparationSeconds = 0): ExerciseConfig {
@@ -201,6 +227,13 @@ export function normalizeExerciseConfig(config: Partial<ExerciseConfig>, legacyP
     strobeFrequencyHz: Math.max(0.5, Math.min(2.5, Number(config.strobeFrequencyHz ?? 1))),
     strobeDutyCyclePercent: Math.max(50, Math.min(80, Number(config.strobeDutyCyclePercent ?? 70))),
     strobeContrastPercent: Math.max(5, Math.min(35, Number(config.strobeContrastPercent ?? 20))),
+    backgroundMotionMode: config.backgroundMotionMode === 'oscillating' ? 'oscillating' : 'continuous',
+    backgroundFrequencyHz: Math.max(0.05, Math.min(1.5, Number(config.backgroundFrequencyHz ?? 0.25))),
+    backgroundAmplitudePercent: Math.max(5, Math.min(50, Number(config.backgroundAmplitudePercent ?? 25))),
+    backgroundRampSeconds: Math.max(0, Math.min(5, Number(config.backgroundRampSeconds ?? 0))),
+    backgroundCoveragePercent: Math.max(25, Math.min(100, Number(config.backgroundCoveragePercent ?? 100))),
+    backgroundContrastPercent: Math.max(5, Math.min(100, Number(config.backgroundContrastPercent ?? 100))),
+    targetBackgroundRelation: config.targetBackgroundRelation === 'in_phase' || config.targetBackgroundRelation === 'counter_phase' ? config.targetBackgroundRelation : 'independent',
     objectSpeedHz: Math.max(0.05, Math.min(2, Number(config.objectSpeedHz ?? 0.5))),
     saccadeFrequencyHz: Math.max(0.2, Math.min(2, Number(config.saccadeFrequencyHz ?? 0.8))),
     metronomeHz: Math.max(0.1, Math.min(4, Number(config.metronomeHz ?? 1))),

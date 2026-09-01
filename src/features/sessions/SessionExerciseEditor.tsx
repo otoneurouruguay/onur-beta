@@ -9,7 +9,7 @@ import { analyzeExerciseCompatibility, applyExercisePurpose, exercisePurposeLabe
 import { buildExerciseExecutionPlan, type ExerciseSetting } from '../exercise/execution'
 import { ExercisePlayer } from '../exercise/ExercisePlayer'
 import { StereoscopicExerciseCanvas } from '../exercise/StereoscopicExerciseCanvas'
-import type { BackgroundType, CognitiveResponseMode, CognitiveSymbol, CognitiveTaskMode, ExerciseConfig, ExercisePurpose, LinearMotionDirection, MotionDirection, ObjectDirection, PreparationSeconds } from '../exercise/types'
+import type { BackgroundMotionMode, BackgroundType, CognitiveResponseMode, CognitiveSymbol, CognitiveTaskMode, ExerciseConfig, ExercisePurpose, LinearMotionDirection, MotionDirection, ObjectDirection, PreparationSeconds, RadialMotionDirection, TargetBackgroundRelation } from '../exercise/types'
 import { getImmersiveScenario, immersiveScenarios } from '../immersive/catalog'
 import { ImmersivePanorama } from '../immersive/ImmersivePanorama'
 
@@ -22,13 +22,18 @@ interface SessionExerciseEditorProps {
 
 const input = 'mt-2 h-11 min-w-0 w-full rounded-2xl border border-[#E9E7E7] bg-white px-3 text-sm'
 const linearDirections: LinearMotionDirection[] = ['left', 'right', 'up', 'down', 'up_left', 'up_right', 'down_left', 'down_right']
+const radialDirections: RadialMotionDirection[] = ['toward', 'away']
 const directionLabels: Record<MotionDirection, string> = {
   left: 'Hacia la izquierda', right: 'Hacia la derecha', up: 'Hacia arriba', down: 'Hacia abajo',
   up_left: 'Diagonal ↖', up_right: 'Diagonal ↗', down_left: 'Diagonal ↙', down_right: 'Diagonal ↘',
   clockwise: 'Horario', counterclockwise: 'Antihorario',
+  toward: 'Expansión · hacia la persona', away: 'Contracción · hacia el centro',
 }
 const objectDirectionLabels: Record<ObjectDirection, string> = {
   horizontal: 'Horizontal', vertical: 'Vertical', diagonal_down: 'Diagonal ↖ ↘', diagonal_up: 'Diagonal ↙ ↗',
+}
+const linkedBackgroundDirections: Record<ObjectDirection, LinearMotionDirection> = {
+  horizontal: 'right', vertical: 'down', diagonal_down: 'down_right', diagonal_up: 'up_right',
 }
 const orderedImmersiveScenarios = [...immersiveScenarios].sort((a, b) => a.intensity - b.intensity)
 
@@ -39,7 +44,7 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
   const viewerProfiles = useCardboardViewerProfiles()
   const viewerProfile = viewerProfiles.activeProfile
   const set = <Key extends keyof ExerciseConfig>(key: Key, value: ExerciseConfig[Key]) => onChange({ ...config, [key]: value })
-  const directions: MotionDirection[] = config.backgroundType === 'spiral' ? ['clockwise', 'counterclockwise'] : linearDirections
+  const directions: MotionDirection[] = config.backgroundType === 'spiral' ? ['clockwise', 'counterclockwise'] : config.backgroundType === 'radial_flow' ? radialDirections : linearDirections
   const isPhysical = config.kind === 'guided_physical'
   const isFree = config.purpose === 'custom_free'
   const isImmersive = config.purpose === 'immersive_context'
@@ -47,6 +52,7 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
   const compatibility = analyzeExerciseCompatibility(config)
   const execution = buildExerciseExecutionPlan(config, setting)
   const cognitive = config.cognitiveTaskMode !== 'none'
+  const linkedVisualConflict = config.targetBackgroundRelation !== 'independent'
 
   useEffect(() => {
     if (!config.cardboardEnabled) return
@@ -63,7 +69,7 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
   }, [config, onChange, viewerProfile])
   const evidenceSourceIds = new Set<string>(['SRC-001'])
   if (config.clinicalProtocol === 'pppd') { evidenceSourceIds.add('SRC-017'); evidenceSourceIds.add('SRC-018'); evidenceSourceIds.add('SRC-019') }
-  if (config.purpose === 'optokinetic' || config.purpose === 'visual_habituation') evidenceSourceIds.add('SRC-022')
+  if (['optokinetic', 'optic_flow', 'visual_habituation', 'visual_motion_fixation', 'pursuit_visual_conflict'].includes(config.purpose)) evidenceSourceIds.add('SRC-022')
   if (config.strobeEnabled) { evidenceSourceIds.add('SRC-037'); evidenceSourceIds.add('SRC-038') }
   if (config.displayMode !== 'standard') evidenceSourceIds.add('SRC-023')
   if (isImmersive) { evidenceSourceIds.add('SRC-034'); evidenceSourceIds.add('SRC-035'); evidenceSourceIds.add('SRC-036') }
@@ -76,9 +82,30 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
     ...config,
     backgroundType,
     backgroundSpeed: backgroundType === 'solid' ? 0 : config.backgroundSpeed,
-    backgroundDirection: backgroundType === 'spiral'
+    targetBackgroundRelation: backgroundType === 'spiral' || backgroundType === 'radial_flow' ? 'independent' : config.targetBackgroundRelation,
+    backgroundDirection: backgroundType === 'radial_flow'
+      ? (config.backgroundDirection === 'away' ? 'away' : 'toward')
+      : backgroundType === 'spiral'
       ? (config.backgroundDirection === 'counterclockwise' ? 'counterclockwise' : 'clockwise')
-      : config.backgroundDirection === 'clockwise' || config.backgroundDirection === 'counterclockwise' ? 'left' : config.backgroundDirection,
+      : config.backgroundDirection === 'clockwise' || config.backgroundDirection === 'counterclockwise' || config.backgroundDirection === 'toward' || config.backgroundDirection === 'away' ? 'left' : config.backgroundDirection,
+  })
+  const setTargetBackgroundRelation = (targetBackgroundRelation: TargetBackgroundRelation) => onChange(targetBackgroundRelation === 'independent' ? { ...config, targetBackgroundRelation } : {
+    ...config,
+    targetBackgroundRelation,
+    backgroundType: config.backgroundType === 'spiral' || config.backgroundType === 'radial_flow' || config.backgroundType === 'solid' ? 'bars' : config.backgroundType,
+    backgroundDirection: linkedBackgroundDirections[config.objectDirection],
+    backgroundMotionMode: 'oscillating',
+    backgroundFrequencyHz: config.objectSpeedHz,
+  })
+  const setObjectDirection = (objectDirection: ObjectDirection) => onChange({
+    ...config,
+    objectDirection,
+    backgroundDirection: linkedVisualConflict ? linkedBackgroundDirections[objectDirection] : config.backgroundDirection,
+  })
+  const setObjectSpeed = (objectSpeedHz: number) => onChange({
+    ...config,
+    objectSpeedHz,
+    backgroundFrequencyHz: linkedVisualConflict ? objectSpeedHz : config.backgroundFrequencyHz,
   })
   const setStrobeEnabled = (strobeEnabled: boolean) => {
     if (!strobeEnabled) return onChange({ ...config, strobeEnabled: false, clinicalProtocol: config.clinicalProtocol === 'stroboscopic_experimental' ? undefined : config.clinicalProtocol })
@@ -169,8 +196,11 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
               <option value="gaze_stabilization_x2">{exercisePurposeLabels.gaze_stabilization_x2}</option>
               <option value="gaze_substitution_remembered">{exercisePurposeLabels.gaze_substitution_remembered}</option>
               <option value="smooth_pursuit">{exercisePurposeLabels.smooth_pursuit}</option>
+              <option value="visual_motion_fixation">{exercisePurposeLabels.visual_motion_fixation}</option>
+              <option value="pursuit_visual_conflict">{exercisePurposeLabels.pursuit_visual_conflict}</option>
               <option value="saccades">{exercisePurposeLabels.saccades}</option>
               <option value="optokinetic">{exercisePurposeLabels.optokinetic}</option>
+              <option value="optic_flow">{exercisePurposeLabels.optic_flow}</option>
               <option value="visual_habituation">{exercisePurposeLabels.visual_habituation}</option>
               <option value="immersive_context">{exercisePurposeLabels.immersive_context}</option>
               <option value="cognitive_visual">{exercisePurposeLabels.cognitive_visual}</option>
@@ -214,14 +244,34 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
           <section className="rounded-2xl border border-[#E9E7E7] bg-white p-5">
             <h3 className="font-black text-[#171717]">Fondo visual</h3>
             <div className="mt-4 grid grid-cols-2 gap-4">
-              <label className="text-xs font-black text-[#2F2F2F]">Fondo<select className={input} value={config.backgroundType} onChange={(event) => setBackgroundType(event.target.value as BackgroundType)}><option value="solid">Color sólido</option><option value="bars">Barras</option><option value="spiral">Espiral</option><option value="checkerboard">Damero</option><option value="dots">Puntos</option></select></label>
-              <label className="text-xs font-black text-[#2F2F2F]">Dirección<select disabled={config.backgroundType === 'solid'} className={`${input} disabled:bg-[#F7F6F4] disabled:text-[#747474]`} value={config.backgroundDirection} onChange={(event) => set('backgroundDirection', event.target.value as MotionDirection)}>{config.backgroundType === 'solid' ? <option value={config.backgroundDirection}>No aplica</option> : directions.map((direction) => <option key={direction} value={direction}>{directionLabels[direction]}</option>)}</select></label>
+              <label className="text-xs font-black text-[#2F2F2F]">Fondo<select className={input} value={config.backgroundType} onChange={(event) => setBackgroundType(event.target.value as BackgroundType)}><option value="solid">Color sólido</option><option value="bars">Barras</option><option value="spiral">Espiral</option><option value="checkerboard">Damero</option><option value="dots">Puntos</option><option value="radial_flow">Flujo radial de puntos</option></select></label>
+              <label className="text-xs font-black text-[#2F2F2F]">Dirección<select disabled={config.backgroundType === 'solid' || linkedVisualConflict} className={`${input} disabled:bg-[#F7F6F4] disabled:text-[#747474]`} value={config.backgroundDirection} onChange={(event) => set('backgroundDirection', event.target.value as MotionDirection)}>{config.backgroundType === 'solid' ? <option value={config.backgroundDirection}>No aplica</option> : directions.map((direction) => <option key={direction} value={direction}>{directionLabels[direction]}</option>)}</select></label>
             </div>
-            <label className="mt-4 block text-xs font-black text-[#2F2F2F]">Velocidad de fondo: {config.backgroundSpeed}<input disabled={config.backgroundType === 'solid'} type="range" min="0" max="160" step="5" className="mt-3 w-full accent-[#E49A02] disabled:opacity-35" value={config.backgroundSpeed} onChange={(event) => set('backgroundSpeed', Number(event.target.value))} /></label>
-            {isFree && <div className="mt-4 grid gap-4 rounded-xl bg-[#F7F6F4] p-4 sm:grid-cols-3">
-              <label className="text-xs font-black text-[#2F2F2F]">Color de fondo<input aria-label="Color de fondo" type="color" className="mt-2 h-11 w-full rounded-xl border border-[#E9E7E7] bg-white p-1" value={config.backgroundColor} onChange={(event) => set('backgroundColor', event.target.value)} /></label>
-              <label className="text-xs font-black text-[#2F2F2F]">Color del patrón<input aria-label="Color del patrón" disabled={config.backgroundType === 'solid'} type="color" className="mt-2 h-11 w-full rounded-xl border border-[#E9E7E7] bg-white p-1 disabled:opacity-35" value={config.foregroundColor} onChange={(event) => set('foregroundColor', event.target.value)} /></label>
-              <label className="text-xs font-black text-[#2F2F2F]">Tamaño del patrón: {config.stripeWidth}px<input disabled={config.backgroundType === 'solid'} type="range" min="8" max="140" step="2" className="mt-3 w-full accent-[#E49A02] disabled:opacity-35" value={config.stripeWidth} onChange={(event) => set('stripeWidth', Number(event.target.value))} /></label>
+            {config.backgroundType !== 'solid' && <div className="mt-4 rounded-2xl bg-[#F7F6F4] p-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="text-xs font-black text-[#2F2F2F]">Movimiento del fondo<select aria-label="Movimiento del fondo" disabled={linkedVisualConflict} className={`${input} disabled:bg-white/60`} value={config.backgroundMotionMode} onChange={(event) => set('backgroundMotionMode', event.target.value as BackgroundMotionMode)}><option value="continuous">Continuo</option><option value="oscillating">Oscilante</option></select></label>
+                {config.backgroundMotionMode === 'continuous'
+                  ? <label className="text-xs font-black text-[#2F2F2F]">Velocidad: {config.backgroundSpeed} px/s<input aria-label="Velocidad de fondo" type="range" min="0" max="160" step="5" className="mt-3 w-full accent-[#E49A02]" value={config.backgroundSpeed} onChange={(event) => set('backgroundSpeed', Number(event.target.value))} /></label>
+                  : <>
+                    <label className="text-xs font-black text-[#2F2F2F]">Frecuencia: {config.backgroundFrequencyHz.toFixed(2)} Hz<input aria-label="Frecuencia de oscilación del fondo" disabled={linkedVisualConflict} type="range" min="0.05" max="1.5" step="0.05" className="mt-3 w-full accent-[#E49A02] disabled:opacity-45" value={config.backgroundFrequencyHz} onChange={(event) => set('backgroundFrequencyHz', Number(event.target.value))} /></label>
+                    <label className="text-xs font-black text-[#2F2F2F]">Amplitud: {config.backgroundAmplitudePercent}%<input aria-label="Amplitud de oscilación del fondo" type="range" min="5" max="50" step="1" className="mt-3 w-full accent-[#E49A02]" value={config.backgroundAmplitudePercent} onChange={(event) => set('backgroundAmplitudePercent', Number(event.target.value))} /></label>
+                  </>}
+              </div>
+              <details className="group mt-4 rounded-xl border border-[#E4E0DA] bg-white p-4">
+                <summary className="flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden"><span><strong className="block text-xs text-[#2F2F2F]">Ajustes avanzados del fondo</strong><span className="mt-1 block text-[10px] leading-4 text-[#747474]">Rampa, cobertura, contraste y geometría.</span></span><ChevronDown aria-hidden="true" className="mt-1 shrink-0 text-[#747474] transition-transform group-open:rotate-180" size={16}/></summary>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label className="text-xs font-black text-[#2F2F2F]">Entrada gradual: {config.backgroundRampSeconds.toFixed(1)} s<input aria-label="Entrada gradual del fondo" type="range" min="0" max="5" step="0.5" className="mt-3 w-full accent-[#E49A02]" value={config.backgroundRampSeconds} onChange={(event) => set('backgroundRampSeconds', Number(event.target.value))} /></label>
+                  <label className="text-xs font-black text-[#2F2F2F]">Cobertura central: {config.backgroundCoveragePercent}%<input aria-label="Cobertura central del fondo" type="range" min="25" max="100" step="5" className="mt-3 w-full accent-[#E49A02]" value={config.backgroundCoveragePercent} onChange={(event) => set('backgroundCoveragePercent', Number(event.target.value))} /></label>
+                  <label className="text-xs font-black text-[#2F2F2F]">Contraste relativo: {config.backgroundContrastPercent}%<input aria-label="Contraste relativo del patrón" type="range" min="5" max="100" step="5" className="mt-3 w-full accent-[#E49A02]" value={config.backgroundContrastPercent} onChange={(event) => set('backgroundContrastPercent', Number(event.target.value))} /></label>
+                  <label className="text-xs font-black text-[#2F2F2F]">Tamaño del patrón: {config.stripeWidth}px<input aria-label="Tamaño del patrón" type="range" min="8" max="140" step="2" className="mt-3 w-full accent-[#E49A02]" value={config.stripeWidth} onChange={(event) => set('stripeWidth', Number(event.target.value))} /></label>
+                  {isFree && <><label className="text-xs font-black text-[#2F2F2F]">Color de fondo<input aria-label="Color de fondo" type="color" className="mt-2 h-11 w-full rounded-xl border border-[#E9E7E7] bg-white p-1" value={config.backgroundColor} onChange={(event) => set('backgroundColor', event.target.value)} /></label><label className="text-xs font-black text-[#2F2F2F]">Color del patrón<input aria-label="Color del patrón" type="color" className="mt-2 h-11 w-full rounded-xl border border-[#E9E7E7] bg-white p-1" value={config.foregroundColor} onChange={(event) => set('foregroundColor', event.target.value)} /></label></>}
+                </div>
+                <p className="mt-3 text-[10px] leading-4 text-[#747474]">La cobertura limita el patrón a una zona central de la pantalla; no representa grados de campo visual. El contraste es relativo a los colores elegidos.</p>
+              </details>
+            </div>}
+            {(config.purpose === 'pursuit_visual_conflict' || isFree) && config.objectMode === 'tracking' && config.backgroundType !== 'solid' && <div className="mt-4 rounded-2xl border border-[#D6C3EA] bg-[#F8F3FC] p-4">
+              <label className="text-xs font-black text-[#563475]">Relación blanco–fondo<select aria-label="Relación blanco y fondo" className={input} value={config.targetBackgroundRelation} onChange={(event) => setTargetBackgroundRelation(event.target.value as TargetBackgroundRelation)}><option value="independent">Independientes</option><option value="in_phase">En fase · mismo sentido</option><option value="counter_phase">Contrafase · sentidos opuestos</option></select></label>
+              <p className="mt-2 text-[10px] leading-4 text-[#72538D]">En fase y contrafase sincronizan frecuencia y eje. La contrafase invierte el desplazamiento del fondo respecto del blanco.</p>
             </div>}
             {config.backgroundType === 'bars' && linearDirections.includes(config.backgroundDirection as LinearMotionDirection) && config.backgroundDirection.includes('_') && <p className="mt-3 text-[11px] leading-5 text-[#747474]">Las barras se dibujan diagonales y avanzan en la dirección elegida.</p>}
             {config.backgroundType === 'spiral' && <p className="mt-3 text-[11px] leading-5 text-[#747474]">La espiral solo admite rotación horaria o antihoraria; una dirección diagonal no describe su geometría.</p>}
@@ -241,7 +291,7 @@ export function SessionExerciseEditor({ config, isFirst = false, setting = 'unsp
             <div className={`mt-4 grid grid-cols-2 gap-4 ${config.objectEnabled ? '' : 'pointer-events-none opacity-40'}`}>
               <label className="text-xs font-black text-[#2F2F2F]">Comportamiento<select className={input} value={config.objectMode} onChange={(event) => set('objectMode', event.target.value as ExerciseConfig['objectMode'])}><option value="fixed">Fijo</option><option value="tracking">Seguimiento</option><option value="saccades">Sacadas</option></select></label>
               <label className="text-xs font-black text-[#2F2F2F]">Tamaño: {config.objectSize}px<input type="range" min="12" max="90" step="2" className="mt-4 w-full accent-[#E49A02]" value={config.objectSize} onChange={(event) => set('objectSize', Number(event.target.value))} /></label>
-              {config.objectMode === 'tracking' && <><label className="text-xs font-black text-[#2F2F2F]">Dirección<select className={input} value={config.objectDirection} onChange={(event) => set('objectDirection', event.target.value as ObjectDirection)}>{(Object.keys(objectDirectionLabels) as ObjectDirection[]).map((direction) => <option key={direction} value={direction}>{objectDirectionLabels[direction]}</option>)}</select></label><div><label className="text-xs font-black text-[#2F2F2F]">Velocidad de seguimiento: {config.objectSpeedHz.toFixed(2)} Hz<input aria-label="Velocidad de seguimiento ocular" type="range" min="0.05" max="2" step="0.05" className="mt-4 w-full accent-[#E49A02]" value={config.objectSpeedHz} onChange={(event) => set('objectSpeedHz', Number(event.target.value))} /></label><div className="mt-2 flex flex-wrap gap-1.5">{([{ label: 'Muy lento', value: 0.1 }, { label: 'Lento', value: 0.25 }, { label: 'Medio', value: 0.5 }, { label: 'Rápido', value: 1 }, { label: 'Muy rápido', value: 1.5 }] as const).map((preset) => <button key={preset.label} type="button" onClick={() => set('objectSpeedHz', preset.value)} className={`rounded-lg border px-2 py-1.5 text-[9px] font-black ${config.objectSpeedHz === preset.value ? 'border-[#E49A02] bg-[#FFF7E8] text-[#A36B00]' : 'border-[#DEDCD9] text-[#747474]'}`}>{preset.label}</button>)}</div></div></>}
+              {config.objectMode === 'tracking' && <><label className="text-xs font-black text-[#2F2F2F]">Dirección<select className={input} value={config.objectDirection} onChange={(event) => setObjectDirection(event.target.value as ObjectDirection)}>{(Object.keys(objectDirectionLabels) as ObjectDirection[]).map((direction) => <option key={direction} value={direction}>{objectDirectionLabels[direction]}</option>)}</select></label><div><label className="text-xs font-black text-[#2F2F2F]">Velocidad de seguimiento: {config.objectSpeedHz.toFixed(2)} Hz<input aria-label="Velocidad de seguimiento ocular" type="range" min="0.05" max="2" step="0.05" className="mt-4 w-full accent-[#E49A02]" value={config.objectSpeedHz} onChange={(event) => setObjectSpeed(Number(event.target.value))} /></label><div className="mt-2 flex flex-wrap gap-1.5">{([{ label: 'Muy lento', value: 0.1 }, { label: 'Lento', value: 0.25 }, { label: 'Medio', value: 0.5 }, { label: 'Rápido', value: 1 }, { label: 'Muy rápido', value: 1.5 }] as const).map((preset) => <button key={preset.label} type="button" onClick={() => setObjectSpeed(preset.value)} className={`rounded-lg border px-2 py-1.5 text-[9px] font-black ${config.objectSpeedHz === preset.value ? 'border-[#E49A02] bg-[#FFF7E8] text-[#A36B00]' : 'border-[#DEDCD9] text-[#747474]'}`}>{preset.label}</button>)}</div></div></>}
               {config.objectMode === 'saccades' && <><label className="text-xs font-black text-[#2F2F2F]">Patrón<select className={input} value={config.saccadePattern} onChange={(event) => set('saccadePattern', event.target.value as ExerciseConfig['saccadePattern'])}><option value="horizontal">Lateral</option><option value="vertical">Arriba/abajo</option><option value="diagonal_down">Diagonal ↖ ↘</option><option value="diagonal_up">Diagonal ↙ ↗</option><option value="random">Aleatorio</option></select></label><label className="text-xs font-black text-[#2F2F2F]">Ritmo: {config.saccadeFrequencyHz} Hz<input type="range" min="0.2" max="2" step="0.1" className="mt-4 w-full accent-[#E49A02]" value={config.saccadeFrequencyHz} onChange={(event) => set('saccadeFrequencyHz', Number(event.target.value))} /></label></>}
               {(config.objectMode === 'tracking' || config.objectMode === 'saccades') && <label className="text-xs font-black text-[#2F2F2F]">Amplitud: {config.objectAmplitude}%<input type="range" min="5" max="42" step="1" className="mt-4 w-full accent-[#E49A02]" value={config.objectAmplitude} onChange={(event) => set('objectAmplitude', Number(event.target.value))} /></label>}
               {isFree && <label className="text-xs font-black text-[#2F2F2F]">Color del blanco<input aria-label="Color del blanco" type="color" className="mt-2 h-11 w-full rounded-xl border border-[#E9E7E7] bg-white p-1" value={config.objectColor} onChange={(event) => set('objectColor', event.target.value)} /></label>}

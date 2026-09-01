@@ -177,6 +177,73 @@ describe('creación de ejercicios', () => {
     expect(screen.getByLabelText('Velocidad de seguimiento ocular')).toHaveValue('1')
   })
 
+  it('configura fijación con fondo móvil como una tarea distinta de RVO x1', () => {
+    render(<EditorHarness/>)
+    fireEvent.change(screen.getByLabelText('Objetivo del ejercicio'), { target: { value: 'visual_motion_fixation' } })
+    expect(screen.getByLabelText('Fondo')).toHaveValue('bars')
+    expect(screen.getByLabelText('Comportamiento')).toHaveValue('fixed')
+    expect(screen.getByText('Configuración coherente')).toBeInTheDocument()
+    expect(document.body).toHaveTextContent('No es RVO x1')
+  })
+
+  it('configura movimiento oscilante, rampa, cobertura y contraste sin confundirlos con velocidad continua', () => {
+    render(<EditorHarness/>)
+    fireEvent.change(screen.getByLabelText('Objetivo del ejercicio'), { target: { value: 'visual_motion_fixation' } })
+    expect(screen.getByLabelText('Movimiento del fondo')).toHaveValue('continuous')
+    expect(screen.getByLabelText('Velocidad de fondo')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Movimiento del fondo'), { target: { value: 'oscillating' } })
+    expect(screen.queryByLabelText('Velocidad de fondo')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Frecuencia de oscilación del fondo'), { target: { value: '0.4' } })
+    fireEvent.change(screen.getByLabelText('Amplitud de oscilación del fondo'), { target: { value: '30' } })
+    fireEvent.change(screen.getByLabelText('Entrada gradual del fondo'), { target: { value: '2.5' } })
+    fireEvent.change(screen.getByLabelText('Cobertura central del fondo'), { target: { value: '70' } })
+    fireEvent.change(screen.getByLabelText('Contraste relativo del patrón'), { target: { value: '55' } })
+
+    expect(screen.getByLabelText('Frecuencia de oscilación del fondo')).toHaveValue('0.4')
+    expect(screen.getByLabelText('Amplitud de oscilación del fondo')).toHaveValue('30')
+    expect(screen.getByLabelText('Entrada gradual del fondo')).toHaveValue('2.5')
+    expect(screen.getByLabelText('Cobertura central del fondo')).toHaveValue('70')
+    expect(screen.getByLabelText('Contraste relativo del patrón')).toHaveValue('55')
+    expect(screen.getByText('Configuración coherente')).toBeInTheDocument()
+  })
+
+  it('configura seguimiento con fondo móvil como conflicto visual combinado', () => {
+    render(<EditorHarness/>)
+    fireEvent.change(screen.getByLabelText('Objetivo del ejercicio'), { target: { value: 'pursuit_visual_conflict' } })
+    expect(screen.getByLabelText('Fondo')).toHaveValue('bars')
+    expect(screen.getByLabelText('Comportamiento')).toHaveValue('tracking')
+    expect(screen.getByLabelText('Velocidad de seguimiento ocular')).toBeInTheDocument()
+    expect(screen.getByText('Configuración coherente')).toBeInTheDocument()
+    expect(document.body).toHaveTextContent('tarea combinada de conflicto visual')
+  })
+
+  it('sincroniza eje y frecuencia al elegir contrafase real', () => {
+    render(<EditorHarness/>)
+    fireEvent.change(screen.getByLabelText('Objetivo del ejercicio'), { target: { value: 'pursuit_visual_conflict' } })
+    fireEvent.change(screen.getByLabelText('Relación blanco y fondo'), { target: { value: 'counter_phase' } })
+    expect(screen.getByLabelText('Movimiento del fondo')).toHaveValue('oscillating')
+    expect(screen.getByLabelText('Movimiento del fondo')).toBeDisabled()
+    expect(screen.getByLabelText('Frecuencia de oscilación del fondo')).toHaveValue('0.5')
+    fireEvent.change(screen.getByLabelText('Velocidad de seguimiento ocular'), { target: { value: '0.3' } })
+    expect(screen.getByLabelText('Frecuencia de oscilación del fondo')).toHaveValue('0.3')
+    const directions = screen.getAllByLabelText('Dirección')
+    fireEvent.change(directions[1], { target: { value: 'vertical' } })
+    expect(directions[0]).toHaveValue('down')
+    expect(screen.getByText('Configuración coherente')).toBeInTheDocument()
+    expect(document.body).toHaveTextContent('en contrafase')
+  })
+
+  it('configura flujo óptico radial como una finalidad propia', () => {
+    render(<EditorHarness/>)
+    fireEvent.change(screen.getByLabelText('Objetivo del ejercicio'), { target: { value: 'optic_flow' } })
+    expect(screen.getByLabelText('Fondo')).toHaveValue('radial_flow')
+    expect(screen.getByLabelText('Dirección')).toHaveValue('toward')
+    expect(screen.getByRole('checkbox', { name: 'Mostrar blanco' })).not.toBeChecked()
+    expect(screen.getByText('Configuración coherente')).toBeInTheDocument()
+    expect(document.body).toHaveTextContent('No representa marcha')
+  })
+
   it('configura metrónomo desde ritmos muy bajos a muy altos y tonos graves o agudos', () => {
     render(<EditorHarness/>)
     fireEvent.click(screen.getByRole('checkbox', { name: 'Metrónomo con sonido' }))

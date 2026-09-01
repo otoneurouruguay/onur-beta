@@ -55,6 +55,15 @@ export function buildExerciseExecutionPlan(config: ExerciseConfig, setting: Exer
     feasibility = 'not_executable'
     warnings.push('La tarea cognitiva necesita leer la consigna y registrar o confirmar la respuesta fuera de un visor.')
   }
+  if (config.purpose === 'visual_motion_fixation') {
+    warnings.push('El blanco queda fijo respecto de los ojos y el fondo se mueve. La cabeza permanece quieta: no es RVO x1 ni estimulación optocinética pura.')
+  }
+  if (config.purpose === 'pursuit_visual_conflict') {
+    warnings.push(`El blanco y el fondo forman una tarea combinada${config.targetBackgroundRelation === 'counter_phase' ? ' sincronizada en contrafase' : config.targetBackgroundRelation === 'in_phase' ? ' sincronizada en fase' : ''}. Seguir solamente el blanco con los ojos y mantener la cabeza quieta; no es seguimiento ocular aislado ni RVO.`)
+  }
+  if (config.purpose === 'optic_flow') {
+    warnings.push('El flujo óptico radial se realiza sentado y con la cabeza quieta. No representa marcha, conducción, estimulación optocinética lineal ni una escena 360°.')
+  }
   if (cognitive && config.kind === 'guided_physical') {
     feasibility = 'not_executable'
     warnings.push('Esta versión no combina figuras en pantalla con una tarea física: dividir la atención entre la pantalla y el entorno no es seguro.')

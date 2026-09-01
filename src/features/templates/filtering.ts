@@ -1,5 +1,5 @@
 import { exercisePurposeLabels } from '../exercise/compatibility'
-import type { ExercisePurpose } from '../exercise/types'
+import { isBackgroundMotionActive, type ExercisePurpose } from '../exercise/types'
 import type { ExerciseTemplateRecord } from './repository'
 
 export type TemplateDeviceFilter = 'all' | 'standard' | 'vr_box' | 'cardboard' | 'quest_browser'
@@ -52,7 +52,7 @@ function matchesStimulus(template: ExerciseTemplateRecord, filter: TemplateStimu
   if (filter === 'physical') return config.kind === 'guided_physical' || config.purpose === 'guided_functional'
   if (filter === 'immersive') return config.purpose === 'immersive_context'
   if (filter === 'cognitive') return config.purpose === 'cognitive_visual' || config.cognitiveTaskMode !== 'none'
-  if (filter === 'moving_background') return config.backgroundType !== 'solid' && config.backgroundSpeed > 0
+  if (filter === 'moving_background') return isBackgroundMotionActive(config)
   if (filter === 'moving_target') return config.objectEnabled && config.objectMode !== 'fixed'
   return config.objectEnabled && config.objectMode === 'fixed'
 }

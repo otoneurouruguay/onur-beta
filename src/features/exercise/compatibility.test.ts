@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { analyzeExerciseCompatibility, applyExercisePurpose, isVrBoxPurposeSupported } from './compatibility'
-import { defaultExerciseConfig, type CognitiveTaskMode, type ExerciseAdvanceMode, type ExerciseConfig, type ExerciseDoseMode, type ExercisePosture, type ExercisePurpose, type ExerciseSurface, type MotionDirection } from './types'
+import { defaultExerciseConfig, normalizeExerciseConfig, type CognitiveTaskMode, type ExerciseAdvanceMode, type ExerciseConfig, type ExerciseDoseMode, type ExercisePosture, type ExercisePurpose, type ExerciseSurface, type MotionDirection } from './types'
 
 function exercise(purpose: ExercisePurpose, overrides: Partial<ExerciseConfig> = {}) {
   return { ...applyExercisePurpose(defaultExerciseConfig, purpose), ...overrides }
@@ -20,12 +20,21 @@ describe('coherencia clínica y espacial de ejercicios', () => {
     ['smooth_pursuit', 'standard', true],
     ['smooth_pursuit', 'vr_box', true],
     ['smooth_pursuit', 'quest_browser', true],
+    ['visual_motion_fixation', 'standard', true],
+    ['visual_motion_fixation', 'vr_box', true],
+    ['visual_motion_fixation', 'quest_browser', true],
+    ['pursuit_visual_conflict', 'standard', true],
+    ['pursuit_visual_conflict', 'vr_box', true],
+    ['pursuit_visual_conflict', 'quest_browser', true],
     ['saccades', 'standard', true],
     ['saccades', 'vr_box', true],
     ['saccades', 'quest_browser', true],
     ['optokinetic', 'standard', true],
     ['optokinetic', 'vr_box', true],
     ['optokinetic', 'quest_browser', true],
+    ['optic_flow', 'standard', true],
+    ['optic_flow', 'vr_box', true],
+    ['optic_flow', 'quest_browser', true],
     ['visual_habituation', 'standard', true],
     ['visual_habituation', 'vr_box', true],
     ['visual_habituation', 'quest_browser', true],
@@ -67,7 +76,7 @@ describe('coherencia clínica y espacial de ejercicios', () => {
   })
 
   it('habilita Cardboard para el grupo visual seguro y RVO x1 presencial con anclaje 3DoF', () => {
-    for (const purpose of ['smooth_pursuit', 'saccades', 'optokinetic', 'visual_habituation', 'custom_free'] as const) {
+    for (const purpose of ['smooth_pursuit', 'visual_motion_fixation', 'pursuit_visual_conflict', 'saccades', 'optokinetic', 'visual_habituation', 'custom_free'] as const) {
       const analysis = analyzeExerciseCompatibility(exercise(purpose, { displayMode: 'vr_box', cardboardEnabled: true, doseMode: 'time', advanceMode: 'automatic' }))
       expect(analysis.valid, purpose).toBe(true)
     }
@@ -102,6 +111,68 @@ describe('coherencia clínica y espacial de ejercicios', () => {
     expect(analysis.issues.some((item) => item.code === 'visual-motion')).toBe(true)
   })
 
+  it('reconoce el movimiento oscilante aun con velocidad continua en cero', () => {
+    const oscillating = exercise('visual_motion_fixation', {
+      backgroundSpeed: 0,
+      backgroundMotionMode: 'oscillating',
+      backgroundFrequencyHz: 0.25,
+      backgroundAmplitudePercent: 20,
+    })
+    expect(analyzeExerciseCompatibility(oscillating).valid).toBe(true)
+    expect(analyzeExerciseCompatibility({ ...oscillating, purpose: 'gaze_stabilization' }).issues.some((item) => item.code === 'gaze-background')).toBe(true)
+    expect(analyzeExerciseCompatibility({ ...oscillating, purpose: 'smooth_pursuit', objectMode: 'tracking' }).issues.some((item) => item.code === 'pursuit-background')).toBe(true)
+  })
+
+  it('valida los límites técnicos de los nuevos parámetros del fondo', () => {
+    const oscillating = exercise('visual_motion_fixation', { backgroundMotionMode: 'oscillating' })
+    const analysis = analyzeExerciseCompatibility({
+      ...oscillating,
+      backgroundFrequencyHz: 2,
+      backgroundAmplitudePercent: 60,
+      backgroundRampSeconds: 6,
+      backgroundCoveragePercent: 20,
+      backgroundContrastPercent: 101,
+    })
+    expect(analysis.issues.map((item) => item.code)).toEqual(expect.arrayContaining([
+      'background-frequency', 'background-amplitude', 'background-ramp', 'background-coverage', 'background-contrast',
+    ]))
+  })
+
+  it('mantiene exactamente los valores históricos cuando faltan los nuevos campos', () => {
+    const legacy = normalizeExerciseConfig({
+      purpose: 'optokinetic',
+      backgroundType: 'bars',
+      backgroundSpeed: 35,
+    })
+    expect(legacy).toMatchObject({
+      backgroundMotionMode: 'continuous',
+      backgroundSpeed: 35,
+      backgroundRampSeconds: 0,
+      backgroundCoveragePercent: 100,
+      backgroundContrastPercent: 100,
+    })
+  })
+
+  it('diferencia fijación con fondo móvil de RVO x1 y del optocinético puro', () => {
+    const configured = exercise('visual_motion_fixation')
+    const analysis = analyzeExerciseCompatibility(configured)
+    expect(analysis.valid).toBe(true)
+    expect(analysis.explanation).toContain('No es RVO x1')
+    expect(configured).toMatchObject({ objectEnabled: true, objectMode: 'fixed', backgroundType: 'bars', backgroundSpeed: 20 })
+    expect(analyzeExerciseCompatibility({ ...configured, objectEnabled: false }).issues.some((item) => item.code === 'visual-fixation-target')).toBe(true)
+    expect(analyzeExerciseCompatibility({ ...configured, backgroundSpeed: 0 }).issues.some((item) => item.code === 'visual-fixation-background')).toBe(true)
+  })
+
+  it('diferencia el seguimiento con conflicto visual del seguimiento ocular aislado', () => {
+    const configured = exercise('pursuit_visual_conflict')
+    const analysis = analyzeExerciseCompatibility(configured)
+    expect(analysis.valid).toBe(true)
+    expect(analysis.explanation).toContain('No es seguimiento ocular aislado')
+    expect(configured).toMatchObject({ objectEnabled: true, objectMode: 'tracking', backgroundType: 'bars', backgroundSpeed: 20 })
+    expect(analyzeExerciseCompatibility({ ...configured, objectMode: 'fixed' }).issues.some((item) => item.code === 'visual-conflict-target')).toBe(true)
+    expect(analyzeExerciseCompatibility({ ...configured, backgroundType: 'solid', backgroundSpeed: 0 }).issues.some((item) => item.code === 'visual-conflict-background')).toBe(true)
+  })
+
   it('limita la intermitencia visual a una exposición presencial conservadora', () => {
     const strobe = exercise('visual_habituation', {
       strobeEnabled: true, displayMode: 'standard', posture: 'seated', surface: 'firm', supervision: 'direct_clinician',
@@ -124,8 +195,11 @@ describe('coherencia clínica y espacial de ejercicios', () => {
     expect(applyExercisePurpose(defaultExerciseConfig, 'gaze_stabilization_x2')).toMatchObject({ kind: 'visual_stimulus', displayMode: 'standard', objectEnabled: true, objectMode: 'tracking', backgroundSpeed: 0 })
     expect(applyExercisePurpose(defaultExerciseConfig, 'gaze_substitution_remembered')).toMatchObject({ kind: 'visual_stimulus', displayMode: 'standard', doseMode: 'repetitions', advanceMode: 'manual', objectMode: 'fixed' })
     expect(applyExercisePurpose(defaultExerciseConfig, 'smooth_pursuit')).toMatchObject({ kind: 'visual_stimulus', objectEnabled: true, objectMode: 'tracking', backgroundSpeed: 0 })
+    expect(applyExercisePurpose(defaultExerciseConfig, 'visual_motion_fixation')).toMatchObject({ kind: 'visual_stimulus', objectEnabled: true, objectMode: 'fixed', backgroundType: 'bars', backgroundSpeed: 20 })
+    expect(applyExercisePurpose(defaultExerciseConfig, 'pursuit_visual_conflict')).toMatchObject({ kind: 'visual_stimulus', objectEnabled: true, objectMode: 'tracking', backgroundType: 'bars', backgroundSpeed: 20 })
     expect(applyExercisePurpose(defaultExerciseConfig, 'saccades')).toMatchObject({ kind: 'visual_stimulus', objectEnabled: true, objectMode: 'saccades', backgroundSpeed: 0 })
     expect(applyExercisePurpose(defaultExerciseConfig, 'optokinetic')).toMatchObject({ kind: 'visual_stimulus', objectEnabled: false, backgroundType: 'bars' })
+    expect(applyExercisePurpose(defaultExerciseConfig, 'optic_flow')).toMatchObject({ kind: 'visual_stimulus', objectEnabled: false, backgroundType: 'radial_flow', backgroundDirection: 'toward' })
     expect(applyExercisePurpose(defaultExerciseConfig, 'immersive_context')).toMatchObject({ kind: 'visual_stimulus', displayMode: 'quest_browser', immersiveScenarioId: 'street_quiet', doseMode: 'time', advanceMode: 'automatic', supervision: 'direct_clinician', rounds: 1 })
     expect(applyExercisePurpose(defaultExerciseConfig, 'cognitive_visual')).toMatchObject({ kind: 'visual_stimulus', displayMode: 'standard', doseMode: 'time', advanceMode: 'manual', cognitiveTaskMode: 'rare_target' })
     expect(applyExercisePurpose(defaultExerciseConfig, 'guided_functional')).toMatchObject({ kind: 'guided_physical', displayMode: 'standard', doseMode: 'repetitions', advanceMode: 'manual' })
@@ -134,6 +208,9 @@ describe('coherencia clínica y espacial de ejercicios', () => {
   it('actualiza el nombre al cambiar de finalidad para no rotular mal la plantilla', () => {
     expect(applyExercisePurpose(defaultExerciseConfig, 'optokinetic').name).toBe('Estimulación optocinética')
     expect(applyExercisePurpose(defaultExerciseConfig, 'saccades').name).toBe('Sacadas visuales')
+    expect(applyExercisePurpose(defaultExerciseConfig, 'visual_motion_fixation').name).toBe('Fijación ante movimiento visual')
+    expect(applyExercisePurpose(defaultExerciseConfig, 'pursuit_visual_conflict').name).toBe('Seguimiento con conflicto visual')
+    expect(applyExercisePurpose(defaultExerciseConfig, 'optic_flow').name).toBe('Flujo óptico radial')
     expect(applyExercisePurpose(defaultExerciseConfig, 'custom_free').name).toBe('Libre · configuración profesional')
   })
 
@@ -181,7 +258,7 @@ describe('coherencia clínica y espacial de ejercicios', () => {
   it('verifica exhaustivamente las combinaciones operativas de VR Box', () => {
     const purposes = Object.keys({
       gaze_stabilization: 1, gaze_stabilization_x2: 1, gaze_substitution_remembered: 1,
-      smooth_pursuit: 1, saccades: 1, optokinetic: 1, visual_habituation: 1,
+      smooth_pursuit: 1, visual_motion_fixation: 1, pursuit_visual_conflict: 1, saccades: 1, optokinetic: 1, optic_flow: 1, visual_habituation: 1,
       immersive_context: 1, cognitive_visual: 1, guided_functional: 1, custom_free: 1,
     }) as ExercisePurpose[]
     const doses: ExerciseDoseMode[] = ['time', 'repetitions']
@@ -206,23 +283,31 @@ describe('coherencia clínica y espacial de ejercicios', () => {
         checked += 1
       }
     }
-    expect(checked).toBe(2112)
+    expect(checked).toBe(2688)
   })
 
   it('verifica todas las direcciones de los fondos móviles compatibles con VR Box', () => {
     const linear: MotionDirection[] = ['left', 'right', 'up', 'down', 'up_left', 'up_right', 'down_left', 'down_right']
     const rotational: MotionDirection[] = ['clockwise', 'counterclockwise']
-    const directions = [...linear, ...rotational]
-    const patterns = ['bars', 'checkerboard', 'dots', 'spiral'] as const
+    const radial: MotionDirection[] = ['toward', 'away']
+    const directions = [...linear, ...rotational, ...radial]
+    const patterns = ['bars', 'checkerboard', 'dots', 'spiral', 'radial_flow'] as const
     let checked = 0
 
-    for (const purpose of ['optokinetic', 'visual_habituation'] as const) for (const backgroundType of patterns) for (const backgroundDirection of directions) {
+    for (const purpose of ['optokinetic', 'optic_flow', 'visual_habituation', 'visual_motion_fixation', 'pursuit_visual_conflict'] as const) for (const backgroundType of patterns) for (const backgroundDirection of directions) {
       const analysis = analyzeExerciseCompatibility(exercise(purpose, {
         displayMode: 'vr_box', doseMode: 'time', advanceMode: 'automatic', backgroundType, backgroundDirection,
       }))
-      expect(analysis.valid, JSON.stringify({ purpose, backgroundType, backgroundDirection })).toBe(backgroundType === 'spiral' ? rotational.includes(backgroundDirection) : linear.includes(backgroundDirection))
+      const geometricallyValid = backgroundType === 'spiral' ? rotational.includes(backgroundDirection)
+        : backgroundType === 'radial_flow' ? radial.includes(backgroundDirection)
+          : linear.includes(backgroundDirection)
+      const purposeValid = purpose === 'optic_flow' ? backgroundType === 'radial_flow'
+        : purpose === 'optokinetic' ? backgroundType !== 'radial_flow'
+          : purpose === 'pursuit_visual_conflict' ? backgroundType !== 'spiral' && backgroundType !== 'radial_flow'
+            : true
+      expect(analysis.valid, JSON.stringify({ purpose, backgroundType, backgroundDirection })).toBe(geometricallyValid && purposeValid)
       checked += 1
     }
-    expect(checked).toBe(80)
+    expect(checked).toBe(300)
   })
 })
