@@ -5,6 +5,8 @@ interface UpdatableServiceWorkerRegistration {
 }
 
 interface ServiceWorkerRegistrar {
+  controller?: unknown
+  addEventListener?: (type: 'controllerchange', listener: () => void) => void
   register: (
     scriptURL: string | URL,
     options?: RegistrationOptions,
@@ -16,6 +18,7 @@ interface DeferredRegistrationOptions {
   serviceWorkerUrl?: string
   scope?: string
   schedule?: (callback: () => void, delay: number) => unknown
+  reload?: (() => void) | null
 }
 
 export async function registerDeferredServiceWorker({
@@ -23,8 +26,20 @@ export async function registerDeferredServiceWorker({
   serviceWorkerUrl = `${import.meta.env.BASE_URL}sw.js`,
   scope = import.meta.env.BASE_URL,
   schedule = typeof window === 'undefined' ? undefined : window.setInterval.bind(window),
+  reload = typeof window === 'undefined' ? null : window.location.reload.bind(window.location),
 }: DeferredRegistrationOptions = {}) {
   if (!registrar) return null
+
+  const updatingExistingApp = Boolean(registrar.controller)
+  let reloadRequested = false
+
+  if (updatingExistingApp && reload && registrar.addEventListener) {
+    registrar.addEventListener('controllerchange', () => {
+      if (reloadRequested) return
+      reloadRequested = true
+      reload()
+    })
+  }
 
   const registration = await registrar.register(serviceWorkerUrl, { scope })
   await registration.update()

@@ -6,9 +6,9 @@ import App from './App.tsx'
 import { AuthProvider } from './features/auth/AuthProvider.tsx'
 import { startDeferredServiceWorkerRegistration } from './pwa/registerDeferredServiceWorker.ts'
 
-// La actualización se busca al cargar y se activa de inmediato para evitar que
-// una pestaña quede vinculada a archivos antiguos. El cambio de controlador no
-// recarga la pantalla; los constructores además conservan sus borradores.
+// La actualización se busca al cargar y se activa de inmediato. Si un caché
+// nuevo toma el control de una pestaña ya abierta, se recarga una sola vez para
+// no conservar referencias a archivos de una publicación anterior.
 startDeferredServiceWorkerRegistration()
 
 const queryClient = new QueryClient({

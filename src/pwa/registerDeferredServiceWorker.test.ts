@@ -33,4 +33,40 @@ describe('actualización de la PWA', () => {
     await Promise.resolve()
     expect(update).toHaveBeenCalledTimes(2)
   })
+
+  it('recarga una sola vez cuando un caché nuevo toma el control de una aplicación abierta', async () => {
+    const update = vi.fn().mockResolvedValue(undefined)
+    const register = vi.fn().mockResolvedValue({ update })
+    const reload = vi.fn()
+    let controllerChange: (() => void) | undefined
+
+    await registerDeferredServiceWorker({
+      registrar: {
+        controller: {},
+        register,
+        addEventListener: (_type, listener) => { controllerChange = listener },
+      },
+      schedule: vi.fn(),
+      reload,
+    })
+
+    expect(controllerChange).toBeTypeOf('function')
+    controllerChange?.()
+    controllerChange?.()
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('no recarga durante la primera instalación del service worker', async () => {
+    const update = vi.fn().mockResolvedValue(undefined)
+    const register = vi.fn().mockResolvedValue({ update })
+    const addEventListener = vi.fn()
+
+    await registerDeferredServiceWorker({
+      registrar: { controller: null, register, addEventListener },
+      schedule: vi.fn(),
+      reload: vi.fn(),
+    })
+
+    expect(addEventListener).not.toHaveBeenCalled()
+  })
 })
