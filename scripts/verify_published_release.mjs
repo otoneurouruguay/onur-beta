@@ -73,9 +73,18 @@ requireCheck(
   digest(localExerciseEditorModule) === digest(publishedExerciseEditorModule),
   'El editor compartido de ejercicios publicado no coincide con la compilación validada.',
 )
-for (const marker of ['Ajuste óptico avanzado del teléfono y visor', 'Fundamento, límites y fuentes', 'Relación blanco–fondo', 'Ajustes avanzados del fondo', 'Flujo óptico radial', 'Contrafase · sentidos opuestos']) {
+for (const marker of ['Ajuste óptico avanzado del teléfono y visor', 'Fundamento, límites y fuentes', 'Relación blanco–fondo', 'Ajustes avanzados del fondo', 'Contrafase · sentidos opuestos']) {
   requireCheck(publishedExerciseEditorModule.toString('utf8').includes(marker), `El editor de ejercicios publicado no contiene: ${marker}.`)
 }
+const compatibilityModuleMatch = publishedExerciseEditorModule.toString('utf8').match(/compatibility-[A-Za-z0-9_-]+\.js/)
+requireCheck(compatibilityModuleMatch, 'El editor publicado no referencia las reglas clínicas compartidas.')
+const compatibilityModulePath = `/assets/${compatibilityModuleMatch[0]}`
+const localCompatibilityModulePath = `${clientPath}${compatibilityModulePath}`
+requireCheck(existsSync(localCompatibilityModulePath), `La compilación local no contiene ${compatibilityModulePath}.`)
+const localCompatibilityModule = readFileSync(localCompatibilityModulePath)
+const publishedCompatibilityModule = await fetchBytes(compatibilityModulePath)
+requireCheck(digest(localCompatibilityModule) === digest(publishedCompatibilityModule), 'Las reglas clínicas publicadas no coinciden con la compilación validada.')
+requireCheck(publishedCompatibilityModule.toString('utf8').includes('Flujo óptico radial'), 'Las reglas clínicas publicadas no contienen Flujo óptico radial.')
 
 const patientProfileModuleMatch = publishedMain.toString('utf8').match(/PatientProfilePage-[A-Za-z0-9_-]+\.js/)
 requireCheck(patientProfileModuleMatch, 'El paquete publicado no referencia el perfil del paciente.')
