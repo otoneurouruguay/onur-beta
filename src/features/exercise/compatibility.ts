@@ -1,5 +1,6 @@
 import { isBackgroundMotionActive, type ExerciseConfig, type ExercisePurpose } from './types'
 import { getImmersiveScenario } from '../immersive/catalog'
+import { canUseQuestProceduralImmersion, isQuestProceduralImmersive, recommendedQuestGeometry } from '../immersive/questProcedural'
 
 export interface ExerciseCompatibilityIssue {
   code: string
@@ -93,6 +94,11 @@ export function applyExercisePurpose(config: ExerciseConfig, purpose: ExercisePu
     name: exercisePurposeDefaultNames[purpose],
     patientInstruction: purposeInstructions[purpose],
     strobeEnabled: (purpose === 'visual_habituation' || purpose === 'custom_free') && config.strobeEnabled,
+    questPresentationMode: purpose === 'immersive_context'
+      ? 'immersive_webxr' as const
+      : ['optokinetic', 'visual_habituation', 'visual_motion_fixation', 'pursuit_visual_conflict', 'smooth_pursuit', 'saccades', 'optic_flow', 'custom_free'].includes(purpose)
+        ? config.questPresentationMode
+        : 'panel_2d' as const,
     targetBackgroundRelation: purpose === 'custom_free' || (purpose === 'pursuit_visual_conflict' && config.purpose === 'pursuit_visual_conflict')
       ? config.targetBackgroundRelation
       : 'independent' as const,
@@ -157,6 +163,7 @@ export function applyExercisePurpose(config: ExerciseConfig, purpose: ExercisePu
       patientInstruction: scenario.patientInstruction,
       kind: 'visual_stimulus',
       displayMode: 'quest_browser',
+      questPresentationMode: 'immersive_webxr',
       cardboardEnabled: false,
       doseMode: 'time',
       advanceMode: 'automatic',
@@ -268,7 +275,7 @@ function issue(code: string, message: string, correction: string): ExerciseCompa
 export function analyzeExerciseCompatibility(config: ExerciseConfig): ExerciseCompatibilityAnalysis {
   const issues: ExerciseCompatibilityIssue[] = []
   const headset = config.displayMode === 'vr_box' || config.displayMode === 'quest_browser'
-  const deviceName = config.displayMode === 'vr_box' ? config.cardboardEnabled ? 'Cardboard con seguimiento 3DoF' : 'VR Box' : 'Meta Quest en modo navegador'
+  const deviceName = config.displayMode === 'vr_box' ? config.cardboardEnabled ? 'Cardboard con seguimiento 3DoF' : 'VR Box' : isQuestProceduralImmersive(config) ? 'Meta Quest WebXR inmersivo' : 'Meta Quest en panel 2D'
   const free = config.purpose === 'custom_free'
   const cognitive = config.cognitiveTaskMode !== 'none'
   const headMovementPurpose = ['gaze_stabilization', 'gaze_stabilization_x2', 'gaze_substitution_remembered'].includes(config.purpose)
@@ -278,6 +285,18 @@ export function analyzeExerciseCompatibility(config: ExerciseConfig): ExerciseCo
 
   if (config.cardboardEnabled && config.displayMode !== 'vr_box') {
     issues.push(issue('cardboard-display-mode', 'El perfil Cardboard pertenece a la presentación VR Box y no puede aplicarse a una pantalla 2D o a Meta Quest.', 'Elegí VR Box o desactivá Cardboard.'))
+  }
+  if (config.questPresentationMode === 'immersive_webxr' && config.purpose !== 'immersive_context' && config.displayMode !== 'quest_browser') {
+    issues.push(issue('quest-immersive-device', 'La inmersión procedural WebXR solo se ejecuta desde Meta Quest en clínica.', 'Elegí Meta Quest o cambiá la presentación a Panel 2D.'))
+  }
+  if (config.displayMode === 'quest_browser' && config.questPresentationMode === 'immersive_webxr' && config.purpose !== 'immersive_context' && !canUseQuestProceduralImmersion(config)) {
+    issues.push(issue('quest-immersive-purpose', 'Esta combinación no tiene una representación procedural inmersiva coherente o segura.', 'Usá Panel 2D o elegí una finalidad visual compatible sin intermitencia ni tarea cognitiva.'))
+  }
+  if (isQuestProceduralImmersive(config)) {
+    if (![90, 180, 360].includes(config.questImmersiveCoverage)) issues.push(issue('quest-coverage', 'La cobertura WebXR no coincide con una geometría implementada.', 'Elegí 90°, 180° o 360°.'))
+    if (config.questBackgroundAngularSpeed < 1 || config.questBackgroundAngularSpeed > 60) issues.push(issue('quest-angular-speed', 'La velocidad angular WebXR está fuera del rango técnico implementado.', 'Elegí entre 1 y 60 grados por segundo.'))
+    if (config.questPatternAngularSize < 1 || config.questPatternAngularSize > 45) issues.push(issue('quest-pattern-size', 'El tamaño angular del patrón está fuera del rango técnico implementado.', 'Elegí entre 1° y 45°.'))
+    if (config.objectEnabled && (config.questTargetAngularSize < 0.5 || config.questTargetAngularSize > 12)) issues.push(issue('quest-target-size', 'El tamaño angular del blanco está fuera del rango técnico implementado.', 'Elegí entre 0,5° y 12°.'))
   }
 
   if (!free && config.backgroundType === 'spiral' && !rotationalDirection) {
@@ -453,6 +472,7 @@ export function analyzeExerciseCompatibility(config: ExerciseConfig): ExerciseCo
   if (config.purpose === 'pursuit_visual_conflict') explanation = `El blanco y el fondo se mueven respecto de los ojos${headset ? ` dentro de ${deviceName}` : ' en una pantalla inmóvil'}; el paciente sigue solo el blanco con la cabeza quieta. No es seguimiento ocular aislado ni estimulación optocinética pura.`
   if (config.purpose === 'pursuit_visual_conflict' && config.targetBackgroundRelation !== 'independent') explanation = `El blanco y el fondo oscilan sobre el mismo eje y con la misma frecuencia, ${config.targetBackgroundRelation === 'counter_phase' ? 'en contrafase' : 'en fase'}; el paciente sigue sólo el blanco con la cabeza quieta.`
   if ((config.purpose === 'optokinetic' || config.purpose === 'optic_flow' || config.purpose === 'visual_habituation') && headset) explanation = `El patrón se mueve respecto de los ojos dentro de ${deviceName}; no necesita estar anclado al ambiente y se realiza sentado, con la cabeza quieta.`
+  if (isQuestProceduralImmersive(config)) explanation = `Quest inicia una única sesión WebXR 6DoF y representa el estímulo en una geometría ${recommendedQuestGeometry(config) === 'particle_tunnel' ? 'de flujo tridimensional' : recommendedQuestGeometry(config) === 'front_disc' ? 'frontal' : 'curva'} anclada al espacio. La cabeza permanece quieta; el aviso de desviación es orientativo y no sustituye la supervisión profesional.`
   if (config.purpose === 'optic_flow' && !headset) explanation = 'El campo de puntos se expande o contrae respecto de un centro visual en una pantalla inmóvil; se realiza sentado y con la cabeza quieta.'
   if (config.strobeEnabled && issues.length === 0) explanation = 'La intermitencia reduce parcialmente la información visual en una pantalla 2D, dentro de límites conservadores y con supervisión profesional directa.'
   if (config.purpose === 'cognitive_visual' && config.displayMode === 'standard') explanation = 'Las figuras se presentan en una pantalla inmóvil, sentado, con una consigna y una respuesta definidas antes de comenzar.'

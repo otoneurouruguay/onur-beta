@@ -42,6 +42,14 @@ export interface SessionEventLogEntry {
   cognitive_reported_count?: number
   immersive_scenario_id?: string
   immersive_rendering?: 'webxr_6dof' | 'cardboard_3dof'
+  immersive_kind?: 'procedural' | 'contextual'
+  immersive_geometry?: 'curved_panel' | 'cylinder' | 'front_disc' | 'particle_tunnel'
+  immersive_coverage_degrees?: 90 | 180 | 360
+  immersive_angular_speed_degrees?: number
+  immersive_pattern_angular_size_degrees?: number
+  immersive_target_angular_size_degrees?: number
+  head_deviation_warning_count?: number
+  xr_session_loss_count?: number
   immersive_audio_enabled?: boolean
   immersive_audio_volume?: number
   immersive_target_enabled?: boolean

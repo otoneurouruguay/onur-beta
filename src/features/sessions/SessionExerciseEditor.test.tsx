@@ -50,6 +50,21 @@ describe('creación de ejercicios', () => {
     expect(screen.getByText(/todavía no inicia WebXR/i)).toBeInTheDocument()
   })
 
+  it('habilita WebXR procedural con parámetros angulares solo para una finalidad compatible', () => {
+    render(<EditorHarness setting="in_person"/>)
+    fireEvent.change(screen.getByLabelText('Objetivo del ejercicio'), { target: { value: 'optokinetic' } })
+    fireEvent.change(screen.getByLabelText('Modo'), { target: { value: 'quest_browser' } })
+
+    const immersive = screen.getByRole('button', { name: 'Inmersivo WebXR' })
+    expect(immersive).not.toBeDisabled()
+    fireEvent.click(immersive)
+    expect(immersive).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByText('Parámetros WebXR avanzados'))
+    expect(screen.getByLabelText('Velocidad angular Quest')).toBeInTheDocument()
+    expect(screen.getByLabelText('Tamaño angular del patrón Quest')).toBeInTheDocument()
+    expect(screen.getByText(/una sola inmersión durante toda la batería/i)).toBeInTheDocument()
+  })
+
   it('permite preparar una plantilla 360° para Quest sin asociarla todavía a un domicilio', () => {
     render(<EditorHarness/>)
     fireEvent.change(screen.getByLabelText('Objetivo del ejercicio'), { target: { value: 'immersive_context' } })

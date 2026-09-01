@@ -10,6 +10,9 @@ export type ObjectMode = 'fixed' | 'tracking' | 'saccades'
 export type ObjectDirection = 'horizontal' | 'vertical' | 'diagonal_down' | 'diagonal_up'
 export type SaccadePattern = ObjectDirection | 'random'
 export type ExerciseDisplayMode = 'standard' | 'vr_box' | 'quest_browser'
+export type QuestPresentationMode = 'panel_2d' | 'immersive_webxr'
+export type QuestImmersiveGeometry = 'curved_panel' | 'cylinder' | 'front_disc' | 'particle_tunnel'
+export type QuestImmersiveCoverage = 90 | 180 | 360
 export type PreparationSeconds = 0 | 5 | 10 | 20
 export type ExerciseKind = 'visual_stimulus' | 'guided_physical'
 export type ExercisePurpose = 'gaze_stabilization' | 'gaze_stabilization_x2' | 'gaze_substitution_remembered' | 'smooth_pursuit' | 'visual_motion_fixation' | 'pursuit_visual_conflict' | 'saccades' | 'optokinetic' | 'optic_flow' | 'visual_habituation' | 'immersive_context' | 'cognitive_visual' | 'guided_functional' | 'custom_free'
@@ -84,6 +87,14 @@ export interface ExerciseConfig {
   purpose: ExercisePurpose
   patientInstruction: string
   displayMode: ExerciseDisplayMode
+  questPresentationMode: QuestPresentationMode
+  questImmersiveGeometry: QuestImmersiveGeometry
+  questImmersiveCoverage: QuestImmersiveCoverage
+  questBackgroundAngularSpeed: number
+  questPatternAngularSize: number
+  questTargetAngularSize: number
+  questTargetAmplitudeDegrees: number
+  questHeadStillGuard: boolean
   cardboardEnabled: boolean
   cardboardViewerProfile?: CardboardViewerProfile
   doseMode: ExerciseDoseMode
@@ -144,6 +155,14 @@ export const defaultExerciseConfig: ExerciseConfig = {
   purpose: 'gaze_stabilization',
   patientInstruction: 'Mantené el blanco nítido mientras movés la cabeza según la indicación profesional.',
   displayMode: 'standard',
+  questPresentationMode: 'panel_2d',
+  questImmersiveGeometry: 'cylinder',
+  questImmersiveCoverage: 180,
+  questBackgroundAngularSpeed: 12,
+  questPatternAngularSize: 12,
+  questTargetAngularSize: 3,
+  questTargetAmplitudeDegrees: 25,
+  questHeadStillGuard: true,
   cardboardEnabled: false,
   doseMode: 'time',
   targetRepetitions: 10,
@@ -222,6 +241,20 @@ export function normalizeExerciseConfig(config: Partial<ExerciseConfig>, legacyP
     ...defaultExerciseConfig,
     ...config,
     purpose: inferExercisePurpose(config),
+    questPresentationMode: config.purpose === 'immersive_context'
+      ? 'immersive_webxr'
+      : config.questPresentationMode === 'immersive_webxr' ? 'immersive_webxr' : 'panel_2d',
+    questImmersiveGeometry: ['curved_panel', 'cylinder', 'front_disc', 'particle_tunnel'].includes(String(config.questImmersiveGeometry))
+      ? config.questImmersiveGeometry as QuestImmersiveGeometry
+      : 'cylinder',
+    questImmersiveCoverage: [90, 180, 360].includes(Number(config.questImmersiveCoverage))
+      ? Number(config.questImmersiveCoverage) as QuestImmersiveCoverage
+      : 180,
+    questBackgroundAngularSpeed: Math.max(1, Math.min(60, Number(config.questBackgroundAngularSpeed ?? 12))),
+    questPatternAngularSize: Math.max(1, Math.min(45, Number(config.questPatternAngularSize ?? 12))),
+    questTargetAngularSize: Math.max(0.5, Math.min(12, Number(config.questTargetAngularSize ?? 3))),
+    questTargetAmplitudeDegrees: Math.max(2, Math.min(75, Number(config.questTargetAmplitudeDegrees ?? 25))),
+    questHeadStillGuard: config.questHeadStillGuard !== false,
     cardboardEnabled: config.cardboardEnabled === true,
     strobeEnabled: config.strobeEnabled === true,
     strobeFrequencyHz: Math.max(0.5, Math.min(2.5, Number(config.strobeFrequencyHz ?? 1))),

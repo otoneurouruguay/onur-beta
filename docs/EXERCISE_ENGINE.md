@@ -57,7 +57,9 @@ Antes de entrar a VR Box aparece un aviso en pantalla normal. Al confirmar, comi
 
 Cuando una sesión mezcla cualquier tarea sin visor y VR Box, el constructor recomienda realizar primero todas las fases 2D o manuales y dejar un único bloque VR al final. Esto incluye tareas 2D temporizadas, no solo repeticiones. Si se conserva otro orden, se inserta una transición por cada cambio de equipamiento.
 
-Los ejercicios Quest no inmersivos se renderizan en una ventana 2D. Los escenarios contextuales 360° sí solicitan una sesión WebXR y usan el seguimiento del visor. Una sesión Quest debe contener únicamente ejercicios Quest porque la versión actual no transfiere una ejecución activa entre el visor y otro dispositivo.
+En Quest el profesional elige de forma explícita entre `panel_2d` e `immersive_webxr`; las configuraciones antiguas conservan el panel 2D. La inmersión procedural está disponible para seguimiento, sacadas, optocinético, flujo óptico, habituación, fijación con fondo móvil, seguimiento con conflicto y Libre técnicamente representable. Una batería procedural mantiene una única `XRSession` local: los cambios de ejercicio y descansos no obligan a salir y volver a entrar. Los escenarios contextuales 360° conservan su reproductor panorámico separado.
+
+Los patrones procedurales usan unidades angulares propias: cobertura 90°/180°/360°, velocidad del fondo en grados por segundo, tamaño angular del patrón y tamaño/amplitud angular del blanco. Barras, damero y puntos se generan sobre un cilindro o segmento curvo; la espiral usa un disco frontal; el flujo radial usa un túnel real de puntos 3D. El fondo y el blanco son objetos separados. Tras entrar a WebXR se toma una referencia `local`, se muestran 2 segundos de centro frontal y se permite recentrar sin exigir una estabilidad artificial. Un aviso no bloqueante aparece tras desviarse más de 10° durante aproximadamente un segundo.
 
 ## Compatibilidad espacial obligatoria
 
@@ -66,16 +68,17 @@ Los ejercicios Quest no inmersivos se renderizan en una ventana 2D. Los escenari
 | RVO x1 / estabilización de mirada | Sí | Solo Cardboard 3DoF presencial | No en el lienzo Quest 2D | Fijar el blanco y mover la cabeza |
 | RVO x2 / estabilización de mirada | Sí | No | No, hasta validar anclaje WebXR | Seguir el blanco y mover la cabeza en sentido opuesto |
 | Objetivo recordado / sustitución (alias RVO x3) | Sí | No | No | Mirar, cerrar ojos, girar cabeza y comprobar al reabrir |
-| Seguimiento ocular suave | Sí | Sí | Sí | Mantener cabeza quieta y seguir el blanco con los ojos |
-| Sacadas | Sí | Sí | Sí | Mantener cabeza quieta y cambiar la mirada |
-| Optocinético | Sí | Sí | Sí | Sentado, cabeza quieta, observar el patrón móvil |
-| Habituación visual | Sí | Sí | Sí | Sentado, cabeza quieta, observar el movimiento dosificado |
+| Seguimiento ocular suave | Sí | Sí | Sí, panel o WebXR frontal | Mantener cabeza quieta y seguir el blanco con los ojos |
+| Sacadas | Sí | Sí | Sí, panel o WebXR frontal | Mantener cabeza quieta y cambiar la mirada |
+| Optocinético | Sí | Sí | Sí, panel o WebXR curvo | Sentado, cabeza quieta, observar el patrón móvil |
+| Flujo óptico | Sí | Sí | Sí, panel o túnel WebXR 3D | Sentado, cabeza quieta, mirar el centro del flujo |
+| Habituación visual | Sí | Sí | Sí, panel o WebXR curvo | Sentado, cabeza quieta, observar el movimiento dosificado |
 | Exposición contextual 360° | No | Solo Cardboard 3DoF presencial | Sí, WebXR presencial | Explorar el entorno desde postura sentada |
 | Tarea cognitivo-visual | Sí | No | No | Sentado, comprender la consigna y responder según el estímulo |
 | Tarea física o funcional | Sí | No | No | Ejecutar fuera del visor con el entorno visible |
 | Libre | Según configuración | Según límites técnicos | Según límites técnicos | Definido y revisado por el profesional |
 
-En VR Box 2D el lienzo acompaña la cabeza. Cardboard 3DoF contrarresta la orientación tras una calibración frontal y por eso admite RVO x1 bajo supervisión clínica, pero no RVO x2 ni objetivo recordado. Quest inicia WebXR solamente para escenarios 360°; sus ejercicios visuales comunes siguen en un panel 2D. Seguimiento y sacadas con cabeza quieta son tareas oculomotoras y no se rotulan como sustitutos de la estabilización de mirada.
+En VR Box 2D el lienzo acompaña la cabeza. Cardboard 3DoF contrarresta la orientación tras una calibración frontal y por eso admite RVO x1 bajo supervisión clínica, pero no RVO x2 ni objetivo recordado. Quest ofrece panel 2D o WebXR procedural solo en las finalidades listadas; RVO x1, x2 y objetivo recordado continúan excluidos de este motor. Seguimiento y sacadas con cabeza quieta son tareas oculomotoras y no se rotulan como sustitutos de la estabilización de mirada.
 
 ## Modo Libre
 
@@ -90,7 +93,8 @@ Guardar y asignar son operaciones distintas. Al crear una sesión se mantienen l
 - El sonido puede requerir una primera interacción si el navegador bloquea audio automático; por ese motivo el metrónomo se deshabilita en VR Box.
 - VR Box 2D duplica el estímulo sin seguimiento. Cardboard 3DoF agrega orientación, corrección radial manual y perfil óptico por combinación teléfono–visor, pero no posición 6DoF ni calibración oficial por código QR.
 - El blanco se limita a la zona visible de cada mitad para evitar que su tamaño o amplitud lo recorten en el borde.
-- Quest muestra un lienzo 2D para ejercicios visuales comunes y solicita `XRSession` con espacio de referencia local para escenarios 360°.
+- Quest conserva el panel 2D como opción y solicita una `XRSession` con espacio de referencia `local` para patrones procedurales o escenarios 360° compatibles.
+- La batería procedural registra modo, geometría, cobertura, parámetros angulares, recentrados, avisos y pérdidas de sesión; no guarda poses ni trayectorias crudas de cabeza.
 - Las tareas físicas se bloquean en ambos visores, incluso con supervisión, porque el entorno queda oculto y el reproductor no controla la ejecución corporal.
 - Se requieren pruebas físicas en celulares, VR Box, tablets, HDMI y Meta Quest antes del piloto.
 

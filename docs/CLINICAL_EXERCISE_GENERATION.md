@@ -28,13 +28,13 @@ El endpoint o proveedor de IA todavía no se conecta a esta capa. Cuando se cone
 ## Reglas de dispositivo para todo borrador
 
 - La finalidad del ejercicio debe mapearse a una configuración técnica validable; el título no alcanza.
-- `GAZE_ADAPTATION_VORX1` solo puede usar una pantalla 2D inmóvil en la versión actual. VR Box fija el blanco a la cabeza y Quest navegador no ofrece un anclaje WebXR controlado y verificado por la aplicación.
+- `GAZE_ADAPTATION_VORX1` usa pantalla 2D inmóvil o Cardboard 3DoF presencial validado. No se incorpora al motor procedural Quest hasta validar específicamente latencia, anclaje, tolerancia y comportamiento ante pérdida de seguimiento; que WebXR exista no demuestra por sí solo equivalencia clínica.
 - `GAZE_ADAPTATION_VORX2` usa un blanco que se desplaza mientras la cabeza se mueve en sentido opuesto; también requiere pantalla 2D inmóvil en la implementación actual.
 - El objetivo recordado se mapea a `GAZE_SUBSTITUTION`. La etiqueta `RVO x3` puede mostrarse como alias docente, pero no debe codificarse como una tercera adaptación ni como ganancia triple.
 - Seguimiento ocular y sacadas pueden mostrarse en visor únicamente con instrucción explícita de mantener la cabeza quieta. No pueden presentarse como reemplazo de adaptación o sustitución vestibular.
 - La estimulación optocinética o la habituación visual requieren un patrón no sólido, velocidad mayor que cero, blanco oculto, postura sentada y límites sintomáticos definidos por el profesional.
 - Balance, marcha, sentarse-pararse y toda tarea funcional se ejecutan en Pantalla 2D, fuera del visor y con el entorno visible.
-- VR Box exige dosis temporal y avance automático. Quest admite interacción del navegador, pero una sesión Quest no se mezcla con otro dispositivo hasta implementar continuidad segura entre equipos.
+- VR Box exige dosis temporal y avance automático. Quest puede usar panel 2D o WebXR procedural en finalidades compatibles, siempre presencial, por tiempo, con avance automático y supervisión directa. Una batería procedural no se mezcla con paneles, escenarios contextuales u otro dispositivo durante la misma ejecución.
 
 Estas reglas se aplican al guardar una plantilla, validar una sesión y abrir el reproductor; una asignación heredada incompatible se bloquea antes de ejecutarse.
 

@@ -3,6 +3,7 @@ import { analyzeExerciseCompatibility } from '../exercise/compatibility'
 import { buildExerciseExecutionPlan } from '../exercise/execution'
 import type { ExerciseConfig } from '../exercise/types'
 import { getImmersiveScenario } from '../immersive/catalog'
+import { canUseQuestProceduralImmersion, isQuestProceduralImmersive } from '../immersive/questProcedural'
 
 export const cycleFormSchema = z.object({
   label: z.string().trim().min(3, 'Ingresá un nombre para el ciclo.').max(100),
@@ -109,6 +110,14 @@ export function validateSession(values: SessionFormValues) {
   if (questExercises.length > 0 && questExercises.length !== values.exercises.length) setExerciseError('Una sesión Meta Quest debe contener exclusivamente ejercicios Quest: esta versión no transfiere una sesión activa entre el visor y otro dispositivo.')
   if (questExercises.some((exercise) => exercise.supervision !== 'direct_clinician' || exercise.posture !== 'seated' || exercise.surface !== 'firm')) setExerciseError('Los ejercicios Quest iniciales requieren supervisión profesional directa, postura sentada y superficie firme.')
   if (questExercises.some((exercise) => exercise.doseMode !== 'time' || exercise.advanceMode !== 'automatic')) setExerciseError('La estación Quest inicial ejecuta ejercicios por tiempo y con avance automático.')
+  const proceduralImmersive = questExercises.filter(isQuestProceduralImmersive)
+  const invalidProceduralImmersive = questExercises.find((exercise) => exercise.questPresentationMode === 'immersive_webxr' && exercise.purpose !== 'immersive_context' && !canUseQuestProceduralImmersion(exercise))
+  if (invalidProceduralImmersive) setExerciseError(`“${invalidProceduralImmersive.name}” no admite inmersión procedural: elegí panel 2D o una finalidad visual compatible sin intermitencia ni tarea cognitiva.`)
+  if (proceduralImmersive.length > 0 && proceduralImmersive.length !== values.exercises.length) setExerciseError('Una batería procedural WebXR debe contener únicamente ejercicios inmersivos procedurales. No se mezcla con paneles 2D ni escenarios contextuales 360° dentro de la misma ejecución.')
+  if (proceduralImmersive.some((exercise) => ![90, 180, 360].includes(exercise.questImmersiveCoverage))) setExerciseError('La cobertura inmersiva debe ser de 90°, 180° o 360°.')
+  if (proceduralImmersive.some((exercise) => exercise.questBackgroundAngularSpeed < 1 || exercise.questBackgroundAngularSpeed > 60)) setExerciseError('La velocidad angular Quest debe estar entre 1 y 60 grados por segundo.')
+  if (proceduralImmersive.some((exercise) => exercise.questPatternAngularSize < 1 || exercise.questPatternAngularSize > 45)) setExerciseError('El tamaño angular del patrón debe estar entre 1° y 45°.')
+  if (proceduralImmersive.some((exercise) => exercise.objectEnabled && (exercise.questTargetAngularSize < 0.5 || exercise.questTargetAngularSize > 12))) setExerciseError('El blanco inmersivo debe medir entre 0,5° y 12°.')
 
   const incompatibleIndex = values.exercises.findIndex((exercise) => !analyzeExerciseCompatibility(exercise).valid)
   if (incompatibleIndex >= 0) {

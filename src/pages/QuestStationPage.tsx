@@ -2,6 +2,7 @@ import { CheckCircle2, ChevronRight, Glasses, KeyRound, Monitor, RotateCcw, Shie
 import { useState, type FormEvent } from 'react'
 import { SessionRunner } from '../features/sessions/SessionRunner'
 import { claimQuestSessionPairing, submitQuestSessionCapture, type ClaimedQuestSession } from '../features/sessions/questRepository'
+import { isAnyQuestImmersive, isQuestProceduralImmersive } from '../features/immersive/questProcedural'
 
 const CLAIM_STORAGE_KEY = 'onur-quest-active-claim-v1'
 
@@ -58,7 +59,8 @@ export function QuestStationPage() {
     void sendResult(result)
   }
 
-  const immersiveQuest = Boolean(claim?.session.exercises.length && claim.session.exercises.every((exercise) => exercise.purpose === 'immersive_context'))
+  const immersiveQuest = Boolean(claim?.session.exercises.length && claim.session.exercises.every(isAnyQuestImmersive))
+  const proceduralQuest = Boolean(claim?.session.exercises.length && claim.session.exercises.every(isQuestProceduralImmersive))
   const stopCriteria = Array.from(new Set(claim?.session.exercises.map((exercise) => exercise.stopCriteria?.trim()).filter(Boolean) ?? [])) as string[]
 
   if (stage === 'running' && claim) {
@@ -79,7 +81,7 @@ export function QuestStationPage() {
       </section> : stage === 'sending' ? <section className="mt-8 rounded-3xl border border-[#E9E7E7] bg-white p-8 text-center"><p role="status" className="text-lg font-black">Enviando la ejecución al profesional…</p><p className="mt-3 text-sm text-[#747474]">No cierres el navegador ni retires la conexión.</p></section> : stage === 'send_failed' && pendingResult ? <section className="mt-8 rounded-3xl border border-[#eccfd2] bg-white p-8 text-center"><h1 className="text-xl font-black">La ejecución quedó guardada en esta pantalla</h1><p className="mt-3 text-sm leading-6 text-[#747474]">No repitas los ejercicios. Restablecé la conexión y reenviá el mismo resultado.</p><button type="button" onClick={() => void sendResult(pendingResult)} className="mt-6 inline-flex h-12 items-center gap-2 rounded-2xl bg-[#171717] px-5 text-sm font-black text-white"><RotateCcw size={17}/> Reintentar envío</button></section> : claim ? <section className="mt-8 overflow-hidden rounded-3xl border border-[#E9E7E7] bg-white shadow-[0_22px_60px_rgba(18,50,56,0.08)]">
         <div className="bg-[#171717] p-7 text-white"><p className="text-[11px] font-black uppercase tracking-[.16em] text-[#EFB33A]">Sesión preparada</p><h1 className="mt-3 text-2xl font-black">{claim.session.title}</h1><p className="mt-2 text-sm text-white/65">Paciente: {claim.patientLabel} · {claim.session.exercises.length} ejercicios</p></div>
         <div className="space-y-4 p-6 sm:p-8">
-          <div className="flex gap-3 rounded-2xl bg-[#FFF7E8] p-4 text-[#8A5B00]"><Monitor className="mt-0.5 shrink-0" size={19}/><p className="text-xs font-bold leading-5"><strong>Modo de ejecución:</strong> {immersiveQuest ? 'cada escenario 360° abrirá WebXR inmersivo. Entre escenarios saldrás de la inmersión y confirmarás nuevamente el ingreso.' : 'estos ejercicios visuales se muestran en una ventana 2D del navegador de Quest; no usan anclaje espacial.'}</p></div>
+          <div className="flex gap-3 rounded-2xl bg-[#FFF7E8] p-4 text-[#8A5B00]"><Monitor className="mt-0.5 shrink-0" size={19}/><p className="text-xs font-bold leading-5"><strong>Modo de ejecución:</strong> {proceduralQuest ? 'la batería completa se ejecutará dentro de una única sesión WebXR. Los patrones y blancos quedan separados y anclados al espacio; descansos y cambios no cierran la inmersión.' : immersiveQuest ? 'cada escenario 360° abrirá WebXR inmersivo con seguimiento del visor.' : 'estos ejercicios visuales se muestran en una ventana 2D del navegador de Quest; no usan anclaje espacial.'}</p></div>
           <div className="flex gap-3 rounded-2xl bg-[#F0F8F3] p-4 text-[#28613D]"><ShieldCheck className="mt-0.5 shrink-0" size={19}/><p className="text-xs font-bold leading-5">Confirmá identidad, postura sentada, superficie firme y criterios de detención antes de colocar el visor.</p></div>
           {stopCriteria.length > 0 && <div className="rounded-2xl bg-[#fceced] p-4 text-[#a94952]"><p className="text-xs font-black">Criterios de detención o pausa</p><ul className="mt-2 list-disc space-y-1 pl-5 text-xs font-bold leading-5">{stopCriteria.map((criterion) => <li key={criterion}>{criterion}</li>)}</ul></div>}
           <div className="rounded-2xl bg-[#F7F6F4] p-4"><p className="text-xs font-black">Indicación profesional</p><p className="mt-2 text-sm leading-6 text-[#747474]">{claim.session.instructions || 'Seguir las indicaciones del profesional presente.'}</p></div>

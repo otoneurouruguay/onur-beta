@@ -30,7 +30,7 @@ Las asignaciones antiguas que no poseen `advanceMode` conservan continuidad auto
 - Pantalla 2D: confirmación táctil, mouse o teclado.
 - VR Box 2D: presentación binocular sin anclaje espacial ni seguimiento de cabeza. No usa botones, mirada, controles externos ni metrónomo.
 - Cardboard 3DoF: opción para VR Box que usa sensores de orientación, calibra una dirección frontal y aplica un perfil óptico copiado dentro de la sesión. No mide traslación corporal 6DoF.
-- Quest: los ejercicios visuales comunes continúan en una ventana 2D; los escenarios contextuales 360° abren WebXR inmersivo con seguimiento del visor.
+- Quest: cada ejercicio compatible puede conservar un panel 2D o activar WebXR procedural. Los escenarios contextuales 360° también abren WebXR, mediante su reproductor panorámico.
 
 RVO x2 y el objetivo recordado solo se habilitan en una pantalla 2D inmóvil. RVO x1 también puede ejecutarse con Cardboard 3DoF, únicamente en clínica, sentado, sobre superficie firme y con supervisión directa. VR Box 2D y los ejercicios Quest no inmersivos no ofrecen una referencia espacial estable. Seguimiento, sacadas, optocinético y habituación continúan rotulados como tareas oculomotoras o visuales, no como sustitutos automáticos de la adaptación del RVO.
 
@@ -44,10 +44,10 @@ VR Box 2D queda restringido a seguimiento, sacadas, optocinético, habituación 
 
 No se habilitan tareas físicas dentro de VR Box ni Quest: deben ejecutarse fuera del visor, con el entorno visible. Las superficies inestables requieren ayudante entrenado o supervisión directa; la marcha domiciliaria no se asigna como independiente.
 
-Una sesión Quest no puede mezclarse con Pantalla 2D o VR Box porque la versión actual no implementa continuidad entre dispositivos. Es siempre presencial, por tiempo, con avance automático y supervisión directa. Una sesión contextual puede acumular varios escenarios 360° compatibles; cada uno abre y cierra su propia inmersión WebXR.
+Una sesión Quest no puede mezclarse con Pantalla 2D o VR Box porque la versión actual no implementa continuidad entre dispositivos. Es siempre presencial, por tiempo, con avance automático y supervisión directa. Tampoco se mezclan dentro de una misma ejecución paneles Quest, patrones WebXR y escenarios contextuales: cada bloque conserva un único modelo de interacción. Una batería procedural WebXR puede incluir varios ejercicios y vueltas dentro de una sola inmersión persistente; los descansos, la pausa y el cambio de patrón no cierran la `XRSession`.
 
 ## Seguridad y trazabilidad
 
 El inicio se registra mediante `start_session_assignment` y la finalización mediante `complete_session_assignment_v2`. El paciente no escribe ejecuciones directamente.
 
-El `event_log` conserva por fase: ejercicio, vuelta, tipo, modo de dosis, dispositivo, tiempo activo, objetivo de repeticiones, cantidad informada, transiciones de colocación/retiro de VR Box y resultado completo/parcial/omitido. La finalización agrega los autorreportes y actualiza el estado en una transacción.
+El `event_log` conserva por fase: ejercicio, vuelta, tipo, modo de dosis, dispositivo, tiempo activo, objetivo de repeticiones, cantidad informada, transiciones de colocación/retiro de VR Box y resultado completo/parcial/omitido. En WebXR procedural agrega geometría, cobertura, parámetros angulares, cantidad de recentrados, avisos de desviación y pérdidas de sesión; nunca guarda poses crudas de cabeza. La finalización agrega los autorreportes y actualiza el estado en una transacción.

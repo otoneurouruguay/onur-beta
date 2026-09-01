@@ -5,6 +5,8 @@ import { activateCardboardTracking } from '../exercise/cardboardTracking'
 import type { ExerciseCompletionReport, ExerciseConfig, ExerciseDisplayMode } from '../exercise/types'
 import type { SessionAssignmentRecord, SessionEventLogEntry } from './repository'
 import { VR_BOX_TRANSITION_SECONDS } from './sequence'
+import { QuestProceduralSessionRunner } from '../immersive/QuestProceduralSessionRunner'
+import { isQuestProceduralImmersive } from '../immersive/questProcedural'
 
 type ExerciseUnit = { type: 'exercise'; config: ExerciseConfig; label: string; exerciseIndex: number; round: number }
 type RestUnit = { type: 'rest'; seconds: number; label: string; nextLabel: string; displayMode: ExerciseDisplayMode; advanceMode: ExerciseConfig['advanceMode']; viewerProfile: ViewerProfile | null }
@@ -183,7 +185,9 @@ function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, n
   return <div ref={containerRef} className="fixed inset-0 z-[120] grid grid-cols-2 divide-x divide-white/10 bg-[#171717] text-white" aria-live="polite">{content('izquierdo')}{content('derecho')}</div>
 }
 
-export function SessionRunner({ session, onFinish, onExit }: { session: SessionAssignmentRecord; onFinish: (activeSeconds: number, skippedExercises: number, eventLog: SessionEventLogEntry[]) => void; onExit: (activeSeconds: number, skippedExercises: number, eventLog: SessionEventLogEntry[]) => void }) {
+type SessionRunnerProps = { session: SessionAssignmentRecord; onFinish: (activeSeconds: number, skippedExercises: number, eventLog: SessionEventLogEntry[]) => void; onExit: (activeSeconds: number, skippedExercises: number, eventLog: SessionEventLogEntry[]) => void }
+
+function StandardSessionRunner({ session, onFinish, onExit }: SessionRunnerProps) {
   const units = useMemo(() => buildUnits(session.exercises), [session.exercises])
   const [index, setIndex] = useState(0)
   const fullscreenTargetRef = useRef<HTMLDivElement>(null)
@@ -269,6 +273,7 @@ export function SessionRunner({ session, onFinish, onExit }: { session: SessionA
         cognitive_reported_count: report?.cognitive?.reportedCount,
         immersive_scenario_id: report?.immersive?.scenarioId ?? unit.config.immersiveScenarioId,
         immersive_rendering: report?.immersive?.rendering,
+        immersive_kind: report?.immersive ? 'contextual' : undefined,
         immersive_audio_enabled: report?.immersive?.ambientAudioEnabled,
         immersive_audio_volume: report?.immersive?.ambientAudioVolume,
         immersive_target_enabled: report?.immersive?.spatialTargetEnabled,
@@ -314,4 +319,9 @@ export function SessionRunner({ session, onFinish, onExit }: { session: SessionA
   return <div ref={fullscreenTargetRef} data-testid="session-runner-viewport" className="fixed inset-0 z-[100] overflow-hidden bg-[#081113] text-white">
     {content}
   </div>
+}
+
+export function SessionRunner(props: SessionRunnerProps) {
+  const proceduralQuestSession = props.session.exercises.length > 0 && props.session.exercises.every(isQuestProceduralImmersive)
+  return proceduralQuestSession ? <QuestProceduralSessionRunner {...props}/> : <StandardSessionRunner {...props}/>
 }

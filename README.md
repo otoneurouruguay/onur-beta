@@ -65,7 +65,8 @@ Decimotercer incremento técnico ejecutable:
 - modo Libre para guardar combinaciones profesionales no validadas sin forzarlas a una finalidad clínica;
 - reproductor continuo con pausa, omitir, salir, fullscreen y controles auto-ocultables;
 - tiempo activo sin contar pausas ni descansos y metrónomo configurable;
-- salida 2D, VR Box binocular, Cardboard 3DoF y Quest WebXR para escenarios 360° desde el mismo panel;
+- salida 2D, VR Box binocular, Cardboard 3DoF, Quest en panel 2D y Quest WebXR para patrones procedurales o escenarios 360°;
+- batería Quest procedural persistente con patrones curvos, disco frontal, flujo de puntos 3D, blanco independiente, recentrado breve y trazabilidad angular sin guardar poses crudas;
 - VR Box 2D temporizado sin seguimiento ni controles, y Cardboard opcional con giroscopio, calibración frontal, perfil óptico transportable y controles duplicados;
 - advertencia y reordenamiento recomendado cuando una sesión mezcla cualquier tarea sin visor con un bloque VR Box;
 - controles de postura, superficie y supervisión, con bloqueos domiciliarios para tareas de mayor riesgo;

@@ -13,7 +13,7 @@ export interface ExerciseTemplateRecord {
 
 const STORAGE_KEY = 'onur-demo-exercise-templates-v1'
 const SEED_VERSION_KEY = 'onur-demo-exercise-templates-seed-version'
-const SEED_VERSION = '9'
+const SEED_VERSION = '10'
 const seedDate = '2026-07-20T00:00:00.000Z'
 const expandedSeedDate = '2026-08-11T00:00:00.000Z'
 const visualMotionSeedDate = '2026-08-31T00:00:00.000Z'
@@ -330,6 +330,62 @@ const immersiveTemplates: ExerciseTemplateRecord[] = [...immersiveScenarios].sor
   updatedAt: seedDate,
 }))
 
+function questProceduralTemplate(name: string, purpose: ExerciseConfig['purpose'], overrides: Partial<ExerciseConfig>): ExerciseConfig {
+  return {
+    ...applyExercisePurpose(defaultExerciseConfig, purpose),
+    name,
+    displayMode: 'quest_browser', questPresentationMode: 'immersive_webxr',
+    doseMode: 'time', advanceMode: 'automatic', posture: 'seated', surface: 'firm', supervision: 'direct_clinician',
+    metronomeEnabled: false, cognitiveTaskMode: 'none', rounds: 2, restSeconds: 30,
+    questImmersiveCoverage: 180, questBackgroundAngularSpeed: 10, questPatternAngularSize: 14,
+    questTargetAngularSize: 3, questTargetAmplitudeDegrees: 22, questHeadStillGuard: true,
+    ...overrides,
+  }
+}
+
+const questProceduralTemplates: ExerciseTemplateRecord[] = [
+  {
+    id: 'template-quest-webxr-optokinetic-bars-low', name: 'Quest WebXR · barras optocinéticas suaves',
+    config: questProceduralTemplate('Quest WebXR · barras optocinéticas suaves', 'optokinetic', {
+      backgroundType: 'bars', backgroundDirection: 'left', backgroundSpeed: 20, objectEnabled: false,
+      questImmersiveGeometry: 'cylinder', questImmersiveCoverage: 90, questBackgroundAngularSpeed: 6,
+      questPatternAngularSize: 18, durationSeconds: 20, rounds: 1, restSeconds: 40,
+    }), createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+  {
+    id: 'template-quest-webxr-optokinetic-checker', name: 'Quest WebXR · damero envolvente',
+    config: questProceduralTemplate('Quest WebXR · damero envolvente', 'visual_habituation', {
+      backgroundType: 'checkerboard', backgroundDirection: 'right', backgroundSpeed: 24, objectEnabled: false,
+      questImmersiveGeometry: 'cylinder', questImmersiveCoverage: 180, questBackgroundAngularSpeed: 10,
+      durationSeconds: 25,
+    }), createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+  {
+    id: 'template-quest-webxr-fixation-background', name: 'Quest WebXR · fijación con fondo móvil',
+    config: questProceduralTemplate('Quest WebXR · fijación con fondo móvil', 'visual_motion_fixation', {
+      backgroundType: 'bars', backgroundDirection: 'left', backgroundSpeed: 20, objectEnabled: true, objectMode: 'fixed',
+      questImmersiveGeometry: 'cylinder', questImmersiveCoverage: 180, questBackgroundAngularSpeed: 8,
+      questTargetAngularSize: 3, durationSeconds: 25,
+    }), createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+  {
+    id: 'template-quest-webxr-saccades', name: 'Quest WebXR · sacadas frontales',
+    config: questProceduralTemplate('Quest WebXR · sacadas frontales', 'saccades', {
+      backgroundType: 'solid', backgroundSpeed: 0, objectEnabled: true, objectMode: 'saccades',
+      questImmersiveGeometry: 'curved_panel', questImmersiveCoverage: 90, questTargetAmplitudeDegrees: 18,
+      durationSeconds: 25,
+    }), createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+  {
+    id: 'template-quest-webxr-optic-flow', name: 'Quest WebXR · flujo óptico 3D',
+    config: questProceduralTemplate('Quest WebXR · flujo óptico 3D', 'optic_flow', {
+      backgroundType: 'radial_flow', backgroundDirection: 'toward', backgroundSpeed: 20, objectEnabled: false,
+      questImmersiveGeometry: 'particle_tunnel', questImmersiveCoverage: 360, questBackgroundAngularSpeed: 6,
+      durationSeconds: 20, rounds: 1, restSeconds: 40,
+    }), createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+]
+
 function pppdVisualLevel(
   level: 1 | 2 | 3,
   purpose: 'visual_habituation' | 'optokinetic',
@@ -464,6 +520,7 @@ const seed: ExerciseTemplateRecord[] = [
   ...rapidImageTemplates,
   ...stroboscopicTemplates,
   ...immersiveTemplates,
+  ...questProceduralTemplates,
   ...pppdTemplates,
 ]
 
