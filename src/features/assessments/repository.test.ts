@@ -1,31 +1,53 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { assessmentComparison, createAssessment, listPatientAssessments } from './repository'
+import { dhiArgentina, emptyAssessmentResponses, scoreAssessment } from './questions'
+import { assessmentComparison, cancelAssessment, completeAssessment, createAssessmentAssignment, listPatientAssessments } from './repository'
 
-const base = { patientId: 'ana-p', treatmentCycleId: 'cycle-ana-2', sourceDocumentId: '', phase: 'final' as const, assessmentDate: '2026-07-16', generalRating: 7, fallsCount: 0, walkingAidUsed: false }
+function responses(value: 0 | 2 | 4) {
+  return Object.fromEntries(dhiArgentina.questions.map((question) => [question.id, value]))
+}
 
-describe('evaluaciones descriptivas', () => {
+const base = {
+  patientId: 'ana-p', treatmentCycleId: 'cycle-ana-2', instrumentCode: 'DHI_AR_25' as const,
+  instrumentVersion: 1, deliveryMode: 'in_person' as const, dueDate: '',
+}
+
+describe('flujo DHI versionado', () => {
   beforeEach(() => localStorage.clear())
 
-  it('compara una evaluación inicial y final v2 completas sin interpretar', async () => {
-    await createAssessment({ ...base, responses: Array(18).fill(1) })
-    const comparison = assessmentComparison(await listPatientAssessments('ana-p'), 'cycle-ana-2')
-    expect(comparison?.initialComparableTotal).toBe(38)
-    expect(comparison?.finalComparableTotal).toBe(18)
-    expect(comparison?.difference).toBe(-20)
-    expect(comparison?.maximumScore).toBe(54)
+  it('calcula total y subescalas con la clave estable de cada pregunta', () => {
+    const result = scoreAssessment(responses(4))
+    expect(result).toMatchObject({ answeredCount: 25, complete: true, total: 100 })
+    expect(result.subscales).toEqual({ physical: 28, emotional: 36, functional: 36 })
   })
 
-  it('no compara formularios incompletos', async () => {
-    await createAssessment({ ...base, responses: [1, null, ...Array(16).fill(1)] })
+  it('crea una asignación domiciliaria vacía sin inventar resultado', async () => {
+    const record = await createAssessmentAssignment({ ...base, phase: 'initial', deliveryMode: 'portal', dueDate: '2026-08-30' })
+    expect(record).toMatchObject({ status: 'assigned', answeredCount: 0, totalScore: null, dueDate: '2026-08-30' })
+    expect(record.responses).toEqual(emptyAssessmentResponses())
+  })
+
+  it('compara únicamente el DHI inicial y final completos del mismo ciclo', async () => {
+    const initial = await createAssessmentAssignment({ ...base, phase: 'initial' })
+    await completeAssessment(initial.id, responses(4))
+    const final = await createAssessmentAssignment({ ...base, phase: 'final' })
+    await completeAssessment(final.id, responses(2))
+    const comparison = assessmentComparison(await listPatientAssessments('ana-p'), 'cycle-ana-2')
+    expect(comparison).toMatchObject({ initialTotal: 100, finalTotal: 50, difference: -50, maximumScore: 100 })
+    expect(comparison?.subscaleDifferences).toEqual({ physical: -14, emotional: -18, functional: -18 })
+  })
+
+  it('no permite finalizar con respuestas faltantes', async () => {
+    const record = await createAssessmentAssignment({ ...base, phase: 'final' })
+    await expect(completeAssessment(record.id, { ...responses(2), F9: null })).rejects.toThrow('25 respuestas')
     expect(assessmentComparison(await listPatientAssessments('ana-p'), 'cycle-ana-2')).toBeNull()
   })
 
-  it('excluye No aplica del numerador y denominador comparables', async () => {
-    await createAssessment({ ...base, responses: ['not_applicable', ...Array(17).fill(1)] })
-    const comparison = assessmentComparison(await listPatientAssessments('ana-p'), 'cycle-ana-2')
-    expect(comparison?.comparedCount).toBe(17)
-    expect(comparison?.maximumScore).toBe(51)
-    expect(comparison?.initialComparableTotal).toBe(35)
-    expect(comparison?.finalComparableTotal).toBe(17)
+  it('permite cancelar una asignación abierta y volver a asignarla sin borrar resultados finalizados', async () => {
+    const pending = await createAssessmentAssignment({ ...base, phase: 'initial', deliveryMode: 'portal' })
+    expect((await cancelAssessment(pending.id)).status).toBe('cancelled')
+    const replacement = await createAssessmentAssignment({ ...base, phase: 'initial', deliveryMode: 'portal' })
+    expect(replacement.status).toBe('assigned')
+    await completeAssessment(replacement.id, responses(0))
+    await expect(cancelAssessment(replacement.id)).rejects.toThrow('ya no se puede cancelar')
   })
 })

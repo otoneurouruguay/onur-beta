@@ -7,6 +7,7 @@ export interface CardboardViewerProfile {
   verticalOffsetPercent: number
   horizontalFovDegrees: number
   verticalFovDegrees: number
+  lensDistortionPercent: number
 }
 
 interface CardboardViewerProfileStore {
@@ -25,6 +26,7 @@ export const defaultCardboardViewerProfile: CardboardViewerProfile = {
   verticalOffsetPercent: 0,
   horizontalFovDegrees: 90,
   verticalFovDegrees: 80,
+  lensDistortionPercent: 18,
 }
 
 const limits = {
@@ -32,6 +34,7 @@ const limits = {
   verticalOffsetPercent: [-15, 15],
   horizontalFovDegrees: [60, 115],
   verticalFovDegrees: [45, 105],
+  lensDistortionPercent: [0, 35],
 } as const
 
 function clamp(value: number, minimum: number, maximum: number) {
@@ -51,6 +54,7 @@ export function normalizeCardboardViewerProfile(profile: Partial<CardboardViewer
     verticalOffsetPercent: numeric('verticalOffsetPercent', defaultCardboardViewerProfile.verticalOffsetPercent),
     horizontalFovDegrees: numeric('horizontalFovDegrees', defaultCardboardViewerProfile.horizontalFovDegrees),
     verticalFovDegrees: numeric('verticalFovDegrees', defaultCardboardViewerProfile.verticalFovDegrees),
+    lensDistortionPercent: numeric('lensDistortionPercent', defaultCardboardViewerProfile.lensDistortionPercent),
   }
 }
 
@@ -97,6 +101,20 @@ export function cardboardEyeCenterPercent(profile: CardboardViewerProfile, eye: 
   }
 }
 
+export function cardboardEyeProjectionFrustum(profile: CardboardViewerProfile, eye: CardboardEye, near = 0.1) {
+  const horizontalHalfExtent = near * Math.tan(profile.horizontalFovDegrees * Math.PI / 360)
+  const verticalHalfExtent = near * Math.tan(profile.verticalFovDegrees * Math.PI / 360)
+  const eyeDirection = eye === 'left' ? -1 : 1
+  const horizontalShift = -eyeDirection * profile.imageSeparationPercent / 100 * horizontalHalfExtent * 2
+  const verticalShift = profile.verticalOffsetPercent / 100 * verticalHalfExtent * 2
+  return {
+    left: -horizontalHalfExtent + horizontalShift,
+    right: horizontalHalfExtent + horizontalShift,
+    top: verticalHalfExtent + verticalShift,
+    bottom: -verticalHalfExtent + verticalShift,
+  }
+}
+
 export function useCardboardViewerProfiles() {
   const [store, setStore] = useState<CardboardViewerProfileStore>(() => readCardboardViewerProfileStore())
   const activeProfile = store.profiles.find((profile) => profile.id === store.activeProfileId) ?? store.profiles[0]
@@ -140,6 +158,7 @@ export function useCardboardViewerProfiles() {
     verticalOffsetPercent: defaultCardboardViewerProfile.verticalOffsetPercent,
     horizontalFovDegrees: defaultCardboardViewerProfile.horizontalFovDegrees,
     verticalFovDegrees: defaultCardboardViewerProfile.verticalFovDegrees,
+    lensDistortionPercent: defaultCardboardViewerProfile.lensDistortionPercent,
   }), [updateActiveProfile])
 
   return {

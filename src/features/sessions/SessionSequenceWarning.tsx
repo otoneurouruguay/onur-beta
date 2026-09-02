@@ -1,12 +1,13 @@
-import { Glasses, WandSparkles } from 'lucide-react'
+import { Glasses, MonitorUp, WandSparkles } from 'lucide-react'
 import type { ExerciseConfig } from '../exercise/types'
-import { analyzeSessionSequence, orderExercisesForVrBox, VR_BOX_TRANSITION_SECONDS } from './sequence'
+import { analyzeSessionSequence, orderExercisesForQuest, orderExercisesForVrBox, VR_BOX_TRANSITION_SECONDS } from './sequence'
 
 export function SessionSequenceWarning({ exercises, onReorder }: { exercises: ExerciseConfig[]; onReorder: (exercises: ExerciseConfig[]) => void }) {
   const analysis = analyzeSessionSequence(exercises)
-  if (!analysis.mixesVrBoxAndNonVrBox && !analysis.mixesVrBoxProfiles) return null
+  if (!analysis.mixesVrBoxAndNonVrBox && !analysis.mixesVrBoxProfiles && !analysis.mixesQuestAndNonQuest) return null
 
-  return <aside className="mb-5 rounded-2xl border border-[#E8CE99] bg-[#FFF7E8] p-5 text-[#8A5B00]">
+  return <div className="mb-5 space-y-3">
+  {(analysis.mixesVrBoxAndNonVrBox || analysis.mixesVrBoxProfiles) && <aside className="rounded-2xl border border-[#E8CE99] bg-[#FFF7E8] p-5 text-[#8A5B00]">
     <div className="flex gap-3">
       <Glasses className="mt-0.5 shrink-0" size={20}/>
       <div className="min-w-0 flex-1">
@@ -18,5 +19,17 @@ export function SessionSequenceWarning({ exercises, onReorder }: { exercises: Ex
         </>}
       </div>
     </div>
-  </aside>
+  </aside>}
+  {analysis.mixesQuestAndNonQuest && <aside className="rounded-2xl border border-[#B8D8C3] bg-[#F0F8F3] p-5 text-[#28613D]">
+    <div className="flex gap-3">
+      <MonitorUp className="mt-0.5 shrink-0" size={20}/>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-black">Sesión mixta: pantalla profesional y Quest</p>
+        <p className="mt-2 text-xs leading-5">La plataforma ejecutará primero las tareas sin Quest en la PC. Después mostrará una transición, enviará únicamente el bloque Quest al visor y combinará ambos resultados en el cierre.</p>
+        <p className="mt-2 text-xs font-bold">{analysis.questBlockAtEnd ? 'El orden actual requiere un único cambio de dispositivo.' : 'Agrupá Quest al final: no se admite volver a la PC después de colocar el visor.'}</p>
+        {!analysis.questBlockAtEnd && <button type="button" onClick={() => onReorder(orderExercisesForQuest(exercises))} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#28613D] px-4 py-3 text-xs font-black text-white"><WandSparkles size={15}/> Agrupar Quest al final</button>}
+      </div>
+    </div>
+  </aside>}
+  </div>
 }

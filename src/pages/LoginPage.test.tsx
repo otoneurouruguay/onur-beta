@@ -35,6 +35,7 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Paciente/i }))
 
     expect(screen.getByLabelText('Usuario')).toHaveValue('')
+    expect(screen.getByLabelText('Usuario')).toHaveAttribute('placeholder', 'Nombre de usuario')
     expect(screen.getByLabelText('PIN o cédula temporal')).toHaveValue('')
   })
 })

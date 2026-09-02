@@ -1,14 +1,19 @@
 import type { StudyType } from '../studies/types'
 import type { ExtractionReviewRecord } from './repository'
+import { isReportRelevantField } from './reportFields'
+import { canonicalFieldStatus } from './fieldResults'
 
 export interface ConfirmedExtractionParameter {
   code: string
   label: string
   value: string
+  status: ReturnType<typeof canonicalFieldStatus>
 }
 
 export interface StudyExtractionReportModel {
   parameters: ConfirmedExtractionParameter[]
+  qualityControls: ConfirmedExtractionParameter[]
+  limitations: string[]
   conclusion: string
   rehabilitationSuggestion: string
 }
@@ -28,10 +33,16 @@ export function buildStudyExtractionReport(
     !extraction.rehabilitationSuggestion.trim()
   ) return null
 
+  const confirmed = extraction.fields
+      .filter((field) => field.studyType === studyType && isReportRelevantField(field) && field.confirmed && Boolean(field.professionalValue.trim()))
+      .map((field) => ({ code: field.code, label: field.label, value: field.professionalValue.trim(), status: canonicalFieldStatus(field) }))
+  const qualityCodes = new Set(studyType === 'posturography'
+    ? ['afis_pattern', 'mix_ve_som', 'mix_ve_vi', 'pppd_index']
+    : ['test_device', 'calibration_quality', 'gain_method', 'impulse_counts', 'head_velocity'])
   return {
-    parameters: extraction.fields
-      .filter((field) => field.studyType === studyType && field.confirmed && Boolean(field.professionalValue.trim()))
-      .map((field) => ({ code: field.code, label: field.label, value: field.professionalValue.trim() })),
+    parameters: confirmed.filter((field) => !qualityCodes.has(field.code)),
+    qualityControls: confirmed.filter((field) => qualityCodes.has(field.code)),
+    limitations: extraction.fields.filter((field) => field.confirmed).flatMap((field) => field.warnings ?? []).filter((warning, index, all) => all.indexOf(warning) === index),
     conclusion: extraction.professionalConclusion.trim(),
     rehabilitationSuggestion: extraction.rehabilitationSuggestion.trim(),
   }

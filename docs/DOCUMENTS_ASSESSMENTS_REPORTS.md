@@ -23,21 +23,21 @@ La solicitud no habilita el archivo. Cada solicitud, decisión, visualización, 
 
 `Solo visualizar` significa que ONUr no ofrece un botón de descarga y genera el enlace sin disposición de descarga. Como el navegador debe recibir los bytes para mostrarlos, una aplicación web no puede impedir de manera absoluta que el usuario conserve una copia; la interfaz no promete una protección técnica imposible.
 
-## Cuestionario físico
+## Cuestionarios clínicos
 
-`public/resources/cuestionario-percepcion-onur.pdf` contiene 18 preguntas cerradas en tres dominios. Las opciones son Nada, Poco, Bastante, Mucho y No aplica. Está diseñado para impresión A4 y lectura sencilla.
+ONUr utiliza el Dizziness Handicap Inventory de 25 ítems en su adaptación argentina validada (DHI-AR). Las respuestas son Sí, A veces y No, con 4, 2 y 0 puntos respectivamente. El servidor calcula el total de 0 a 100 y las subescalas física, emocional y funcional.
 
 La app permite:
 
-- registrar momento inicial, final o seguimiento;
-- transcribir respuestas completas o parciales;
-- adjuntar una fotografía privada de la hoja;
-- registrar valoración general de 0 a 10, caídas declaradas y uso de apoyo para caminar;
-- calcular un total descriptivo con denominador según las respuestas aplicables;
-- comparar inicial y final solo cuando ambos formularios v2 están completos, usando preguntas puntuables en ambos momentos;
-- conservar los registros de la versión anterior sin mezclarlos en la comparación.
+- asignar un DHI inicial, final o de seguimiento dentro de un ciclo;
+- habilitarlo solamente en el portal domiciliario del paciente, sin correo ni WhatsApp;
+- guardar avance parcial y continuar más tarde;
+- iniciarlo presencialmente desde el perfil y registrar las respuestas con el paciente presente;
+- cancelar una asignación pendiente sin modificar resultados ya finalizados;
+- mostrar al profesional el total, las subescalas y cada respuesta;
+- comparar el DHI inicial y final solamente cuando ambos están completos y corresponden al mismo ciclo y versión.
 
-Es un instrumento propio no validado, sin puntos de corte. No es una escala diagnóstica, no determina causas y no genera recomendaciones médicas.
+Una puntuación mayor indica mayor discapacidad percibida. ONUr no convierte el resultado en un diagnóstico automático y no muestra puntajes anteriores al paciente mientras responde una nueva evaluación. La arquitectura admite instrumentos versionados adicionales, pero el VSS-SF no se habilita hasta disponer de una versión española validada y autorizada.
 
 ## Informe por ciclo
 

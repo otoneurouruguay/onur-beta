@@ -1,11 +1,11 @@
 import type { ExtractedField } from './types'
-import { BAP_AUTOMATIC_REPORT_SOURCES, bapReferenceForAge } from './bapReferenceData'
+import type { CycleStudyPhase } from '../documents/types'
+import { bapReferenceForAge } from './bapReferenceData'
 
 export interface BapAutomaticReportDraft {
   conclusion: string
   rehabilitationSuggestion: string
   evidence: string[]
-  sources: readonly string[]
   warnings: string[]
 }
 
@@ -20,6 +20,30 @@ interface Values {
   mixedVestibularSomatosensory: number | null
   mixedVestibularVisual: number | null
   aphysiological: number | null
+}
+
+const legacyConclusionBoilerplate = [
+  'Este borrador describe el perfil funcional y no establece un diagnóstico; debe correlacionarse con anamnesis, examen neurológico y vestibular, marcha, Romberg y estudios asociados.',
+]
+
+const legacyRehabilitationBoilerplate = [
+  'Borrador para revisión profesional.',
+  'No se genera una nueva prescripción automática a partir del estudio final aislado.',
+  'El profesional debe definir ejercicios, dosis, frecuencia, asistencia, progresión, regresión y precauciones; se sugiere reevaluar con la misma metodología para documentar evolución.',
+]
+
+function removePhrases(value: string, phrases: readonly string[]) {
+  return phrases.reduce((text, phrase) => text.replace(phrase, ''), value)
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+export function removeLegacyAutomaticReportBoilerplate(conclusion: string, rehabilitationSuggestion: string) {
+  return {
+    conclusion: removePhrases(conclusion, legacyConclusionBoilerplate),
+    rehabilitationSuggestion: removePhrases(rehabilitationSuggestion, legacyRehabilitationBoilerplate),
+  }
 }
 
 function numericValue(value: string) {
@@ -57,7 +81,7 @@ function comparison(label: string, observed: number, reference: number, relation
   return `${label}: ${percent(observed)} (${relation === 'below' ? 'referencia mínima' : 'límite superior'} ${percent(reference)})`
 }
 
-export function buildBapAutomaticReport(fields: ExtractedField[]): BapAutomaticReportDraft | null {
+export function buildBapAutomaticReport(fields: ExtractedField[], cyclePhase: CycleStudyPhase = 'unspecified'): BapAutomaticReportDraft | null {
   if (!fields.some((field) => field.studyType === 'posturography')) return null
   const values = readValues(fields)
   const populatedConditions = values.conditions.filter((value) => value !== null).length
@@ -136,10 +160,11 @@ export function buildBapAutomaticReport(fields: ExtractedField[]): BapAutomaticR
     conclusion.push('No es posible establecer una comparación normativa automática hasta verificar una edad incluida en la tabla de referencia.')
   }
   if (hasAphysiologicalFinding) conclusion.push('El indicador afisiológico elevado obliga a revisar la calidad técnica, la comprensión de las consignas y la coherencia del estudio antes de interpretarlo.')
-  conclusion.push('Este borrador describe el perfil funcional y no establece un diagnóstico; debe correlacionarse con anamnesis, examen neurológico y vestibular, marcha, Romberg y estudios asociados.')
 
-  const rehabilitation: string[] = ['Borrador para revisión profesional.']
-  if (!reference) {
+  const rehabilitation: string[] = []
+  if (cyclePhase === 'final') {
+    rehabilitation.push('Esta posturografía está registrada como evaluación final. Comparar con la inicial del mismo ciclo, la evolución sintomática, la función y los objetivos antes de decidir alta, continuidad o un nuevo plan.')
+  } else if (!reference) {
     rehabilitation.push('Verificar la edad y completar la comparación normativa antes de definir objetivos específicos desde esta posturografía.')
   } else if (hasAphysiologicalFinding) {
     rehabilitation.push('Priorizar el control de calidad del estudio y repetir las condiciones incongruentes antes de orientar la rehabilitación con estos resultados.')
@@ -150,11 +175,10 @@ export function buildBapAutomaticReport(fields: ExtractedField[]): BapAutomaticR
     if (hasVisualFinding) targets.push('integración visual con tareas graduadas de equilibrio y orientación espacial')
     if (hasVisualConflict) targets.push('habituación visual u optocinética progresiva frente a estímulos y ambientes visualmente complejos')
     if (targets.length) rehabilitation.push(`Considerar un programa individualizado dirigido a ${targets.join('; ')}.`)
-    else rehabilitation.push('Los indicadores comparables no generan por sí solos una orientación específica de rehabilitación; definir la conducta según síntomas, examen funcional y objetivos del paciente.')
+    else rehabilitation.push('Los indicadores comparables no orientan por sí solos un objetivo específico de rehabilitación.')
     if (compositeLow || loweredConditions.includes(5) || loweredConditions.includes(6)) rehabilitation.push('Incluir valoración del riesgo de caídas, seguridad en oscuridad y superficies irregulares, y medidas ambientales cuando correspondan.')
   }
-  rehabilitation.push('El profesional debe definir ejercicios, dosis, frecuencia, asistencia, progresión, regresión y precauciones; se sugiere reevaluar con la misma metodología para documentar evolución.')
 
   if (populatedConditions < 6) warnings.push(`Solo hay ${populatedConditions} de 6 condiciones disponibles; el borrador puede estar incompleto.`)
-  return { conclusion: conclusion.join(' '), rehabilitationSuggestion: rehabilitation.join('\n\n'), evidence, sources: BAP_AUTOMATIC_REPORT_SOURCES, warnings }
+  return { conclusion: conclusion.join(' '), rehabilitationSuggestion: rehabilitation.join('\n\n'), evidence, warnings }
 }

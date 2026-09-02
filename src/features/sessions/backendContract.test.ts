@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import migration from '../../../supabase/migrations/202607170002_supervised_in_person_sessions.sql?raw'
+import atomicCompletionMigration from '../../../supabase/migrations/202608240002_atomic_supervised_session_completion.sql?raw'
+import repositorySource from './repository.ts?raw'
 
 describe('contrato backend de sesiones presenciales supervisadas', () => {
   it('mantiene las funciones del paciente limitadas al modo domiciliario', () => {
@@ -34,5 +36,26 @@ describe('contrato backend de sesiones presenciales supervisadas', () => {
     expect(migration).toContain('create or replace function public.duplicate_in_person_assignment_as_home')
     expect(migration).toContain("jsonb_build_object('mode', 'home')")
     expect(migration).toContain("'session_assignment_duplicated_as_home'")
+  })
+
+  it('guarda todo el cierre supervisado dentro de una única función segura', () => {
+    const supervisedCompletionSource = repositorySource.slice(
+      repositorySource.indexOf('export async function completeSupervisedInPersonSession'),
+      repositorySource.indexOf('export async function recordFreeInPersonSession'),
+    )
+    expect(atomicCompletionMigration).toContain('complete_supervised_in_person_session_v2')
+    expect(atomicCompletionMigration).toContain('peak_discomfort = peak_discomfort_input')
+    expect(atomicCompletionMigration).toContain('recovery_minutes = recovery_minutes_input')
+    expect(atomicCompletionMigration).toContain('delayed_response = nullif')
+    expect(atomicCompletionMigration).toContain('progression_decision = nullif')
+    expect(atomicCompletionMigration).toContain('supervised_in_person_session_close_repaired')
+    expect(supervisedCompletionSource).toContain("supabase.rpc('complete_supervised_in_person_session_v2'")
+    expect(supervisedCompletionSource).not.toContain("supabase.from('session_executions').update")
+  })
+
+  it('permite que la beta anterior reintente únicamente las métricas faltantes', () => {
+    expect(atomicCompletionMigration).toContain('executions_professional_supervised_feedback_update')
+    expect(atomicCompletionMigration).toContain('grant update (peak_discomfort, recovery_minutes, delayed_response, progression_decision)')
+    expect(atomicCompletionMigration).toContain("execution.finished_at >= now() - interval '24 hours'")
   })
 })

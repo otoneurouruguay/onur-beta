@@ -8,8 +8,9 @@ Deno.serve(async (request) => {
   const bearer = request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '')
   if (!bearer) return jsonResponse({ error: 'No autorizado.' }, 401)
   try {
-    const { patient_id, document_id, storage_path } = await request.json()
+    const { patient_id, document_id, storage_path, action = 'failed_upload' } = await request.json()
     if (typeof patient_id !== 'string' || typeof storage_path !== 'string') return jsonResponse({ error: 'Solicitud inválida.' }, 400)
+    if (!['failed_upload', 'delete_document'].includes(action)) return jsonResponse({ error: 'Solicitud inválida.' }, 400)
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false, autoRefreshToken: false } })
     const { data: actorData } = await admin.auth.getUser(bearer)
     const actorId = actorData.user?.id
@@ -27,9 +28,9 @@ Deno.serve(async (request) => {
       await admin.from('source_documents').delete().eq('id', document_id)
     }
     await admin.storage.from('clinical-documents').remove([storage_path])
-    await admin.from('audit_events').insert({ actor_user_id: actorId, action: 'failed_upload_cleaned', entity_type: 'source_document', entity_id: document_id || null, metadata: { patient_id } })
+    await admin.from('audit_events').insert({ actor_user_id: actorId, action: action === 'delete_document' ? 'document_deleted' : 'failed_upload_cleaned', entity_type: 'source_document', entity_id: document_id || null, metadata: { patient_id } })
     return jsonResponse({ success: true })
   } catch {
-    return jsonResponse({ error: 'No fue posible limpiar la carga incompleta.' }, 400)
+    return jsonResponse({ error: 'No fue posible completar la eliminación.' }, 400)
   }
 })

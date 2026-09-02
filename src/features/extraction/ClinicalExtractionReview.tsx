@@ -6,12 +6,40 @@ import { EXTRACTOR_VERSION } from './extractor'
 import { analyzeClinicalFile, releaseExtractionPreviews } from './localOcr'
 import type { ExtractedField, PageClassification, PatientMatchStatus } from './types'
 import { pageClassificationLabels } from './types'
-import { useConfirmExtraction, useDiscardExtraction, useManualExtraction, useReplaceExtraction, useSaveExtraction, useStudyExtraction } from './hooks'
+import { useConfirmExtraction, useDiscardExtraction, useManualExtraction, useReopenExtraction, useReplaceExtraction, useSaveExtraction, useStudyExtraction } from './hooks'
 import type { ExtractionReviewRecord } from './repository'
 import { PrivateDocumentViewer } from './PrivateDocumentViewer'
-import { buildBapAutomaticReport } from './bapAutomaticReport'
+import { buildBapAutomaticReport, removeLegacyAutomaticReportBoilerplate } from './bapAutomaticReport'
+import { isReportRelevantField, isReportRequiredField } from './reportFields'
+import { canonicalFieldStatus, deriveFieldCounters, fieldReviewReason, isFieldPresent } from './fieldResults'
+import { buildVestibularAutomaticReport, type VestibularAutomaticReport } from './vestibularAutomaticReport'
+import { sanitizeVestibularNarrative } from './vestibularNarrative'
 
 const control = 'h-11 rounded-xl border border-[#E9E7E7] bg-white px-3 text-sm text-[#171717]'
+
+function extractionErrorMessage(caught: unknown, fallback: string) {
+  if (caught instanceof Error && caught.message.trim()) return caught.message
+  if (caught && typeof caught === 'object' && 'message' in caught) {
+    const message = (caught as { message?: unknown }).message
+    if (typeof message === 'string' && message.trim()) return message
+  }
+  return fallback
+}
+
+function fieldStatusPresentation(field: ExtractedField) {
+  const status = canonicalFieldStatus(field)
+  const values: Record<typeof status, { label: string; className: string }> = {
+    detected: { label: 'Detectado', className: 'bg-[#EEF5F0] text-[#496451]' },
+    confirmed: { label: 'Confirmado', className: 'bg-[#EEF5F0] text-[#496451]' },
+    needs_review: { label: 'Revisar', className: 'bg-[#FFF7E8] text-[#8A5B00]' },
+    unreadable: { label: 'No legible', className: 'bg-[#fceced] text-[#a94952]' },
+    not_reported: { label: 'No informado', className: 'bg-[#fceced] text-[#a94952]' },
+    not_performed: { label: 'No realizado', className: 'bg-[#E9E7E7] text-[#747474]' },
+    invalid: { label: 'No calculable', className: 'bg-[#FFF7E8] text-[#8A5B00]' },
+    conflicting: { label: 'En conflicto', className: 'bg-[#fceced] text-[#a94952]' },
+  }
+  return values[status]
+}
 
 function normalizedField(field: ExtractedField, value: string) {
   if (!field.metricCode) return value.trim()
@@ -26,6 +54,7 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
   const confirm = useConfirmExtraction(studyId)
   const manual = useManualExtraction(studyId)
   const discard = useDiscardExtraction(studyId)
+  const reopen = useReopenExtraction(studyId)
   const replace = useReplaceExtraction(studyId)
   const replaceCandidates = replace.mutateAsync
   const reprocessed = useRef(new Set<string>())
@@ -36,11 +65,24 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [reprocessStatus, setReprocessStatus] = useState('')
+  const [editedFieldIds, setEditedFieldIds] = useState<Set<string>>(() => new Set())
 
   useEffect(() => {
     if (query.data) {
-      setDraft(query.data)
+      const cleanedReport = removeLegacyAutomaticReportBoilerplate(query.data.professionalConclusion, query.data.rehabilitationSuggestion)
+      const hasVestibularFields = query.data.fields.some((field) => field.studyType === 'vhit')
+      const hasEmbeddedConduct = /\bco[nm]ducta\s*:/iu.test(cleanedReport.conclusion)
+      const conclusion = hasVestibularFields && hasEmbeddedConduct
+        ? sanitizeVestibularNarrative(cleanedReport.conclusion, 'conclusion')
+        : cleanedReport.conclusion
+      const record = query.data.status === 'review' ? {
+        ...query.data,
+        professionalConclusion: conclusion,
+        rehabilitationSuggestion: cleanedReport.rehabilitationSuggestion,
+      } : query.data
+      setDraft(record)
       setPageNumber(query.data.sectionPageNumbers[0] ?? 1)
+      setEditedFieldIds(new Set())
     }
   }, [query.data])
 
@@ -67,20 +109,29 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
         if (!cancelled) { setReprocessStatus(''); setNotice('La imagen fue reanalizada con el lector mejorado.') }
       })
       .catch((caught) => {
-        if (!cancelled) { setReprocessStatus(''); setError(caught instanceof Error ? caught.message : 'No fue posible reanalizar el original privado.') }
+        if (!cancelled) { setReprocessStatus(''); setError(extractionErrorMessage(caught, 'No fue posible reanalizar el original privado.')) }
       })
     return () => { cancelled = true }
   }, [query.data, replaceCandidates])
 
-  const parameters = useMemo(() => draft?.fields.filter((field) => field.professionalValue.trim() || field.required) ?? [], [draft])
-  const missing = useMemo(() => parameters.filter((field) => field.required && !field.professionalValue.trim()), [parameters])
-  const automaticReport = useMemo(() => draft ? buildBapAutomaticReport(draft.fields) : null, [draft])
-  const reviewCount = parameters.filter((field) => field.professionalValue.trim() && (field.status !== 'read' || field.confidence < .82)).length
+  const relevantFields = useMemo(() => draft?.fields.filter(isReportRelevantField) ?? [], [draft])
+  const parameters = useMemo(() => relevantFields.filter((field) => isFieldPresent(field) || isReportRequiredField(field)), [relevantFields])
+  const missing = useMemo(() => parameters.filter((field) => isReportRequiredField(field) && !isFieldPresent(field)), [parameters])
+  const counters = useMemo(() => deriveFieldCounters(relevantFields), [relevantFields])
+  const studyType = draft?.fields.find((field) => field.studyType === 'posturography') ? 'posturography' : 'vhit'
+  const automaticReport = useMemo(() => draft ? studyType === 'posturography' ? buildBapAutomaticReport(draft.fields, draft.cyclePhase ?? 'unspecified') : buildVestibularAutomaticReport(draft.fields) : null, [draft, studyType])
+  const vestibularAutomaticReport = automaticReport && typeof (automaticReport as Partial<VestibularAutomaticReport>).transcribedConduct === 'string'
+    ? automaticReport as VestibularAutomaticReport
+    : null
   const activeField = draft?.fields.find((field) => field.clientId === selectedField)
   const blocking = missing.length > 0 || !draft?.professionalConclusion.trim() || !draft.rehabilitationSuggestion.trim() || draft.patientMatchStatus === 'mismatch' || draft.pages.some((item) => item.classification === 'unrecognized')
 
   const updateField = (clientId: string, updater: (field: ExtractedField) => ExtractedField) => setDraft((current) => current ? { ...current, fields: current.fields.map((field) => field.clientId === clientId ? updater(field) : field) } : current)
-  const updateValue = (field: ExtractedField, value: string) => updateField(field.clientId, (current) => ({ ...current, professionalValue: value, normalizedValue: normalizedField(current, value), status: value ? 'review' : 'unrecognized', confirmed: false }))
+  const updateValue = (field: ExtractedField, value: string) => {
+    updateField(field.clientId, (current) => ({ ...current, professionalValue: value, normalizedValue: normalizedField(current, value), value: value.trim() || null, displayValue: value, status: value.trim() ? 'needs_review' : 'not_reported', confirmed: false }))
+    setEditedFieldIds((current) => new Set(current).add(field.clientId))
+    setNotice('')
+  }
   const updateClassification = (targetPage: number, classification: PageClassification) => setDraft((current) => current ? { ...current, pages: current.pages.map((item) => item.pageNumber === targetPage ? { ...item, classification } : item) } : current)
   const updateMatch = (status: PatientMatchStatus) => setDraft((current) => current ? { ...current, patientMatchStatus: status } : current)
 
@@ -93,17 +144,19 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
       if (!current || current.id !== draft.id) return current
       const needsConclusion = !current.professionalConclusion.trim()
       const needsSuggestion = !current.rehabilitationSuggestion.trim()
-      if (!needsConclusion && !needsSuggestion) return current
+      const transcribedConduct = vestibularAutomaticReport?.transcribedConduct.trim() ?? ''
+      const hasLegacyCopiedConduct = studyType === 'vhit' && Boolean(transcribedConduct) && current.rehabilitationSuggestion.trim() === transcribedConduct
+      if (!needsConclusion && !needsSuggestion && !hasLegacyCopiedConduct) return current
       return {
         ...current,
         professionalConclusion: needsConclusion ? automaticReport.conclusion : current.professionalConclusion,
-        rehabilitationSuggestion: needsSuggestion ? automaticReport.rehabilitationSuggestion : current.rehabilitationSuggestion,
+        rehabilitationSuggestion: needsSuggestion || hasLegacyCopiedConduct ? automaticReport.rehabilitationSuggestion : current.rehabilitationSuggestion,
       }
     })
-  }, [automaticReport, draft])
+  }, [automaticReport, draft, studyType, vestibularAutomaticReport])
 
   const applyAutomaticReport = () => {
-    if (!draft || !automaticReport) { setError('Completá los parámetros de la posturografía para generar el borrador automático.'); return }
+    if (!draft || !automaticReport) { setError(studyType === 'posturography' ? 'Completá los parámetros de la posturografía para generar el borrador automático.' : 'El documento no contiene una conclusión suficiente para generar el borrador clínico.'); return }
     const replacesText = Boolean(draft.professionalConclusion.trim() || draft.rehabilitationSuggestion.trim())
     const alreadyCurrent = draft.professionalConclusion === automaticReport.conclusion && draft.rehabilitationSuggestion === automaticReport.rehabilitationSuggestion
     if (replacesText && !alreadyCurrent && !window.confirm('¿Reemplazar los textos actuales por un nuevo borrador basado en los parámetros mostrados?')) return
@@ -112,80 +165,132 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
     setNotice('Borrador automático actualizado. Podés editar ambos textos antes de confirmar.')
   }
 
+  const applyParameterCorrections = () => {
+    if (!draft || editedFieldIds.size === 0) return
+    const correctedCount = draft.fields.filter((field) => editedFieldIds.has(field.clientId) && field.professionalValue.trim()).length
+    setDraft({
+      ...draft,
+      fields: draft.fields.map((field) => {
+        if (!editedFieldIds.has(field.clientId)) return field
+        const value = field.professionalValue.trim()
+        return {
+          ...field,
+          professionalValue: value,
+          normalizedValue: normalizedField(field, value),
+          value: value || null,
+          displayValue: value,
+          status: value ? 'confirmed' : 'not_reported',
+          confirmed: Boolean(value),
+          source: { page: field.pageNumber, regionId: field.source?.regionId ?? 'manual', normalizedBbox: field.region, method: 'professional_edit' },
+          correctionHistory: value && value !== field.rawValue ? [...(field.correctionHistory ?? []), { previousValue: field.rawValue, value, correctedAt: new Date().toISOString(), actor: 'professional' as const }] : field.correctionHistory,
+        }
+      }),
+    })
+    setEditedFieldIds(new Set())
+    setError('')
+    setNotice(correctedCount > 0
+      ? `${correctedCount} ${correctedCount === 1 ? 'corrección aplicada' : 'correcciones aplicadas'}. Se actualizaron los estados y los datos faltantes sin volver a procesar el documento.`
+      : 'Se actualizaron los datos faltantes sin volver a procesar el documento.')
+  }
+
   const saveDraft = async () => {
     if (!draft) return
     setError(''); setNotice('')
     try { await save.mutateAsync(draft); setNotice('Borrador guardado.') }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible guardar el borrador.') }
+    catch (caught) { setError(extractionErrorMessage(caught, 'No fue posible guardar el borrador.')) }
   }
 
   const confirmDraft = async () => {
     if (!draft) return
     if (blocking) { setError('Completá los datos marcados, la conclusión y la sugerencia profesional antes de generar el informe.'); return }
-    const confirmedDraft: ExtractionReviewRecord = { ...draft, fields: draft.fields.map((field) => field.professionalValue.trim() ? { ...field, confirmed: true, status: 'read' } : field) }
+    const confirmedDraft: ExtractionReviewRecord = {
+      ...draft,
+      fields: draft.fields.map((field) => isReportRelevantField(field) && field.professionalValue.trim()
+        ? { ...field, confirmed: true, status: ['invalid', 'not_performed'].includes(field.status) ? field.status : 'confirmed' }
+        : { ...field, confirmed: false }),
+    }
     setError(''); setNotice('')
     try {
       await save.mutateAsync(confirmedDraft)
       await confirm.mutateAsync(confirmedDraft.id)
       setDraft({ ...confirmedDraft, status: 'confirmed' })
       navigate(`/app/estudios/${studyId}/informe`, { replace: true })
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible generar el informe.') }
+    } catch (caught) { setError(extractionErrorMessage(caught, 'No fue posible generar el informe.')) }
   }
 
   const chooseManual = async () => {
     if (!draft || !window.confirm('¿Continuar con carga completamente manual?')) return
     setError('')
     try { await manual.mutateAsync(draft.id); setDraft({ ...draft, status: 'manual' }) }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible cambiar a carga manual.') }
+    catch (caught) { setError(extractionErrorMessage(caught, 'No fue posible cambiar a carga manual.')) }
   }
 
   const discardDraft = async () => {
     if (!draft || !window.confirm('¿Descartar el borrador automático? El original privado se conservará.')) return
     setError('')
     try { await discard.mutateAsync(draft.id); setDraft({ ...draft, status: 'discarded' }) }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible descartar el borrador.') }
+    catch (caught) { setError(extractionErrorMessage(caught, 'No fue posible descartar el borrador.')) }
+  }
+
+  const reopenDraft = async () => {
+    if (!draft || draft.status !== 'discarded') return
+    setError(''); setNotice('')
+    try {
+      await reopen.mutateAsync(draft.id)
+      setDraft({ ...draft, status: 'review' })
+      setNotice('Borrador reabierto. Ya podés corregirlo y guardarlo.')
+    } catch (caught) { setError(extractionErrorMessage(caught, 'No fue posible reabrir el borrador.')) }
   }
 
   if (query.isPending) return <div className="rounded-2xl border border-[#E9E7E7] bg-white p-6 text-sm text-[#747474]">Cargando parámetros…</div>
   if (!draft) return null
   const locked = draft.status !== 'review'
+  const confirmedWithLegacyCopiedConduct = locked && Boolean(vestibularAutomaticReport?.transcribedConduct)
+    && draft.rehabilitationSuggestion.trim() === vestibularAutomaticReport?.transcribedConduct.trim()
 
   return <section className="space-y-5">
-    <div className="rounded-2xl border border-[#E8CE99] bg-[#FFF7E8] px-5 py-4 text-xs leading-5 text-[#8A5B00]"><strong>Revisión profesional obligatoria.</strong> ONUr transcribe parámetros y prepara un borrador estadístico editable; no diagnostica ni define tratamientos. La conclusión y la rehabilitación solo forman parte del informe después de ser revisadas y confirmadas por el profesional.</div>
+    <div className="rounded-2xl border border-[#E8CE99] bg-[#FFF7E8] px-5 py-4 text-xs leading-5 text-[#8A5B00]"><strong>Revisión profesional obligatoria.</strong> ONUr transcribe parámetros y controla si el documento contiene los datos mínimos para una lectura interpretable; no diagnostica ni define tratamientos. La conclusión y la rehabilitación solo forman parte del informe después de ser revisadas y confirmadas por el profesional.</div>
 
     {reprocessStatus && <div role="status" className="flex items-center gap-3 rounded-2xl bg-[#FFF7E8] p-4 text-sm font-black text-[#A36B00]"><LoaderCircle className="animate-spin" size={18}/>{reprocessStatus}</div>}
     {draft.patientMatchStatus === 'mismatch' && <div className="rounded-2xl border border-[#efc3c7] bg-[#fceced] p-4"><div className="flex gap-3"><AlertTriangle className="shrink-0 text-[#a94952]"/><p className="text-sm font-black text-[#8d3c45]">La identidad del documento no coincide completamente con el paciente seleccionado.</p></div><label className="mt-3 flex items-start gap-3 text-xs font-bold text-[#8d3c45]"><input type="checkbox" onChange={(event) => updateMatch(event.target.checked ? 'confirmed_by_professional' : 'mismatch')}/> Confirmo que el documento corresponde a este paciente.</label></div>}
-    {locked && <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#E8CE99] bg-[#FFF7E8] p-4"><CheckCircle2 className="text-[#A36B00]"/><p className="mr-auto text-sm font-black text-[#7A5100]">{draft.status === 'confirmed' ? 'Informe confirmado.' : draft.status === 'manual' ? 'Carga manual seleccionada.' : 'Borrador descartado.'}</p>{draft.status === 'confirmed' && <Link to={`/app/estudios/${studyId}/informe`} className="rounded-xl border border-[#E8CE99] bg-white px-3 py-2 text-xs font-black text-[#A36B00]">Ver informe</Link>}</div>}
+    {locked && <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#E8CE99] bg-[#FFF7E8] p-4"><CheckCircle2 className="text-[#A36B00]"/><p className="mr-auto text-sm font-black text-[#7A5100]">{draft.status === 'confirmed' ? 'Informe confirmado.' : draft.status === 'manual' ? 'Carga manual seleccionada.' : 'Borrador descartado. El archivo original sigue disponible.'}</p>{draft.status === 'confirmed' && <Link to={`/app/estudios/${studyId}/informe`} className="rounded-xl border border-[#E8CE99] bg-white px-3 py-2 text-xs font-black text-[#A36B00]">Ver informe</Link>}{draft.status === 'discarded' && <button type="button" onClick={reopenDraft} disabled={reopen.isPending} className="inline-flex items-center gap-2 rounded-xl border border-[#E8CE99] bg-white px-3 py-2 text-xs font-black text-[#A36B00] disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw size={14}/>{reopen.isPending ? 'Reabriendo…' : 'Reabrir borrador'}</button>}</div>}
 
     <div className="grid gap-5 xl:grid-cols-[.9fr_1.1fr]">
       <section className="overflow-hidden rounded-2xl border border-[#E9E7E7] bg-white">
         <div className="border-b border-[#E9E7E7] p-5"><h2 className="font-black text-[#171717]">Estudio original</h2><p className="mt-1 text-xs text-[#747474]">Página {pageNumber} de {draft.pages.length} · {draft.sourceFilename}</p></div>
         <div className="relative min-h-[500px] bg-[#E9E7E7]"><PrivateDocumentViewer url={draft.documentUrl} mimeType={draft.mimeType} pageNumber={pageNumber} region={activeField?.pageNumber === pageNumber ? activeField.region : null}/></div>
+        {activeField && <div className="border-t border-[#E9E7E7] bg-[#F7F6F4] p-4 text-xs leading-5 text-[#747474]"><p className="font-black text-[#2F2F2F]">Evidencia del campo seleccionado</p><p>Región: {activeField.source?.regionId ?? 'página completa'} · Método: {activeField.source?.method ?? activeField.extractorMethod}</p><p>OCR crudo: {activeField.rawValue || 'Sin lectura'} · Normalizado: {activeField.normalizedValue || activeField.displayValue || 'null'}</p>{fieldReviewReason(activeField) && <p className="mt-1 font-bold text-[#8A5B00]">Motivo: {fieldReviewReason(activeField)}</p>}</div>}
         {draft.pages.length > 1 && <div className="flex gap-2 overflow-x-auto border-t border-[#E9E7E7] p-3">{draft.pages.map((item) => <button key={item.pageNumber} type="button" onClick={() => setPageNumber(item.pageNumber)} className={`min-w-20 rounded-xl border px-3 py-2 text-left text-xs ${item.pageNumber === pageNumber ? 'border-[#E49A02] bg-[#FFF7E8]' : 'border-[#E9E7E7]'}`}>Pág. {item.pageNumber}</button>)}</div>}
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-[#E9E7E7] bg-white">
-        <div className="border-b border-[#E9E7E7] p-5"><h2 className="font-black text-[#171717]">Parámetros obtenidos</h2><p className="mt-1 text-xs text-[#747474]">{parameters.filter((field) => field.professionalValue.trim()).length} detectados · {reviewCount} para revisar · {missing.length} faltantes</p></div>
-        {missing.length > 0 && <p className="border-b border-[#efc3c7] bg-[#fff7f7] px-5 py-3 text-xs font-bold text-[#a94952]">Falta completar: {missing.map((field) => field.label).join(' · ')}</p>}
-        <div className="max-h-[660px] divide-y divide-[#E9E7E7] overflow-y-auto">{parameters.map((field) => <label key={field.clientId} onClick={() => { setSelectedField(field.clientId); setPageNumber(field.pageNumber) }} className={`grid cursor-pointer gap-2 p-4 sm:grid-cols-[1fr_170px] sm:items-center ${selectedField === field.clientId ? 'bg-[#FFF7E8]' : ''}`}>
-          <span><span className="flex items-center gap-2 text-sm font-black text-[#2F2F2F]">{field.label}{field.required ? ' *' : ''}<span className={`rounded-full px-2 py-0.5 text-[9px] uppercase ${field.status === 'read' && field.confidence >= .82 ? 'bg-[#FFF7E8] text-[#A36B00]' : field.professionalValue ? 'bg-[#FFF7E8] text-[#8A5B00]' : 'bg-[#fceced] text-[#a94952]'}`}>{field.status === 'read' && field.confidence >= .82 ? 'Leído' : field.professionalValue ? 'Revisar' : 'Falta'}</span></span>{field.rawValue && <small className="mt-1 block text-[10px] text-[#747474]">Detectado: {field.rawValue} · pág. {field.pageNumber}</small>}</span>
-          <input disabled={locked} aria-label={field.label} value={field.professionalValue} onChange={(event) => updateValue(field, event.target.value)} className={`${control} w-full ${!field.professionalValue ? 'border-[#df9fa5]' : ''}`}/>
-        </label>)}</div>
+        <div className="flex flex-col gap-3 border-b border-[#E9E7E7] p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-black text-[#171717]">Parámetros obtenidos</h2><p className="mt-1 text-xs text-[#747474]">{counters.total} controlados · {counters.detected} detectados · {counters.confirmed} confirmados · {counters.needsReview} para revisar · {counters.conflicting} en conflicto · {counters.invalid} inválidos · {counters.notPerformed} no realizados · {counters.missingRequired} faltantes</p></div>{!locked && <button type="button" onClick={applyParameterCorrections} disabled={editedFieldIds.size === 0} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#E8CE99] bg-[#FFF7E8] px-3 py-2 text-xs font-black text-[#A36B00] disabled:cursor-not-allowed disabled:opacity-45"><RefreshCw size={14}/> Aplicar correcciones{editedFieldIds.size > 0 ? ` (${editedFieldIds.size})` : ''}</button>}</div>
+        {missing.length > 0 && <p className="border-b border-[#efc3c7] bg-[#fff7f7] px-5 py-3 text-xs font-bold text-[#a94952]">Falta completar o consignar como “no informado”: {missing.map((field) => field.label).join(' · ')}</p>}
+        <p className="border-b border-[#E9E7E7] bg-[#F7F6F4] px-5 py-3 text-xs leading-5 text-[#747474]">{studyType === 'posturography' ? 'Se muestran únicamente los datos que alimentan el informe funcional y la sugerencia: edad, seis condiciones, puntaje compuesto, índices sensoriales, preferencia visual y controles de calidad relevantes. El resto permanece disponible en el estudio original y no requiere transcripción.' : 'ONUr adapta los datos obligatorios al documento: en un informe narrativo controla identidad temporal, conclusión y secciones consignadas; cuando detecta vHIT agrega HIMP, canales, ganancias, simetría, sacadas, impulsos y calidad técnica. Las curvas nunca se interpretan automáticamente.'}</p>
+        <div className="max-h-[660px] divide-y divide-[#E9E7E7] overflow-y-auto">{parameters.map((field) => {
+          const presentation = fieldStatusPresentation(field)
+          return <label key={field.clientId} onClick={() => { setSelectedField(field.clientId); setPageNumber(field.pageNumber) }} className={`grid cursor-pointer gap-2 p-4 sm:grid-cols-[1fr_170px] sm:items-center ${selectedField === field.clientId ? 'bg-[#FFF7E8]' : ''}`}>
+            <span><span className="flex flex-wrap items-center gap-2 text-sm font-black text-[#2F2F2F]">{field.label}{isReportRequiredField(field) ? ' *' : ''}<span className={`rounded-full px-2 py-0.5 text-[9px] uppercase ${presentation.className}`}>{editedFieldIds.has(field.clientId) ? 'Editado' : presentation.label}</span></span>{field.rawValue && <small className="mt-1 block text-[10px] text-[#747474]">OCR: {field.rawValue} · normalizado: {field.normalizedValue || 'null'} · pág. {field.pageNumber}</small>}{fieldReviewReason(field) && <small className="mt-1 block text-[10px] font-bold text-[#8A5B00]">{fieldReviewReason(field)}</small>}</span>
+            <input disabled={locked} aria-label={field.label} value={field.professionalValue} onChange={(event) => updateValue(field, event.target.value)} className={`${control} w-full ${!isFieldPresent(field) ? 'border-[#df9fa5]' : ''}`}/>
+          </label>
+        })}</div>
         {parameters.length === 0 && <p className="p-6 text-sm text-[#747474]">No se reconocieron parámetros. El original puede pasarse a carga manual.</p>}
       </section>
     </div>
 
     <section className="rounded-2xl border border-[#E9E7E7] bg-white p-5 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div><div className="flex items-center gap-2"><Sparkles size={18} className="text-[#E49A02]"/><h2 className="font-black text-[#171717]">Conclusión y rehabilitación</h2></div><p className="mt-1 max-w-3xl text-xs leading-5 text-[#747474]">ONUr genera un borrador preliminar con los parámetros mostrados y las referencias BAP por edad. Podés corregirlo libremente; nunca reemplaza tu criterio profesional.</p></div>
-        {!locked && <button type="button" onClick={applyAutomaticReport} disabled={!automaticReport} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#E8CE99] bg-[#FFF7E8] px-3 py-2 text-xs font-black text-[#A36B00] disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw size={14}/> Regenerar desde parámetros</button>}
+        <div><div className="flex items-center gap-2"><Sparkles size={18} className="text-[#E49A02]"/><h2 className="font-black text-[#171717]">Conclusión y rehabilitación</h2></div><p className="mt-1 max-w-3xl text-xs leading-5 text-[#747474]">{studyType === 'posturography' ? 'ONUr genera un borrador preliminar con los parámetros mostrados y las referencias BAP por edad. Podés corregirlo libremente; nunca reemplaza tu criterio profesional.' : 'En vHIT, ONUr mantiene la conclusión y la conducta originales como transcripción separada. La sugerencia clínica se elabora desde los hallazgos estructurados y las fuentes relevantes del catálogo, sin interpretar curvas y con confirmación profesional obligatoria.'}</p></div>
+        {!locked && <button type="button" onClick={applyAutomaticReport} disabled={!automaticReport} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#E8CE99] bg-[#FFF7E8] px-3 py-2 text-xs font-black text-[#A36B00] disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw size={14}/>{studyType === 'posturography' ? 'Regenerar desde parámetros' : 'Actualizar transcripción y sugerencia'}</button>}
       </div>
-      <div className="mt-3 flex flex-wrap gap-2"><span className="rounded-full bg-[#FFF7E8] px-2.5 py-1 text-[10px] font-black uppercase text-[#A36B00]">Borrador automático</span><span className="rounded-full bg-[#E9E7E7] px-2.5 py-1 text-[10px] font-black uppercase text-[#747474]">Editable</span><span className="rounded-full bg-[#FFF7E8] px-2.5 py-1 text-[10px] font-black uppercase text-[#8A5B00]">Confirmación obligatoria</span></div>
+      <div className="mt-3 flex flex-wrap gap-2"><span className="rounded-full bg-[#FFF7E8] px-2.5 py-1 text-[10px] font-black uppercase text-[#A36B00]">{studyType === 'vhit' ? 'Transcripción OCR + síntesis clínica' : 'Borrador automático'}</span><span className="rounded-full bg-[#E9E7E7] px-2.5 py-1 text-[10px] font-black uppercase text-[#747474]">Editable</span><span className="rounded-full bg-[#FFF7E8] px-2.5 py-1 text-[10px] font-black uppercase text-[#8A5B00]">Confirmación obligatoria</span></div>
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        <label className="text-sm font-black text-[#2F2F2F]">Conclusión para confirmar *<textarea disabled={locked} aria-label="Conclusión para confirmar" value={draft.professionalConclusion} onChange={(event) => setDraft({ ...draft, professionalConclusion: event.target.value })} className="mt-2 min-h-44 w-full rounded-2xl border border-[#E9E7E7] p-4 text-sm font-normal leading-6" placeholder="El borrador aparecerá cuando haya parámetros suficientes."/><small className="mt-1 block font-normal text-[#747474]">Editá cualquier frase que no coincida con tu interpretación.</small></label>
-        <label className="text-sm font-black text-[#2F2F2F]">Sugerencia de rehabilitación para confirmar *<textarea disabled={locked} aria-label="Sugerencia de rehabilitación para confirmar" value={draft.rehabilitationSuggestion} onChange={(event) => setDraft({ ...draft, rehabilitationSuggestion: event.target.value })} className="mt-2 min-h-44 w-full rounded-2xl border border-[#E9E7E7] p-4 text-sm font-normal leading-6" placeholder="El borrador aparecerá cuando haya parámetros suficientes."/><small className="mt-1 block font-normal text-[#747474]">Ajustá objetivos, dosis, progresión y precauciones según la valoración clínica.</small></label>
+        <label className="text-sm font-black text-[#2F2F2F]">{studyType === 'vhit' ? 'Conclusión transcripta para confirmar *' : 'Conclusión para confirmar *'}<textarea disabled={locked} aria-label="Conclusión para confirmar" value={draft.professionalConclusion} onChange={(event) => setDraft({ ...draft, professionalConclusion: event.target.value })} className="mt-2 min-h-44 w-full rounded-2xl border border-[#E9E7E7] p-4 text-sm font-normal leading-6" placeholder="El borrador aparecerá cuando haya parámetros suficientes."/><small className="mt-1 block font-normal text-[#747474]">{studyType === 'vhit' ? 'Texto recuperado de “Conclusión / En suma”; verificá que coincida con el original.' : 'Editá cualquier frase que no coincida con tu interpretación.'}</small></label>
+        <label className="text-sm font-black text-[#2F2F2F]">{studyType === 'vhit' ? 'Sugerencia clínica fundamentada para confirmar *' : 'Sugerencia de rehabilitación para confirmar *'}<textarea disabled={locked} aria-label="Sugerencia de rehabilitación para confirmar" value={draft.rehabilitationSuggestion} onChange={(event) => setDraft({ ...draft, rehabilitationSuggestion: event.target.value })} className="mt-2 min-h-44 w-full rounded-2xl border border-[#E9E7E7] p-4 text-sm font-normal leading-6" placeholder="El borrador aparecerá cuando haya parámetros suficientes."/><small className="mt-1 block font-normal text-[#747474]">{studyType === 'vhit' ? 'Se genera desde hallazgos estructurados y fuentes relevantes; ajustá objetivos, dosis, progresión y precauciones.' : 'Ajustá objetivos, dosis, progresión y precauciones según la valoración clínica.'}</small></label>
       </div>
-      {automaticReport && <details className="mt-5 rounded-2xl border border-[#E9E7E7] bg-[#F7F6F4] p-4"><summary className="cursor-pointer text-xs font-black text-[#2F2F2F]">Cómo se generó este borrador</summary><div className="mt-3 grid gap-4 text-xs leading-5 text-[#747474] lg:grid-cols-2"><div><p className="font-black text-[#2F2F2F]">Comparaciones utilizadas</p>{automaticReport.evidence.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{automaticReport.evidence.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="mt-2">No hubo desvíos comparables o faltan datos para seleccionar referencias.</p>}{automaticReport.warnings.length > 0 && <div className="mt-3 rounded-xl bg-[#FFF7E8] p-3 font-bold text-[#8A5B00]">{automaticReport.warnings.join(' ')}</div>}</div><div><p className="font-black text-[#2F2F2F]">Fuentes internas seguras</p><ul className="mt-2 list-disc space-y-1 pl-5">{automaticReport.sources.map((item) => <li key={item}>{item}</li>)}</ul><p className="mt-3">No se utilizaron informes ni imágenes de la carpeta de datos clínicos sensibles.</p></div></div></details>}
+      {vestibularAutomaticReport?.transcribedConduct && <div className="mt-5 rounded-2xl border border-[#E9E7E7] bg-white p-4"><p className="text-xs font-black text-[#2F2F2F]">Conducta original transcripta · solo referencia</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#5E5E5E]">{vestibularAutomaticReport.transcribedConduct}</p><p className="mt-2 text-[10px] font-bold text-[#8A5B00]">Este texto no se copia en la sugerencia clínica.</p></div>}
+      {confirmedWithLegacyCopiedConduct && vestibularAutomaticReport && <details className="mt-4 rounded-2xl border border-[#E8CE99] bg-[#FFF7E8] p-4"><summary className="cursor-pointer text-xs font-black text-[#8A5B00]">Informe histórico con formato anterior · ver nueva sugerencia disponible</summary><div className="mt-3"><p className="text-xs leading-5 text-[#7A5100]">La sugerencia confirmada en este registro coincide con la conducta original porque fue guardada antes de separar ambos textos. El historial confirmado no se modifica automáticamente.</p><p className="mt-3 whitespace-pre-wrap rounded-xl bg-white p-3 text-sm leading-6 text-[#2F2F2F]">{vestibularAutomaticReport.rehabilitationSuggestion}</p><p className="mt-2 text-[10px] font-bold text-[#8A5B00]">Vista previa no guardada; los nuevos borradores ya usan esta lógica.</p></div></details>}
+      {automaticReport && <details className="mt-5 rounded-2xl border border-[#E9E7E7] bg-[#F7F6F4] p-4"><summary className="cursor-pointer text-xs font-black text-[#2F2F2F]">Cómo se generó este borrador</summary><div className="mt-3 text-xs leading-5 text-[#747474]"><p className="font-black text-[#2F2F2F]">Hallazgos y comparaciones utilizadas</p>{automaticReport.evidence.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{automaticReport.evidence.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="mt-2">No hubo desvíos comparables o faltan datos para seleccionar referencias.</p>}{vestibularAutomaticReport && vestibularAutomaticReport.sources.length > 0 && <div className="mt-4"><p className="font-black text-[#2F2F2F]">Fuentes relevantes del catálogo</p><ul className="mt-2 space-y-2">{vestibularAutomaticReport.sources.map((source) => <li key={source.id}><a href={source.url} target="_blank" rel="noreferrer" className="font-bold text-[#A36B00] underline decoration-[#E8CE99] underline-offset-2">{source.id} · {source.title}{source.year ? ` (${source.year})` : ''}</a></li>)}</ul></div>}{automaticReport.warnings.length > 0 && <div className="mt-3 rounded-xl bg-[#FFF7E8] p-3 font-bold text-[#8A5B00]">{automaticReport.warnings.join(' ')}</div>}</div></details>}
     </section>
 
     {(draft.pages.length > 1 || draft.pages.some((item) => item.classification === 'unrecognized')) && <details className="rounded-2xl border border-[#E9E7E7] bg-white p-4"><summary className="cursor-pointer text-xs font-black text-[#2F2F2F]">Revisar clasificación de páginas</summary><div className="mt-4 grid gap-3 sm:grid-cols-2">{draft.pages.map((item) => <label key={item.pageNumber} className="text-xs font-bold text-[#747474]">Página {item.pageNumber}<select disabled={locked} value={item.classification} onChange={(event) => updateClassification(item.pageNumber, event.target.value as PageClassification)} className={`${control} mt-1 w-full`}>{Object.entries(pageClassificationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>)}</div></details>}
@@ -193,7 +298,7 @@ export function ClinicalExtractionReview({ studyId }: { studyId: string }) {
     {error && <p role="alert" className="rounded-2xl bg-[#fceced] p-4 text-sm font-bold text-[#a94952]">{error}</p>}
     {notice && <p role="status" className="rounded-2xl bg-[#FFF7E8] p-4 text-sm font-bold text-[#A36B00]">{notice}</p>}
 
-    {!locked && <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" onClick={saveDraft} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#E49A02] px-4 py-3 text-xs font-black text-[#E49A02]"><Save size={15}/> Guardar para después</button><button type="button" onClick={confirmDraft} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#E49A02] px-5 py-3 text-sm font-black text-white"><ClipboardCheck size={17}/> Confirmar y ver informe</button></div>}
+    {!locked && <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" onClick={saveDraft} disabled={save.isPending || confirm.isPending} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#E49A02] px-4 py-3 text-xs font-black text-[#E49A02] disabled:cursor-not-allowed disabled:opacity-50"><Save size={15}/>{save.isPending && !confirm.isPending ? 'Guardando…' : 'Guardar para después'}</button><button type="button" onClick={confirmDraft} disabled={save.isPending || confirm.isPending} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#E49A02] px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50"><ClipboardCheck size={17}/>{confirm.isPending ? 'Confirmando…' : 'Confirmar y ver informe'}</button></div>}
     {!locked && <details className="text-right"><summary className="cursor-pointer text-xs font-bold text-[#747474]">Opciones avanzadas</summary><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={chooseManual} className="inline-flex items-center gap-2 rounded-xl border border-[#E9E7E7] px-3 py-2 text-xs font-bold text-[#2F2F2F]"><FilePenLine size={14}/> Carga manual</button><button type="button" onClick={discardDraft} className="inline-flex items-center gap-2 rounded-xl border border-[#efc3c7] px-3 py-2 text-xs font-bold text-[#a94952]"><Trash2 size={14}/> Descartar</button></div></details>}
   </section>
 }

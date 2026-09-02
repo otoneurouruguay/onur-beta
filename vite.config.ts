@@ -1,9 +1,13 @@
 import { defineConfig } from 'vite'
+import { readFileSync } from 'node:fs'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { PWA_UPDATE_POLICY } from './src/pwa/policy.js'
 
 const base = process.env.VITE_BASE_PATH || '/'
+const packageVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version as string
+const pwaCacheId = `onur-beta-${packageVersion}`
 
 export default defineConfig({
   base,
@@ -11,15 +15,27 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'prompt',
+      registerType: PWA_UPDATE_POLICY.registerType,
+      injectRegister: PWA_UPDATE_POLICY.injectRegister,
       workbox: {
-          cacheId: 'onur-beta-0.1.0-beta.29',
+        cacheId: pwaCacheId,
         globIgnores: ['**/ocr/**', '**/three.module-*.js'],
         cleanupOutdatedCaches: true,
-        skipWaiting: false,
-        clientsClaim: false,
+        skipWaiting: PWA_UPDATE_POLICY.skipWaiting,
+        clientsClaim: PWA_UPDATE_POLICY.clientsClaim,
       },
-      includeAssets: ['onur-mark.svg', 'onur-192.png', 'onur-512.png'],
+      includeAssets: [
+        'favicon.ico',
+        'favicon-32.png',
+        'favicon-48.png',
+        'otoneuro-apple-touch-icon.png',
+        'otoneuro-app-192.png',
+        'otoneuro-app-512.png',
+        'otoneuro-app-maskable-192.png',
+        'otoneuro-app-maskable-512.png',
+        'otoneuro-mark.png',
+        'otoneuro-horizontal.png',
+      ],
       manifest: {
         name: 'ONUr Beta',
         short_name: 'ONUr',
@@ -32,16 +48,28 @@ export default defineConfig({
         scope: base,
         icons: [
           {
-            src: 'onur-192.png',
+            src: 'otoneuro-app-192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: 'onur-512.png',
+            src: 'otoneuro-app-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any',
+          },
+          {
+            src: 'otoneuro-app-maskable-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          {
+            src: 'otoneuro-app-maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
           },
         ],
       },

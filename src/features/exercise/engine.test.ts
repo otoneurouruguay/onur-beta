@@ -1,10 +1,79 @@
 import { describe, expect, it } from 'vitest'
-import { calculateSaccadePosition, calculateTrackingPosition, clampObjectPosition } from './engine'
+import { backgroundCoverageRect, backgroundMotionOffset, backgroundRampEnvelope, backgroundRotationRadians, calculateSaccadePosition, calculateTrackingPosition, clampObjectPosition, radialFlowParticleAt, strobeOcclusionAlphaAt } from './engine'
 import { cognitiveInstruction, cognitiveStepAt, cognitiveSymbolAtStep, isCognitiveTargetStep } from './cognitive'
 import { applyExercisePurpose } from './compatibility'
 import { defaultExerciseConfig } from './types'
 
 describe('motor de posiciones del ejercicio', () => {
+  it('mantiene el desplazamiento continuo previo y permite una entrada gradual sin salto', () => {
+    const config = { ...defaultExerciseConfig, backgroundSpeed: 20, backgroundRampSeconds: 2 }
+    expect(backgroundMotionOffset(config, 0, 1000)).toBe(0)
+    expect(backgroundMotionOffset(config, 1, 1000)).toBe(5)
+    expect(backgroundMotionOffset(config, 2, 1000)).toBe(20)
+    expect(backgroundMotionOffset(config, 3, 1000)).toBe(40)
+  })
+
+  it('oscila el fondo con frecuencia y amplitud explícitas', () => {
+    const config = {
+      ...defaultExerciseConfig,
+      backgroundMotionMode: 'oscillating' as const,
+      backgroundFrequencyHz: 0.25,
+      backgroundAmplitudePercent: 25,
+      backgroundRampSeconds: 0,
+    }
+    expect(backgroundMotionOffset(config, 0, 1000)).toBeCloseTo(0)
+    expect(backgroundMotionOffset(config, 1, 1000)).toBeCloseTo(250)
+    expect(backgroundMotionOffset(config, 2, 1000)).toBeCloseTo(0)
+    expect(backgroundMotionOffset(config, 3, 1000)).toBeCloseTo(-250)
+  })
+
+  it('aplica una envolvente suave y recorta la cobertura al centro', () => {
+    const config = { ...defaultExerciseConfig, backgroundRampSeconds: 2 }
+    expect(backgroundRampEnvelope(config, 0)).toBe(0)
+    expect(backgroundRampEnvelope(config, 1)).toBe(0.5)
+    expect(backgroundRampEnvelope(config, 2)).toBe(1)
+    expect(backgroundCoverageRect(1000, 500, 50)).toEqual({ x: 250, y: 125, width: 500, height: 250 })
+    expect(backgroundCoverageRect(1000, 500, 10)).toEqual({ x: 375, y: 187.5, width: 250, height: 125 })
+    expect(backgroundCoverageRect(1000, 500, 120)).toEqual({ x: 0, y: 0, width: 1000, height: 500 })
+  })
+
+  it('oscila la espiral en ambos sentidos sin inventar una trayectoria diagonal', () => {
+    const config = {
+      ...defaultExerciseConfig,
+      backgroundMotionMode: 'oscillating' as const,
+      backgroundFrequencyHz: 0.25,
+      backgroundAmplitudePercent: 25,
+      backgroundRampSeconds: 0,
+      backgroundDirection: 'clockwise' as const,
+    }
+    expect(backgroundRotationRadians(config, 1)).toBeCloseTo(Math.PI / 4)
+    expect(backgroundRotationRadians({ ...config, backgroundDirection: 'counterclockwise' }, 1)).toBeCloseTo(-Math.PI / 4)
+  })
+
+  it('invierte realmente el fondo oscilante al elegir contrafase', () => {
+    const base = {
+      ...defaultExerciseConfig,
+      backgroundMotionMode: 'oscillating' as const,
+      backgroundFrequencyHz: 0.25,
+      backgroundAmplitudePercent: 25,
+      backgroundRampSeconds: 0,
+      targetBackgroundRelation: 'in_phase' as const,
+    }
+    expect(backgroundMotionOffset(base, 1, 1000)).toBeCloseTo(250)
+    expect(backgroundMotionOffset({ ...base, targetBackgroundRelation: 'counter_phase' }, 1, 1000)).toBeCloseTo(-250)
+  })
+
+  it('genera flujo radial determinista y reversible desde el centro', () => {
+    const base = { ...applyExercisePurpose(defaultExerciseConfig, 'optic_flow'), backgroundSpeed: 100, backgroundRampSeconds: 0 }
+    const initial = radialFlowParticleAt(base, 0, 100, 100, 4)
+    const outward = radialFlowParticleAt(base, 0.1, 100, 100, 4)
+    const inward = radialFlowParticleAt({ ...base, backgroundDirection: 'away' }, 0.1, 100, 100, 4)
+    expect(radialFlowParticleAt(base, 0, 100, 100, 4)).toEqual(initial)
+    expect((outward.progress - initial.progress + 1) % 1).toBeCloseTo(0.1)
+    expect((initial.progress - inward.progress + 1) % 1).toBeCloseTo(0.1)
+    expect(initial.size).toBeGreaterThan(0)
+  })
+
   it('mantiene el seguimiento vertical centrado en el eje horizontal', () => {
     const point = calculateTrackingPosition(0.25, 1000, 500, 'vertical', 1, 30)
     expect(point.x).toBe(500)
@@ -36,6 +105,13 @@ describe('motor de posiciones del ejercicio', () => {
   it('mantiene el blanco completo dentro de cada mitad del visor', () => {
     expect(clampObjectPosition({ x: -20, y: 500 }, 320, 180, 90)).toEqual({ x: 47, y: 133 })
     expect(clampObjectPosition({ x: 160, y: 90 }, 320, 180, 90)).toEqual({ x: 160, y: 90 })
+  })
+
+  it('aplica la intermitencia solo durante la fase de oclusión configurada', () => {
+    const config = { ...defaultExerciseConfig, strobeEnabled: true, strobeFrequencyHz: 1, strobeDutyCyclePercent: 70, strobeContrastPercent: 20 }
+    expect(strobeOcclusionAlphaAt(config, 0.5)).toBe(0)
+    expect(strobeOcclusionAlphaAt(config, 0.8)).toBe(0.2)
+    expect(strobeOcclusionAlphaAt({ ...config, strobeEnabled: false }, 0.8)).toBe(0)
   })
 
   it.each([

@@ -70,6 +70,16 @@ try{
   const other=assertNoError(await foreignProfessional.from('patients').insert({professional_id:created.foreignProfessionalUserId,full_name:'Paciente Aislado Staging',status:'active'}).select().single(),'crear segundo paciente')
   created.otherPatientId=other.id
 
+  const reminder=assertNoError(await professional.from('patient_reminder_notes').insert({patient_id:created.patientId,body:'Recordatorio ficticio para próxima sesión',created_by:created.professionalUserId,updated_by:created.professionalUserId}).select('id,body').single(),'crear nota recordatoria')
+  const foreignReminders=assertNoError(await foreignProfessional.from('patient_reminder_notes').select('id').eq('id',reminder.id),'aislar nota recordatoria')
+  assert(foreignReminders.length===0,'Un profesional ajeno pudo ver una nota recordatoria.')
+  const editedReminder=assertNoError(await professional.from('patient_reminder_notes').update({body:'Recordatorio ficticio editado',updated_by:created.professionalUserId}).eq('id',reminder.id).select('body').single(),'editar nota recordatoria')
+  assert(editedReminder.body==='Recordatorio ficticio editado','La edición de la nota recordatoria no quedó guardada.')
+  assertNoError(await professional.from('patient_reminder_notes').update({archived_at:new Date().toISOString(),archived_by:created.professionalUserId,updated_by:created.professionalUserId}).eq('id',reminder.id),'archivar nota recordatoria')
+  const activeReminders=assertNoError(await professional.from('patient_reminder_notes').select('id').eq('id',reminder.id).is('archived_at',null),'ocultar nota archivada')
+  assert(activeReminders.length===0,'Una nota archivada continuó visible como activa.')
+  log('notas recordatorias privadas, editables y archivables')
+
   const accountResult=await professional.functions.invoke('create-patient-account',{body:{patient_id:created.patientId,username,temporary_ci:temporaryCi}})
   assertNoError(accountResult,'crear cuenta paciente')
   const account=assertNoError(await admin.from('patient_portal_accounts').select('auth_user_id').eq('patient_id',created.patientId).single(),'leer cuenta paciente')
@@ -77,12 +87,16 @@ try{
 
   const firstLogin=await patientLogin(temporaryCi);assert(firstLogin.must_change_pin===true,'El primer acceso no exige cambio de PIN.')
   const patientClient=client();assertNoError(await patientClient.auth.setSession({access_token:firstLogin.session.access_token,refresh_token:firstLogin.session.refresh_token}),'establecer sesión paciente')
-  const ownRows=assertNoError(await patientClient.from('patients').select('id'),'RLS pacientes')
-  assert(ownRows.length===1&&ownRows[0].id===created.patientId,'El paciente pudo ver un perfil ajeno.')
-  log('aislamiento RLS entre pacientes')
+  const temporaryRows=assertNoError(await patientClient.from('patients').select('id'),'RLS temporal pacientes')
+  assert(temporaryRows.length===0,'La sesión temporal pudo leer datos clínicos antes de cambiar el PIN.')
+  log('bloqueo clínico de la sesión temporal')
 
-  const pinChange=await patientClient.functions.invoke('change-patient-pin',{body:{pin}});assertNoError(pinChange,'cambiar PIN')
+  const pinChange=assertNoError(await patientClient.functions.invoke('change-patient-pin',{body:{pin}}),'cambiar PIN')
+  assertNoError(await patientClient.auth.setSession({access_token:pinChange.session.access_token,refresh_token:pinChange.session.refresh_token}),'renovar sesión después del PIN')
   const secondLogin=await patientLogin(pin);assert(secondLogin.must_change_pin===false,'El cambio de PIN no quedó confirmado.')
+  const ownRows=assertNoError(await patientClient.from('patients').select('id'),'RLS pacientes')
+  assert(ownRows.length===1&&ownRows[0].id===created.patientId,'El paciente pudo ver un perfil ajeno o no pudo ver su propio perfil.')
+  log('aislamiento RLS entre pacientes')
   log('primer acceso con cédula temporal y PIN de cuatro dígitos')
 
   created.storagePath=`${created.professionalUserId}/${created.patientId}/${crypto.randomUUID()}-staging.pdf`
@@ -146,21 +160,9 @@ try{
   log('extracción local, RLS, revisión, confirmación y auditoría sin contenido clínico')
 
   const directCaptureInput={target_patient_id:created.patientId,target_treatment_cycle_id:null,performed_at_input:new Date().toISOString(),condition_count_input:6,duration_seconds_input:20}
-  const foreignDirectCapture=await foreignProfessional.rpc('create_direct_bap_capture_draft',directCaptureInput)
-  assert(foreignDirectCapture.error,'Un profesional ajeno pudo crear una captura BAP directa.')
-  const patientDirectCapture=await patientClient.rpc('create_direct_bap_capture_draft',directCaptureInput)
-  assert(patientDirectCapture.error,'El portal del paciente pudo crear una captura BAP directa.')
-  const directStudyId=assertNoError(await professional.rpc('create_direct_bap_capture_draft',directCaptureInput),'crear borrador de captura BAP directa')
-  const directMetricPayload=Array.from({length:6},(_,index)=>({metric_code:'condition_score',raw_value:String(80+index),normalized_numeric_value:80+index,normalized_text_value:null,unit_code:'percent',condition_code:String(index+1),side:null,axis:null,trial_number:1,source_method:'transcribed',source_location:`Captura BAP sintética · condición ${index+1}`,normalization_rule_version:'onur-normalization-1.0',quality_status:'ok',issues:[]}))
-  assertNoError(await professional.rpc('replace_study_import',{target_study_id:directStudyId,metric_payload:directMetricPayload,import_quality_notes:'Captura directa completamente ficticia de staging',import_interpretable:false,parser_version:'onur-normalization-1.0'}),'guardar parámetros BAP directos')
-  const directStudy=assertNoError(await professional.from('clinical_studies').select('status,calculation_method_version,metric_values(source_method)').eq('id',directStudyId).single(),'leer captura BAP directa')
-  assert(directStudy.status==='reviewed'&&directStudy.calculation_method_version==='onur-bap-webserial-1.0-beta'&&directStudy.metric_values?.length===6&&directStudy.metric_values.every(metric=>metric.source_method==='direct_capture'),'La captura directa no preservó origen, versión o métricas.')
-  const directJob=assertNoError(await professional.from('import_jobs').select('parser_type,parser_version').eq('study_id',directStudyId).single(),'leer importación BAP directa')
-  assert(directJob.parser_type==='bap_web_serial'&&directJob.parser_version==='onur-bap-webserial-1.0-beta','La captura directa no quedó identificada por su transporte.')
-  const directAudits=assertNoError(await admin.from('audit_events').select('action,metadata').eq('entity_id',directStudyId).eq('action','direct_bap_capture_created'),'leer auditoría BAP directa')
-  assert(directAudits.length===1&&directAudits[0].metadata?.transport==='web_serial'&&directAudits[0].metadata?.raw_frames_stored===false,'La auditoría BAP directa no registra el transporte seguro.')
-  assert(!JSON.stringify(directAudits).includes('80'),'La auditoría BAP directa expuso un parámetro de la captura.')
-  log('captura BAP directa, permisos, trazabilidad y auditoría sin tramas crudas')
+  const retiredDirectCapture=await professional.rpc('create_direct_bap_capture_draft',directCaptureInput)
+  assert(retiredDirectCapture.error,'La captura BAP directa retirada volvió a quedar expuesta en el backend.')
+  log('captura BAP directa legada permanece deshabilitada')
 
   const study=assertNoError(await professional.from('clinical_studies').insert({patient_id:created.patientId,source_document_id:document.id,study_type:'posturography',performed_at:'2026-07-16T12:00:00Z',device_name:'Equipo ficticio',protocol_code:'bap-a-d',protocol_version:'1',created_by:created.professionalUserId}).select().single(),'crear estudio')
   const metricPayload=[{metric_code:'condition_score',raw_value:'75,0',normalized_numeric_value:75,normalized_text_value:null,unit_code:'percent',condition_code:'A',side:null,axis:null,trial_number:1,source_method:'transcribed',source_location:'Smoke test',normalization_rule_version:'onur-normalization-1.0',quality_status:'ok',issues:[]}]
@@ -222,9 +224,29 @@ try{
   const duplicatedVisibleAtHome=assertNoError(await patientClient.from('session_assignments').select('id').eq('id',duplicatedAssignmentId),'consultar duplicación domiciliaria')
   assert(duplicatedVisibleAtHome.length===1,'La asignación domiciliaria duplicada no quedó disponible para el paciente.')
 
+  const clinicDateFormatter=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Montevideo',year:'numeric',month:'2-digit',day:'2-digit'})
+  const repeatToday=clinicDateFormatter.format(new Date())
+  const repeatTomorrow=clinicDateFormatter.format(new Date(Date.now()+86400000))
+  const repeatSeriesId=crypto.randomUUID()
+  const repeatedAssignmentIds=assertNoError(await professional.rpc('repeat_session_assignment_as_home',{target_assignment_id:assignment.id,scheduled_dates_input:[repeatToday,repeatTomorrow],repetition_series_id_input:repeatSeriesId}),'programar serie domiciliaria')
+  assert(repeatedAssignmentIds.length===2&&new Set(repeatedAssignmentIds).size===2,'La serie no creó dos asignaciones independientes.')
+  const repeatedRetryIds=assertNoError(await professional.rpc('repeat_session_assignment_as_home',{target_assignment_id:assignment.id,scheduled_dates_input:[repeatToday,repeatTomorrow],repetition_series_id_input:repeatSeriesId}),'reintentar serie idempotente')
+  assert(JSON.stringify(repeatedRetryIds)===JSON.stringify(repeatedAssignmentIds),'El reintento de la serie creó duplicados o cambió los identificadores.')
+  const repeatedAssignments=assertNoError(await professional.from('session_assignments').select('id,status,available_from,available_until,repeat_series_id,repeat_series_position,repeat_series_size,repeat_source_assignment_id,session_plans(plan_definition),session_executions(id)').in('id',repeatedAssignmentIds).order('repeat_series_position'),'leer serie domiciliaria')
+  assert(repeatedAssignments.every((item,index)=>item.status==='assigned'&&item.repeat_series_id===repeatSeriesId&&item.repeat_series_position===index+1&&item.repeat_series_size===2&&item.repeat_source_assignment_id===assignment.id&&item.session_plans?.plan_definition?.mode==='home'&&item.session_executions.length===0),'La serie copió resultados o perdió modo, orden o trazabilidad.')
+  assertNoError(await patientClient.rpc('start_session_assignment',{target_assignment_id:repeatedAssignmentIds[0]}),'iniciar primera repetición como paciente')
+  assertNoError(await patientClient.rpc('complete_session_assignment_v2',{target_assignment_id:repeatedAssignmentIds[0],active_seconds_input:30,skipped_count_input:0,initial_discomfort_input:1,final_discomfort_input:1,perceived_difficulty_input:1,patient_comment_input:'Repetición ficticia completada',event_log_input:[{type:'finished'}]}),'finalizar primera repetición como paciente')
+  const repeatedAfterCompletion=assertNoError(await professional.from('session_assignments').select('id,status,session_executions(patient_comment)').in('id',repeatedAssignmentIds).order('repeat_series_position'),'verificar independencia de repeticiones')
+  assert(repeatedAfterCompletion[0].status==='completed'&&repeatedAfterCompletion[0].session_executions?.[0]?.patient_comment==='Repetición ficticia completada'&&repeatedAfterCompletion[1].status==='assigned'&&repeatedAfterCompletion[1].session_executions.length===0,'Completar una fecha modificó otra repetición de la serie.')
+  log('repetición individual, serie por fechas, idempotencia y ejecución independiente como paciente')
+
   const supervisedAudits=assertNoError(await admin.from('audit_events').select('actor_user_id,action,metadata').eq('entity_id',inPersonAssignment.id).in('action',['supervised_in_person_session_started','supervised_in_person_session_restarted','supervised_in_person_session_finished']),'leer auditoría presencial')
   assert(supervisedAudits.length===3,'Faltan eventos de inicio, reinicio o cierre presencial.')
-  for(const row of supervisedAudits)assert(row.actor_user_id===created.professionalUserId&&row.metadata?.mode==='in_person'&&row.metadata?.supervised===true&&row.metadata?.operated_by===created.professionalUserId,'La auditoría presencial no identifica supervisión y operador.')
+  for(const row of supervisedAudits){
+    assert(row.actor_user_id===created.professionalUserId,'La auditoría presencial no identifica al profesional.')
+    if(row.action==='supervised_in_person_session_finished')assert(row.metadata?.patient_id===created.patientId&&row.metadata?.status==='partial','La auditoría del cierre presencial no conserva paciente y resultado.')
+    else assert(row.metadata?.mode==='in_person'&&row.metadata?.supervised===true&&row.metadata?.operated_by===created.professionalUserId,'La auditoría de inicio presencial no identifica supervisión y operador.')
+  }
   log('permisos, flujo presencial, reinicio, omisión, duplicación y auditoría')
 
   const questPlanDefinition={mode:'in_person',exercises:[{name:'Optocinético Quest ficticio',displayMode:'quest_browser',doseMode:'time',advanceMode:'automatic',durationSeconds:20,rounds:1,restSeconds:0,posture:'seated',surface:'firm',supervision:'direct_clinician'}]}
@@ -235,7 +257,7 @@ try{
   const foreignPairing=await foreignProfessional.rpc('create_quest_session_pairing',{target_assignment_id:questAssignment.id})
   assert(foreignPairing.error,'Un profesional ajeno pudo preparar la estación Quest.')
   const pairing=assertNoError(await professional.rpc('create_quest_session_pairing',{target_assignment_id:questAssignment.id}),'crear vínculo Quest')
-  assert(/^[0-9A-F]{8}$/.test(pairing.code),'El vínculo Quest no devolvió un código temporal válido.')
+  assert(/^[0-9]{4}$/.test(pairing.code),'El vínculo Quest no devolvió un código numérico temporal de cuatro dígitos.')
   const questStation=client()
   const claim=assertNoError(await questStation.rpc('claim_quest_session_pairing',{pairing_code_input:pairing.code}),'reclamar vínculo Quest anónimo')
   assert(claim.pairingId===pairing.id&&claim.deviceToken&&claim.patientLabel==='Paciente F.','La estación Quest no recibió el vínculo mínimo esperado.')
@@ -261,7 +283,7 @@ try{
 
   const auditRows=assertNoError(await admin.from('audit_events').select('action').in('actor_user_id',[created.professionalUserId,created.patientUserId]),'leer auditoría')
   const audited=auditRows.map(row=>row.action)
-  for(const action of ['patient_account_created','patient_pin_changed','document_access_requested','document_access_approved','document_viewed','document_downloaded','clinical_extraction_started','clinical_pages_classified','clinical_extraction_review_saved','clinical_extraction_confirmed','clinical_study_finalized','patient_acknowledgement_accepted','session_started','session_finished','supervised_in_person_session_started','supervised_in_person_session_restarted','supervised_in_person_session_finished','session_assignment_duplicated_as_home','patient_account_disable'])assert(audited.includes(action),`Falta auditoría ${action}.`)
+  for(const action of ['patient_account_created','patient_pin_changed','document_access_requested','document_access_approved','document_viewed','document_downloaded','clinical_extraction_started','clinical_pages_classified','clinical_extraction_review_saved','clinical_extraction_confirmed','clinical_study_finalized','patient_acknowledgement_accepted','session_started','session_finished','supervised_in_person_session_started','supervised_in_person_session_restarted','supervised_in_person_session_finished','session_assignment_duplicated_as_home','session_assignment_repeated_as_home','patient_account_disable'])assert(audited.includes(action),`Falta auditoría ${action}.`)
   log('eventos críticos de auditoría')
   process.stdout.write('\nSmoke test de staging completado correctamente.\n')
 }finally{await cleanup()}

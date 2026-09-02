@@ -36,12 +36,3 @@ export interface StatisticalSuggestion {
   createdAt: string
   status: SuggestionStatus
 }
-
-export interface QualityIssue {
-  id: string
-  code: string
-  field: string
-  originalValue: string
-  message: string
-  status: QualityStatus
-}

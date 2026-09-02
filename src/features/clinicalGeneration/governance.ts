@@ -12,21 +12,6 @@ export const requiredGenerationInputs = [
   'stop_rules_defined_by_clinician',
 ] as const
 
-export const hardStopTriggers = [
-  'mareo o desequilibrio agudo con debilidad o adormecimiento focal',
-  'dificultad nueva para hablar o comprender',
-  'diplopía nueva, pérdida visual súbita o signos oculomotores centrales reportados',
-  'incapacidad súbita o desproporcionada para caminar o mantenerse sentado',
-  'cefalea súbita intensa e inusual',
-  'pérdida de conciencia, síncope, dolor torácico o disnea significativa',
-  'nuevo déficit auditivo súbito asociado a síndrome vestibular agudo sin evaluación médica',
-  'traumatismo reciente no evaluado con deterioro neurológico',
-  'caídas repetidas sin posibilidad de entorno seguro',
-  'sospecha de fuga de LCR, dehiscencia de canal superior o fístula no evaluada',
-  'diagnóstico incierto de síndrome vestibular agudo',
-  'instrucción clínica explícita de no realizar ejercicio',
-] as const
-
 export interface GenerationActorContext {
   userId?: string
   clinicallyAuthorized: boolean

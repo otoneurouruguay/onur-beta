@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExtractedField } from './types'
 import type { ExtractionReviewRecord } from './repository'
 import { ClinicalExtractionReview } from './ClinicalExtractionReview'
@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   record: null as ExtractionReviewRecord | null,
   save: vi.fn(),
   confirm: vi.fn(),
+  reopen: vi.fn(),
 }))
 
 vi.mock('./hooks', () => ({
@@ -17,6 +18,7 @@ vi.mock('./hooks', () => ({
   useConfirmExtraction: () => ({ mutateAsync: mocks.confirm, isPending: false }),
   useManualExtraction: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDiscardExtraction: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useReopenExtraction: () => ({ mutateAsync: mocks.reopen, isPending: false }),
   useReplaceExtraction: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }))
 
@@ -39,16 +41,30 @@ function record(): ExtractionReviewRecord {
   return {
     id: 'synthetic-job', documentId: 'synthetic-document', studyIds: ['synthetic-study'], status: 'review', intakeKind: 'posturography_bap', extractorVersion: 'onur-local-ocr-1.3',
     patientMatchStatus: 'match', mismatchFields: [], pages: [{ pageNumber: 1, proposedClassification: 'posturography', classification: 'posturography', classificationConfidence: 1, rotationDegrees: 0, width: 1000, height: 700, previewUrl: '', text: '', lines: [] }],
-    fields: Object.entries(values).map(([code, value]) => field(code, value)), sourceFilename: 'bap-synthetic.png', mimeType: 'image/png', documentUrl: '', sectionStudyId: 'synthetic-study', sectionPageNumbers: [1],
+    fields: [...Object.entries(values).map(([code, value]) => field(code, value)), field('software_version', 'Posturo 9.1'), field('los_forward', '7.5')], sourceFilename: 'bap-synthetic.png', mimeType: 'image/png', documentUrl: '', sectionStudyId: 'synthetic-study', sectionPageNumbers: [1],
     professionalConclusion: '', rehabilitationSuggestion: '',
   }
 }
 
+function vestibularRecord(): ExtractionReviewRecord {
+  const vestibularField = (code: string, value: string): ExtractedField => ({
+    clientId: `synthetic-${code}`, code, label: code, group: 'Conclusión', studyType: 'vhit', required: code === 'conclusion', metricCode: '', rawValue: value, normalizedValue: value, unitCode: '', conditionCode: '', side: '', pageNumber: 1, region: null, confidence: .93, status: 'detected', extractorMethod: 'local_ocr', extractorVersion: 'onur-local-ocr-2.1', professionalValue: value, confirmed: false,
+  })
+  return {
+    id: 'synthetic-vestibular-job', documentId: 'synthetic-document', studyIds: ['synthetic-study'], status: 'review', intakeKind: 'vestibular_and_reports', extractorVersion: 'onur-local-ocr-2.1', patientMatchStatus: 'match', mismatchFields: [],
+    pages: [{ pageNumber: 1, proposedClassification: 'vestibular_report', classification: 'vestibular_report', classificationConfidence: .95, rotationDegrees: 0, width: 1000, height: 1400, previewUrl: '', text: '', lines: [], template: { type: 'vestibular_report', confidence: .95, matchedSignals: 4, aspectRatio: .71 } }],
+    fields: [vestibularField('conclusion', 'Conclusión vestibular literal sintética.'), vestibularField('conduct', 'Conducta literal sintética.')], sourceFilename: 'vestibular-synthetic.png', mimeType: 'image/png', documentUrl: '', sectionStudyId: 'synthetic-study', sectionPageNumbers: [1], professionalConclusion: '', rehabilitationSuggestion: '',
+  }
+}
+
 describe('ClinicalExtractionReview automatic report draft', () => {
+  afterEach(cleanup)
+
   beforeEach(() => {
     mocks.record = record()
     mocks.save.mockReset().mockResolvedValue(undefined)
     mocks.confirm.mockReset().mockResolvedValue(undefined)
+    mocks.reopen.mockReset().mockResolvedValue(undefined)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
@@ -67,6 +83,149 @@ describe('ClinicalExtractionReview automatic report draft', () => {
     fireEvent.click(screen.getByRole('button', { name: /regenerar desde parámetros/i }))
     expect(window.confirm).toHaveBeenCalled()
     expect((conclusion as HTMLTextAreaElement).value).toContain('70 a 79 años')
-    expect(screen.getByText(/09_TABLA_VALORES_NORMALES_BAP.xlsx/)).toBeInTheDocument()
+    expect(screen.getByText('Hallazgos y comparaciones utilizadas')).toBeInTheDocument()
+    expect(screen.queryByText(/fuentes internas seguras/i)).not.toBeInTheDocument()
+    expect(conclusion).not.toHaveValue(expect.stringContaining('Este borrador'))
+    expect(suggestion).not.toHaveValue(expect.stringContaining('Borrador para revisión profesional'))
+  })
+
+  it('aplica solo las correcciones editadas y actualiza su estado sin repetir el OCR', async () => {
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    const refresh = screen.getByRole('button', { name: 'Aplicar correcciones' })
+    expect(refresh).toBeDisabled()
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'condition 1' }), { target: { value: '97' } })
+    expect(screen.getByRole('button', { name: 'Aplicar correcciones (1)' })).toBeEnabled()
+    expect(screen.getByText('Editado')).toBeInTheDocument()
+    expect(screen.getByText(/1 para revisar/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar correcciones (1)' }))
+
+    expect(screen.getByRole('button', { name: 'Aplicar correcciones' })).toBeDisabled()
+    expect(screen.getByText('Confirmado')).toBeInTheDocument()
+    expect(screen.getByText(/0 para revisar/)).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('1 corrección aplicada')
+  })
+
+  it('muestra los parámetros estructurados del estudio y omite metadatos técnicos ajenos', () => {
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    expect(screen.getByRole('textbox', { name: 'condition 1' })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'software version' })).not.toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'los forward' })).toBeInTheDocument()
+  })
+
+  it('limpia las aclaraciones redundantes guardadas por versiones anteriores', async () => {
+    mocks.record = {
+      ...record(),
+      professionalConclusion: 'Conclusión clínica sintética. Este borrador describe el perfil funcional y no establece un diagnóstico; debe correlacionarse con anamnesis, examen neurológico y vestibular, marcha, Romberg y estudios asociados.',
+      rehabilitationSuggestion: 'Borrador para revisión profesional.\n\nConsiderar entrenamiento vestibular sintético.\n\nEl profesional debe definir ejercicios, dosis, frecuencia, asistencia, progresión, regresión y precauciones; se sugiere reevaluar con la misma metodología para documentar evolución.',
+    }
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Conclusión para confirmar' })).toHaveValue('Conclusión clínica sintética.'))
+    expect(screen.getByRole('textbox', { name: 'Sugerencia de rehabilitación para confirmar' })).toHaveValue('Considerar entrenamiento vestibular sintético.')
+  })
+
+  it('muestra el motivo devuelto por Supabase cuando la confirmación falla', async () => {
+    mocks.confirm.mockRejectedValue({ message: 'Todos los valores clínicos presentes deben estar confirmados.' })
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Conclusión para confirmar' })).not.toHaveValue(''))
+    fireEvent.click(screen.getByRole('button', { name: /confirmar y ver informe/i }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Todos los valores clínicos presentes deben estar confirmados.'))
+  })
+
+  it('separa la conclusión transcripta, la conducta original y la sugerencia fundamentada', async () => {
+    mocks.record = vestibularRecord()
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Conclusión para confirmar' })).toHaveValue('Conclusión vestibular literal sintética.'))
+    expect(screen.getByRole('textbox', { name: 'Sugerencia de rehabilitación para confirmar' })).not.toHaveValue('Conducta literal sintética.')
+    expect((screen.getByRole('textbox', { name: 'Sugerencia de rehabilitación para confirmar' }) as HTMLTextAreaElement).value).toContain('diagnóstico funcional')
+    expect(screen.getByText('Conducta literal sintética.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Actualizar transcripción y sugerencia' })).toBeEnabled()
+    expect(screen.getByText('Fuentes relevantes del catálogo')).toBeInTheDocument()
+    expect(screen.getByText(/las curvas nunca se interpretan automáticamente/i)).toBeInTheDocument()
+  })
+
+  it('preserva un informe confirmado anterior y muestra la nueva sugerencia como vista previa', () => {
+    mocks.record = {
+      ...vestibularRecord(),
+      status: 'confirmed',
+      professionalConclusion: 'Conclusión vestibular literal sintética.',
+      rehabilitationSuggestion: 'Conducta literal sintética.',
+    }
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    expect(screen.getByText(/informe histórico con formato anterior/i)).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Sugerencia de rehabilitación para confirmar' })).toHaveValue('Conducta literal sintética.')
+  })
+
+  it('confirma también los resultados vestibulares que antes quedaban ocultos y bloqueaban el guardado', async () => {
+    const current = vestibularRecord()
+    const hiddenClinicalFields = ['vhit_results', 'deep_sensation', 'reflexes'].map((code) => ({
+      ...current.fields[0],
+      clientId: `synthetic-${code}`,
+      code,
+      label: code,
+      required: false,
+      metricCode: `${code}_text`,
+      rawValue: 'Normal',
+      normalizedValue: 'Normal',
+      professionalValue: 'Normal',
+    }))
+    mocks.record = {
+      ...current,
+      fields: [...current.fields, ...hiddenClinicalFields],
+      professionalConclusion: 'Conclusión vestibular revisada.',
+      rehabilitationSuggestion: 'Rehabilitación vestibular revisada.',
+    }
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    expect(screen.getByRole('textbox', { name: 'vhit_results' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'deep_sensation' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'reflexes' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /confirmar y ver informe/i }))
+
+    await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({
+      fields: expect.arrayContaining(hiddenClinicalFields.map(({ clientId }) => expect.objectContaining({ clientId, confirmed: true }))),
+    })))
+    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledWith('synthetic-vestibular-job'))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('limpia Conducta de un borrador vestibular anterior sin reemplazar la rehabilitación editada', async () => {
+    mocks.record = {
+      ...vestibularRecord(),
+      professionalConclusion: 'Síndrome vestibular sintético. Sistemas oculomotores normales. Cancelación Conducta: Rehabilitación vestibular sintética.',
+      rehabilitationSuggestion: 'Trabajo de VORx1 x2 y propioceptivo.',
+    }
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Conclusión para confirmar' })).toHaveValue('Síndrome vestibular sintético. Sistemas oculomotores normales.'))
+    expect(screen.getByRole('textbox', { name: 'Sugerencia de rehabilitación para confirmar' })).toHaveValue('Trabajo de VORx1 x2 y propioceptivo.')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar para después' }))
+    await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({
+      professionalConclusion: 'Síndrome vestibular sintético. Sistemas oculomotores normales.',
+      rehabilitationSuggestion: 'Trabajo de VORx1 x2 y propioceptivo.',
+    })))
+    expect(screen.getByRole('status')).toHaveTextContent('Borrador guardado.')
+  })
+
+  it('permite reabrir un borrador descartado y volver a editarlo', async () => {
+    mocks.record = { ...vestibularRecord(), status: 'discarded' }
+    render(<MemoryRouter><ClinicalExtractionReview studyId="synthetic-study"/></MemoryRouter>)
+
+    expect(screen.getByRole('textbox', { name: 'Conclusión para confirmar' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Reabrir borrador' }))
+
+    await waitFor(() => expect(mocks.reopen).toHaveBeenCalledWith('synthetic-vestibular-job'))
+    expect(screen.getByRole('textbox', { name: 'Conclusión para confirmar' })).toBeEnabled()
+    expect(screen.getByRole('status')).toHaveTextContent('Borrador reabierto')
   })
 })

@@ -5,11 +5,13 @@ import { activateCardboardTracking } from '../exercise/cardboardTracking'
 import type { ExerciseCompletionReport, ExerciseConfig, ExerciseDisplayMode } from '../exercise/types'
 import type { SessionAssignmentRecord, SessionEventLogEntry } from './repository'
 import { VR_BOX_TRANSITION_SECONDS } from './sequence'
+import { QuestProceduralSessionRunner } from '../immersive/QuestProceduralSessionRunner'
+import { isQuestProceduralImmersive } from '../immersive/questProcedural'
 
 type ExerciseUnit = { type: 'exercise'; config: ExerciseConfig; label: string; exerciseIndex: number; round: number }
 type RestUnit = { type: 'rest'; seconds: number; label: string; nextLabel: string; displayMode: ExerciseDisplayMode; advanceMode: ExerciseConfig['advanceMode']; viewerProfile: ViewerProfile | null }
 type ViewerProfile = 'vr_box' | 'cardboard'
-type VrBoxTransitionUnit = { type: 'vr_box_transition'; direction: 'put_on' | 'take_off'; seconds: number; nextLabel: string; viewerProfile: ViewerProfile }
+type VrBoxTransitionUnit = { type: 'vr_box_transition'; direction: 'put_on' | 'take_off'; seconds: number; nextLabel: string; viewerProfile: ViewerProfile; nextStopCriteria?: string }
 type Unit = ExerciseUnit | RestUnit | VrBoxTransitionUnit
 
 function buildUnits(exercises: ExerciseConfig[]): Unit[] {
@@ -32,7 +34,7 @@ function buildUnits(exercises: ExerciseConfig[]): Unit[] {
       })
       if (desiredViewer) units.push({
         type: 'vr_box_transition', direction: 'put_on', seconds: VR_BOX_TRANSITION_SECONDS,
-        nextLabel: phase.config.name, viewerProfile: desiredViewer,
+        nextLabel: phase.config.name, viewerProfile: desiredViewer, nextStopCriteria: phase.config.stopCriteria,
       })
       activeViewer = desiredViewer
     }
@@ -67,9 +69,19 @@ function RestScreen({ seconds, label, nextLabel, displayMode, advanceMode, viewe
   const cardboard = viewerProfile === 'cardboard'
 
   useEffect(() => {
-    if (ready) { if (advanceMode === 'automatic') onComplete(); return }
-    const timer = window.setTimeout(() => setRemaining((value) => value - 1), 1000)
+    const deadline = Date.now() + seconds * 1_000
+    let timer = 0
+    const tick = () => {
+      const nextRemaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1_000))
+      setRemaining(nextRemaining)
+      if (nextRemaining > 0) timer = window.setTimeout(tick, 250)
+    }
+    timer = window.setTimeout(tick, 250)
     return () => window.clearTimeout(timer)
+  }, [seconds])
+
+  useEffect(() => {
+    if (ready && advanceMode === 'automatic') onComplete()
   }, [advanceMode, onComplete, ready])
 
   useEffect(() => {
@@ -94,7 +106,7 @@ function RestScreen({ seconds, label, nextLabel, displayMode, advanceMode, viewe
   return <div className={`fixed inset-0 z-[100] bg-[#171717] text-white ${vrBox ? 'grid grid-cols-2 divide-x divide-white/10' : ''}`}>{content('izquierdo')}{vrBox && content('derecho')}</div>
 }
 
-function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, onComplete, onExit }: VrBoxTransitionUnit & { onComplete: () => void; onExit: () => void }) {
+function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, nextStopCriteria, fullscreenTargetRef, onComplete, onExit }: VrBoxTransitionUnit & { fullscreenTargetRef?: React.RefObject<HTMLElement | null>; onComplete: () => void; onExit: () => void }) {
   const [started, setStarted] = useState(direction === 'take_off')
   const [remaining, setRemaining] = useState(seconds)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -112,20 +124,14 @@ function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, o
   useEffect(() => {
     if (!started || remaining > 0 || completedRef.current) return
     completedRef.current = true
-    const complete = async () => {
-      if (direction === 'take_off' && document.fullscreenElement) {
-        try { await document.exitFullscreen() } catch { /* La sesión continúa aunque el navegador conserve pantalla completa. */ }
-      }
-      onComplete()
-    }
-    void complete()
+    onComplete()
   }, [direction, onComplete, remaining, started])
 
   const startVrPreparation = async () => {
     setTrackingPermissionError('')
     setActivatingSensors(viewerProfile === 'cardboard')
     const activationRequest = viewerProfile === 'cardboard' ? activateCardboardTracking() : Promise.resolve({ permission: 'granted' as const })
-    const fullscreenRequest = containerRef.current?.requestFullscreen?.()
+    const fullscreenRequest = (fullscreenTargetRef?.current ?? containerRef.current)?.requestFullscreen?.()
     const activation = await activationRequest
     try {
       await fullscreenRequest
@@ -157,8 +163,9 @@ function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, o
       <p className="mt-5 text-xs font-black uppercase tracking-[.16em] text-[#E49A02]">Preparación de {viewerLabel}</p>
       <h2 className="mt-3 text-2xl font-black">El próximo ejercicio usa el visor</h2>
       <p className="mt-3 text-sm leading-6 text-white/65">Dejá el {viewerLabel} abierto y el celular listo. Al continuar tendrás {seconds} segundos para colocarlo en el visor. {viewerProfile === 'cardboard' ? 'Después se calibrará la posición frontal y el ejercicio comenzará cuando la cabeza esté estable.' : 'Después, el ejercicio comenzará solo.'}</p>
-      {viewerProfile === 'cardboard' && <p className="mt-3 text-xs leading-5 text-white/55">Cardboard usa giroscopio y acelerómetro para seguimiento 3DoF. Al finalizar la cuenta, mirá el + de frente y mantené la cabeza quieta. El perfil óptico activo ajustará los centros y el campo visual; no mide desplazamiento físico 6DoF ni corrige distorsión de lentes por QR.</p>}
+      {viewerProfile === 'cardboard' && <p className="mt-3 text-xs leading-5 text-white/55">Cardboard usa giroscopio y acelerómetro para seguimiento 3DoF. Al finalizar la cuenta, mirá el + de frente y mantené la cabeza quieta. El perfil óptico activo ajustará centros, campo visual y corrección radial; no mide desplazamiento físico 6DoF ni reemplaza el código QR específico del visor.</p>}
       <p className="mt-4 rounded-2xl bg-black/25 p-4 text-xs font-bold text-white/75">Próxima fase: {nextLabel}</p>
+      {nextStopCriteria && <p className="mt-3 rounded-2xl bg-[#c74750]/18 p-4 text-xs font-bold leading-5 text-[#ffb8bd]"><strong>Detener o pausar:</strong> {nextStopCriteria}</p>}
       {trackingPermissionError && <p role="alert" className="mt-4 rounded-2xl bg-[#c74750]/18 p-4 text-xs font-bold leading-5 text-[#ff9da4]">{trackingPermissionError}</p>}
       <button type="button" disabled={activatingSensors} onClick={() => void startVrPreparation()} className="mt-6 h-14 w-full rounded-2xl bg-[#E49A02] px-4 text-sm font-black text-white disabled:opacity-50">{activatingSensors ? 'Comprobando giroscopio… mové suavemente el celular' : viewerProfile === 'cardboard' ? 'Activar sensores y preparar Cardboard' : `Comenzar preparación de ${seconds} segundos`}</button>
       <button type="button" onClick={onExit} className="mt-4 text-xs font-bold text-white/55">Salir de la sesión</button>
@@ -178,14 +185,49 @@ function VrBoxTransitionScreen({ direction, seconds, nextLabel, viewerProfile, o
   return <div ref={containerRef} className="fixed inset-0 z-[120] grid grid-cols-2 divide-x divide-white/10 bg-[#171717] text-white" aria-live="polite">{content('izquierdo')}{content('derecho')}</div>
 }
 
-export function SessionRunner({ session, onFinish, onExit }: { session: SessionAssignmentRecord; onFinish: (activeSeconds: number, skippedExercises: number, eventLog: SessionEventLogEntry[]) => void; onExit: () => void }) {
+type SessionRunnerProps = { session: SessionAssignmentRecord; onFinish: (activeSeconds: number, skippedExercises: number, eventLog: SessionEventLogEntry[]) => void; onExit: (activeSeconds: number, skippedExercises: number, eventLog: SessionEventLogEntry[]) => void }
+
+function StandardSessionRunner({ session, onFinish, onExit }: SessionRunnerProps) {
   const units = useMemo(() => buildUnits(session.exercises), [session.exercises])
   const [index, setIndex] = useState(0)
+  const fullscreenTargetRef = useRef<HTMLDivElement>(null)
   const skippedRef = useRef(0)
   const activeSecondsRef = useRef(0)
   const eventLogRef = useRef<SessionEventLogEntry[]>([])
   const finishingRef = useRef(false)
   const unit = units[index]
+
+  const requestExit = (currentActiveSeconds = 0, report?: ExerciseCompletionReport) => {
+    const confirmed = window.confirm('¿Salir de la sesión? El avance realizado se guardará como una sesión parcial y el profesional podrá revisarlo.')
+    if (!confirmed) return false
+    const roundedSeconds = Math.max(0, Math.round(currentActiveSeconds))
+    if (unit?.type === 'exercise') {
+      skippedRef.current += 1
+      eventLogRef.current.push({
+        type: 'exercise_partial',
+        at: new Date().toISOString(),
+        exercise_index: unit.exerciseIndex,
+        round: unit.round,
+        exercise_name: unit.config.name,
+        exercise_kind: unit.config.kind,
+        dose_mode: report?.doseMode ?? unit.config.doseMode,
+        display_mode: unit.config.displayMode,
+        active_seconds: roundedSeconds,
+        target_repetitions: report?.targetRepetitions,
+        reported_repetitions: report?.reportedRepetitions,
+        completion: 'partial',
+      })
+    }
+    activeSecondsRef.current += roundedSeconds
+    eventLogRef.current.push({
+      type: 'interrupted',
+      at: new Date().toISOString(),
+      active_seconds: activeSecondsRef.current,
+      skipped_exercises: Math.max(1, skippedRef.current),
+    })
+    onExit(activeSecondsRef.current, Math.max(1, skippedRef.current), eventLogRef.current)
+    return true
+  }
 
   useEffect(() => {
     document.body.dataset.onurSessionRunning = 'true'
@@ -219,6 +261,7 @@ export function SessionRunner({ session, onFinish, onExit }: { session: SessionA
         cardboard_vertical_offset_percent: report?.headTracking?.opticalProfile.verticalOffsetPercent,
         cardboard_horizontal_fov_degrees: report?.headTracking?.opticalProfile.horizontalFovDegrees,
         cardboard_vertical_fov_degrees: report?.headTracking?.opticalProfile.verticalFovDegrees,
+        cardboard_lens_distortion_percent: report?.headTracking?.opticalProfile.lensDistortionPercent,
         active_seconds: Math.max(0, Math.round(activeSeconds)), target_repetitions: report?.targetRepetitions,
         reported_repetitions: report?.reportedRepetitions, completion,
         cognitive_mode: report?.cognitive?.mode,
@@ -230,6 +273,12 @@ export function SessionRunner({ session, onFinish, onExit }: { session: SessionA
         cognitive_reported_count: report?.cognitive?.reportedCount,
         immersive_scenario_id: report?.immersive?.scenarioId ?? unit.config.immersiveScenarioId,
         immersive_rendering: report?.immersive?.rendering,
+        immersive_kind: report?.immersive ? 'contextual' : undefined,
+        immersive_audio_enabled: report?.immersive?.ambientAudioEnabled,
+        immersive_audio_volume: report?.immersive?.ambientAudioVolume,
+        immersive_target_enabled: report?.immersive?.spatialTargetEnabled,
+        immersive_target_azimuth_degrees: report?.immersive?.spatialTargetAzimuthDegrees,
+        immersive_target_elevation_degrees: report?.immersive?.spatialTargetElevationDegrees,
       })
     } else if (unit?.type === 'vr_box_transition') {
       eventLogRef.current.push({ type: unit.direction === 'put_on' ? 'vr_box_put_on' : 'vr_box_take_off', at: new Date().toISOString(), active_seconds: unit.seconds, viewer_profile: unit.viewerProfile })
@@ -245,14 +294,34 @@ export function SessionRunner({ session, onFinish, onExit }: { session: SessionA
   }, [onFinish, units.length])
 
   if (!unit) return null
-  if (unit.type === 'rest') return <RestScreen {...unit} onComplete={() => advance()} onExit={onExit}/>
-  if (unit.type === 'vr_box_transition') return <VrBoxTransitionScreen {...unit} onComplete={() => advance()} onExit={onExit}/>
 
-  const progress = units.slice(0, index + 1).filter((item) => item.type === 'exercise').length
-  const total = session.exercises.reduce((count, exercise) => count + exercise.rounds, 0)
-  const preparationSeconds = progress === 1 && unit.config.displayMode !== 'vr_box' ? unit.config.preparationSeconds : 0
-  return <>
-    {unit.config.displayMode !== 'vr_box' && <div className="fixed left-4 top-20 z-[110] rounded-full bg-black/55 px-3 py-2 text-[10px] font-black text-white backdrop-blur">{unit.label} · {progress}/{total}</div>}
-    <ExercisePlayer key={index} config={{ ...unit.config, rounds: 1 }} preparationSeconds={preparationSeconds} onComplete={(seconds, report) => advance(seconds, report)} onSkip={(seconds, report) => advance(seconds, report ?? { doseMode: unit.config.doseMode, completion: 'skipped' })} onExit={onExit}/>
-  </>
+  let content: React.ReactNode
+  if (unit.type === 'rest') {
+    content = <RestScreen key={index} {...unit} onComplete={() => advance()} onExit={() => { requestExit() }}/>
+  } else if (unit.type === 'vr_box_transition') {
+    content = <VrBoxTransitionScreen key={index} {...unit} fullscreenTargetRef={fullscreenTargetRef} onComplete={() => advance()} onExit={() => { requestExit() }}/>
+  } else {
+    const progress = units.slice(0, index + 1).filter((item) => item.type === 'exercise').length
+    const total = session.exercises.reduce((count, exercise) => count + exercise.rounds, 0)
+    const preparationSeconds = unit.config.displayMode === 'vr_box'
+      ? 0
+      : Math.max(
+        unit.config.stopCriteria ? 5 : 0,
+        unit.config.purpose === 'immersive_context' && unit.config.displayMode === 'quest_browser' && progress > 1 ? 5 : 0,
+        unit.config.preparationSeconds,
+      )
+    content = <>
+      {unit.config.displayMode !== 'vr_box' && !(unit.config.displayMode === 'quest_browser' && unit.config.purpose === 'immersive_context') && <div className="fixed left-4 top-20 z-[110] rounded-full bg-black/55 px-3 py-2 text-[10px] font-black text-white backdrop-blur">{unit.label} · {progress}/{total}</div>}
+      <ExercisePlayer key={index} fullscreenTargetRef={fullscreenTargetRef} config={{ ...unit.config, rounds: 1 }} preparationSeconds={preparationSeconds} onComplete={(seconds, report) => advance(seconds, report)} onSkip={(seconds, report) => advance(seconds, report ?? { doseMode: unit.config.doseMode, completion: 'skipped' })} onExit={requestExit}/>
+    </>
+  }
+
+  return <div ref={fullscreenTargetRef} data-testid="session-runner-viewport" className="fixed inset-0 z-[100] overflow-hidden bg-[#081113] text-white">
+    {content}
+  </div>
+}
+
+export function SessionRunner(props: SessionRunnerProps) {
+  const proceduralQuestSession = props.session.exercises.length > 0 && props.session.exercises.every(isQuestProceduralImmersive)
+  return proceduralQuestSession ? <QuestProceduralSessionRunner {...props}/> : <StandardSessionRunner {...props}/>
 }

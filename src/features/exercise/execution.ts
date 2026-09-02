@@ -1,5 +1,6 @@
 import { cognitiveInstruction, cognitiveTaskLabel } from './cognitive'
 import type { ExerciseConfig } from './types'
+import { isQuestProceduralImmersive } from '../immersive/questProcedural'
 
 export type ExerciseSetting = 'home' | 'in_person' | 'unspecified'
 export type ExecutionFeasibility = 'ready' | 'review' | 'in_person_only' | 'not_executable'
@@ -20,11 +21,12 @@ const headMovementPurposes = new Set<ExerciseConfig['purpose']>(['gaze_stabiliza
 export function buildExerciseExecutionPlan(config: ExerciseConfig, setting: ExerciseSetting = 'unspecified'): ExerciseExecutionPlan {
   const cognitive = config.cognitiveTaskMode !== 'none'
   const immersive = config.purpose === 'immersive_context'
+  const proceduralImmersive = isQuestProceduralImmersive(config)
   const warnings: string[] = []
   const equipment = config.displayMode === 'vr_box'
     ? ['Celular compatible en orientación horizontal', config.cardboardEnabled ? 'Visor compatible con Cardboard preparado y abierto' : 'VR Box preparado y abierto', 'Silla estable sobre superficie firme']
     : config.displayMode === 'quest_browser'
-      ? [immersive ? 'Meta Quest con WebXR habilitado' : 'Meta Quest con navegador abierto', 'Silla estable sobre superficie firme', 'Profesional junto al paciente']
+      ? [immersive || proceduralImmersive ? 'Meta Quest con WebXR habilitado' : 'Meta Quest con navegador abierto', 'Silla estable sobre superficie firme', 'Profesional junto al paciente']
       : config.kind === 'guided_physical'
         ? ['Entorno despejado', config.surface === 'unstable' ? 'Superficie indicada por el profesional' : 'Superficie firme', config.supervision === 'independent_after_approval' ? 'Sin material adicional' : 'Ayudante o profesional indicado']
         : ['Pantalla 2D inmóvil', 'Silla estable', 'Sin material adicional']
@@ -38,9 +40,16 @@ export function buildExerciseExecutionPlan(config: ExerciseConfig, setting: Exer
     if (config.displayMode === 'vr_box' && config.cardboardEnabled) warnings.push('Cardboard permite orientación 3DoF desde un punto fijo; no detecta traslación, no crea profundidad posicional y no debe usarse de pie ni caminando.')
     if (config.displayMode === 'quest_browser') warnings.push('El tiempo comienza después de que WebXR confirma la inmersión. El botón del visor y el menú del sistema permiten abandonar la experiencia.')
   }
+  if (proceduralImmersive) {
+    feasibility = setting === 'home' ? 'not_executable' : 'in_person_only'
+    warnings.push(setting === 'home'
+      ? 'Los patrones WebXR inmersivos son exclusivamente presenciales y no se asignan al domicilio.'
+      : 'WebXR mantiene una única inmersión durante la batería, recentra el frente al ingresar y registra pérdidas de sesión sin guardar movimientos crudos de cabeza.')
+    warnings.push('La cabeza permanece quieta. El aviso por desviación angular es orientativo y no reemplaza la observación del profesional ni constituye una medición clínica.')
+  }
   if (config.displayMode === 'vr_box') {
     if (config.cardboardEnabled) {
-      warnings.push('Cardboard usa giroscopio y acelerómetro para un anclaje angular 3DoF relativo a una calibración frontal estable. El perfil local ajusta centros y campo visual, pero no mide traslación 6DoF, no interpreta códigos QR ni corrige la distorsión específica de las lentes.')
+      warnings.push('Cardboard usa giroscopio y acelerómetro para un anclaje angular 3DoF relativo a una calibración frontal estable. El perfil local ajusta centros, campo visual y una corrección radial manual; no mide traslación 6DoF ni interpreta el código QR específico del visor.')
       warnings.push('Si se pierde la señal, el ejercicio se pausa y exige retirar el visor, mirar al frente y recalibrar.')
       if (config.purpose === 'gaze_stabilization') {
         feasibility = setting === 'home' ? 'not_executable' : 'in_person_only'
@@ -54,6 +63,15 @@ export function buildExerciseExecutionPlan(config: ExerciseConfig, setting: Exer
   if (config.displayMode !== 'standard' && cognitive) {
     feasibility = 'not_executable'
     warnings.push('La tarea cognitiva necesita leer la consigna y registrar o confirmar la respuesta fuera de un visor.')
+  }
+  if (config.purpose === 'visual_motion_fixation') {
+    warnings.push('El blanco queda fijo respecto de los ojos y el fondo se mueve. La cabeza permanece quieta: no es RVO x1 ni estimulación optocinética pura.')
+  }
+  if (config.purpose === 'pursuit_visual_conflict') {
+    warnings.push(`El blanco y el fondo forman una tarea combinada${config.targetBackgroundRelation === 'counter_phase' ? ' sincronizada en contrafase' : config.targetBackgroundRelation === 'in_phase' ? ' sincronizada en fase' : ''}. Seguir solamente el blanco con los ojos y mantener la cabeza quieta; no es seguimiento ocular aislado ni RVO.`)
+  }
+  if (config.purpose === 'optic_flow') {
+    warnings.push('El flujo óptico radial se realiza sentado y con la cabeza quieta. No representa marcha, conducción, estimulación optocinética lineal ni una escena 360°.')
   }
   if (cognitive && config.kind === 'guided_physical') {
     feasibility = 'not_executable'
@@ -79,8 +97,8 @@ export function buildExerciseExecutionPlan(config: ExerciseConfig, setting: Exer
 
   const setup = config.displayMode === 'standard'
     ? `${config.posture === 'seated' ? 'Sentado' : config.posture === 'standing' ? 'De pie' : 'En marcha'}, en superficie ${config.surface === 'firm' ? 'firme' : 'inestable'}, con la pantalla inmóvil y el entorno despejado.`
-    : immersive && config.displayMode === 'quest_browser'
-      ? 'Sentado, con pies apoyados y profesional al lado. Abrir la estación Quest, confirmar la sesión y pulsar “Entrar en inmersión”; el tiempo no corre antes de WebXR.'
+    : (immersive || proceduralImmersive) && config.displayMode === 'quest_browser'
+      ? 'Sentado, con pies apoyados y profesional al lado. Abrir la estación Quest, confirmar la sesión y pulsar “Entrar en modo inmersivo”; mirar el + durante 2 segundos. El tiempo no corre antes de WebXR.'
     : config.cardboardEnabled
       ? 'Sentado, sin desplazarse, permitir sensores y colocar Cardboard. Al terminar la cuenta regresiva, mirar el + de frente y mantener la cabeza quieta hasta la confirmación “3DoF activo”.'
       : 'Sentado, con el visor ajustado durante la transición guiada y sin desplazarse.'
@@ -95,7 +113,7 @@ export function buildExerciseExecutionPlan(config: ExerciseConfig, setting: Exer
     ? 'Ingresar el total contado antes de pasar a la fase siguiente.'
     : cognitive && config.cognitiveResponseMode === 'screen_tap'
       ? 'La plataforma registra respuestas al objetivo y respuestas fuera del objetivo; no constituye una evaluación diagnóstica.'
-      : immersive
+      : immersive || proceduralImmersive
         ? 'La fase termina automáticamente al agotarse la dosis. El paciente o profesional puede pausar o salir desde los controles del visor; no se repite el video automáticamente.'
       : config.displayMode === 'vr_box'
         ? config.cardboardEnabled

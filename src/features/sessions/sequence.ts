@@ -8,6 +8,8 @@ export interface SessionSequenceAnalysis {
   mixesVrBoxProfiles: boolean
   optimizedForVrBox: boolean
   visorChanges: number
+  mixesQuestAndNonQuest: boolean
+  questBlockAtEnd: boolean
 }
 
 type ViewerProfile = 'none' | 'vr_box' | 'cardboard'
@@ -20,6 +22,10 @@ export function analyzeSessionSequence(exercises: ExerciseConfig[]): SessionSequ
   const lastNonVrBoxIndex = exercises.reduce((last, exercise, index) => exercise.displayMode !== 'vr_box' ? index : last, -1)
   const firstVrBoxIndex = exercises.findIndex((exercise) => exercise.displayMode === 'vr_box')
   const vrProfiles = new Set(exercises.filter((exercise) => exercise.displayMode === 'vr_box').map((exercise) => viewerProfile(exercise)))
+  const hasQuest = exercises.some((exercise) => exercise.displayMode === 'quest_browser')
+  const hasNonQuest = exercises.some((exercise) => exercise.displayMode !== 'quest_browser')
+  const firstQuestIndex = exercises.findIndex((exercise) => exercise.displayMode === 'quest_browser')
+  const lastNonQuestForQuestIndex = exercises.reduce((last, exercise, index) => exercise.displayMode !== 'quest_browser' ? index : last, -1)
   let visorChanges = 0
   let activeViewer: ViewerProfile = 'none'
 
@@ -38,6 +44,8 @@ export function analyzeSessionSequence(exercises: ExerciseConfig[]): SessionSequ
     mixesVrBoxProfiles: vrProfiles.size > 1,
     optimizedForVrBox: !hasVrBox || !hasNonVrBox || firstVrBoxIndex > lastNonVrBoxIndex,
     visorChanges,
+    mixesQuestAndNonQuest: hasQuest && hasNonQuest,
+    questBlockAtEnd: !hasQuest || !hasNonQuest || firstQuestIndex > lastNonQuestForQuestIndex,
   }
 }
 
@@ -46,4 +54,11 @@ export function orderExercisesForVrBox(exercises: ExerciseConfig[]) {
   const standardTimed = exercises.filter((exercise) => exercise.doseMode === 'time' && exercise.displayMode !== 'vr_box')
   const vrBoxTimed = exercises.filter((exercise) => exercise.doseMode === 'time' && exercise.displayMode === 'vr_box')
   return [...repetitions, ...standardTimed, ...vrBoxTimed]
+}
+
+export function orderExercisesForQuest(exercises: ExerciseConfig[]) {
+  return [
+    ...exercises.filter((exercise) => exercise.displayMode !== 'quest_browser'),
+    ...exercises.filter((exercise) => exercise.displayMode === 'quest_browser'),
+  ]
 }

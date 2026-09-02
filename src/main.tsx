@@ -1,22 +1,15 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './features/auth/AuthProvider.tsx'
+import { startDeferredServiceWorkerRegistration } from './pwa/registerDeferredServiceWorker.ts'
 
-registerSW({
-  // Las actualizaciones quedan listas en segundo plano y se activan cuando el
-  // usuario cierra la app. Nunca recargamos un formulario o una sesión activa.
-  immediate: false,
-  onRegisteredSW: (_serviceWorkerUrl, registration) => {
-    if (registration) {
-      void registration.update()
-      window.setInterval(() => void registration.update(), 60 * 60 * 1_000)
-    }
-  },
-})
+// La actualización se busca al cargar y se activa de inmediato. Si un caché
+// nuevo toma el control de una pestaña ya abierta, se recarga una sola vez para
+// no conservar referencias a archivos de una publicación anterior.
+startDeferredServiceWorkerRegistration()
 
 const queryClient = new QueryClient({
   defaultOptions: {

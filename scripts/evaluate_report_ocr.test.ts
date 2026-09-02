@@ -62,11 +62,20 @@ describe('OCR de informe vestibular escaneado sintetico', () => {
         lines,
       }
       const fields = extractFields([page], 'vestibular_and_reports')
+      expect(fields.find((field) => field.studyType === 'vhit' && field.code === 'study_date')).toMatchObject({ value: '2026-07-17', required: true })
       expect(fields.find((field) => field.code === 'clinical_exam')?.rawValue).toContain('Se realizo examen clinico e instrumentado vestibular')
+      expect(fields.find((field) => field.code === 'himp')).toMatchObject({ professionalValue: 'resultado sintetico', required: false })
+      expect(fields.find((field) => field.code === 'cranial_nerve_vii')?.professionalValue).toContain('normal')
+      expect(fields.find((field) => field.code === 'fixation_system')?.professionalValue).toContain('normal')
+      expect(fields.find((field) => field.code === 'visual_suppression')?.professionalValue).toContain('normal')
+      expect(fields.find((field) => field.code === 'skew')?.professionalValue).toContain('negativo')
+      expect(fields.find((field) => field.code === 'head_shaking')?.professionalValue).toContain('negativo')
+      expect(fields.find((field) => field.code === 'positional_tests')?.professionalValue).toContain('no registrado')
+      expect(fields.find((field) => field.code === 'gait')?.professionalValue).toContain('resultado sintetico')
       expect(fields.find((field) => field.code === 'conclusion')?.rawValue).toContain('Hallazgo vestibular sintetico')
       expect(fields.find((field) => field.code === 'conclusion')?.rawValue).toContain('informacion perteneciente a una persona real')
       expect(fields.find((field) => field.code === 'conduct')?.rawValue).toContain('Reevaluacion sintetica y plan ficticio supervisado')
-      expect(fields.find((field) => field.code === 'document_type')).toMatchObject({ rawValue: 'Informe vestibular / vHIT', status: 'review' })
+      expect(fields.find((field) => field.code === 'document_type')).toMatchObject({ rawValue: 'Informe vestibular / vHIT', status: 'needs_review' })
     } finally {
       await worker.terminate()
     }

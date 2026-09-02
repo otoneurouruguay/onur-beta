@@ -1,9 +1,24 @@
 import { LogOut, Pause, Play, RotateCcw, Scan } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
-import type { CardboardHeadPose } from '../exercise/cardboardTracking'
-import type { CardboardViewerProfile } from '../exercise/cardboardViewerProfiles'
-import { immersiveMediaUrl, type ImmersiveDevice, type ImmersiveScenario } from './catalog'
+import { smoothCardboardHeadPose, type CardboardHeadPose } from '../exercise/cardboardTracking'
+import { cardboardEyeProjectionFrustum, defaultCardboardViewerProfile, type CardboardEye, type CardboardViewerProfile } from '../exercise/cardboardViewerProfiles'
+import type { ImmersiveTargetShape } from '../exercise/types'
+import { immersiveAudioUrl, immersiveMediaUrl, type ImmersiveDevice, type ImmersiveScenario } from './catalog'
+
+interface SpatialTargetConfig {
+  enabled: boolean
+  color: string
+  size: number
+  shape: ImmersiveTargetShape
+  azimuthDegrees: number
+  elevationDegrees: number
+}
+
+interface AmbientAudioConfig {
+  enabled: boolean
+  volume: number
+}
 
 interface ImmersivePanoramaProps {
   scenario: ImmersiveScenario
@@ -11,6 +26,11 @@ interface ImmersivePanoramaProps {
   paused?: boolean
   headPose?: CardboardHeadPose | null
   viewerProfile?: CardboardViewerProfile
+  controlsVisible?: boolean
+  canEnterImmersion?: boolean
+  formattedTime?: string
+  spatialTarget?: SpatialTargetConfig
+  ambientAudio?: AmbientAudioConfig
   className?: string
   onImmersionChange?: (active: boolean) => void
   onTogglePause?: () => void
@@ -19,13 +39,14 @@ interface ImmersivePanoramaProps {
 
 type XrSessionLike = NonNullable<Parameters<THREE.WebXRManager['setSession']>[0]>
 
-export function ImmersivePanorama({ scenario, device, paused = false, headPose = null, viewerProfile, className = '', onImmersionChange, onTogglePause, onExit }: ImmersivePanoramaProps) {
+export function ImmersivePanorama({ scenario, device, paused = false, headPose = null, viewerProfile, controlsVisible = true, canEnterImmersion = true, formattedTime, spatialTarget, ambientAudio, className = '', onImmersionChange, onTogglePause, onExit }: ImmersivePanoramaProps) {
   const onDemand = device === undefined
   const [activated, setActivated] = useState(!onDemand)
   const containerRef = useRef<HTMLDivElement>(null)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const xrSessionRef = useRef<XrSessionLike | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const pausedRef = useRef(paused)
   const headPoseRef = useRef(headPose)
   const onImmersionChangeRef = useRef(onImmersionChange)
@@ -36,9 +57,14 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
 
   useEffect(() => {
     pausedRef.current = paused
-    if (!videoRef.current) return
-    if (paused) videoRef.current.pause()
-    else void videoRef.current.play().catch(() => undefined)
+    if (videoRef.current) {
+      if (paused) videoRef.current.pause()
+      else void videoRef.current.play().catch(() => undefined)
+    }
+    if (audioRef.current) {
+      if (paused) audioRef.current.pause()
+      else void audioRef.current.play().catch(() => undefined)
+    }
   }, [paused])
   useEffect(() => { headPoseRef.current = headPose }, [headPose])
   useEffect(() => { onImmersionChangeRef.current = onImmersionChange }, [onImmersionChange])
@@ -76,6 +102,94 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
     sphere.rotation.y = -Math.PI / 2
     scene.add(sphere)
 
+    let targetTexture: THREE.CanvasTexture | null = null
+    let targetMaterial: THREE.SpriteMaterial | null = null
+    if (spatialTarget?.enabled && scenario.spatialTargetAllowed && scenario.motion === 'static') {
+      const canvas = document.createElement('canvas')
+      canvas.width = 128
+      canvas.height = 128
+      const context = canvas.getContext('2d')
+      if (context) {
+        context.clearRect(0, 0, 128, 128)
+        context.fillStyle = spatialTarget.color
+        context.strokeStyle = '#ffffff'
+        context.lineWidth = 6
+        context.beginPath()
+        if (spatialTarget.shape === 'diamond') {
+          context.moveTo(64, 8); context.lineTo(120, 64); context.lineTo(64, 120); context.lineTo(8, 64); context.closePath()
+        } else if (spatialTarget.shape === 'cross') {
+          context.rect(48, 8, 32, 112); context.rect(8, 48, 112, 32)
+        } else context.arc(64, 64, 54, 0, Math.PI * 2)
+        context.fill()
+        context.stroke()
+        targetTexture = new THREE.CanvasTexture(canvas)
+        targetTexture.colorSpace = THREE.SRGBColorSpace
+        targetMaterial = new THREE.SpriteMaterial({ map: targetTexture, transparent: true, depthTest: false, depthWrite: false })
+        const target = new THREE.Sprite(targetMaterial)
+        const yaw = THREE.MathUtils.degToRad(spatialTarget.azimuthDegrees)
+        const elevation = THREE.MathUtils.degToRad(spatialTarget.elevationDegrees)
+        const radius = 10
+        target.position.set(Math.sin(yaw) * Math.cos(elevation) * radius, Math.sin(elevation) * radius, -Math.cos(yaw) * Math.cos(elevation) * radius)
+        const scale = Math.max(0.28, Math.min(1.7, spatialTarget.size / 50))
+        target.scale.set(scale, scale, 1)
+        target.renderOrder = 10
+        scene.add(target)
+      }
+    }
+
+    if (ambientAudio?.enabled && scenario.ambientAudio && device === 'quest') {
+      const audio = document.createElement('audio')
+      audioRef.current = audio
+      audio.src = immersiveAudioUrl(scenario)
+      audio.loop = true
+      audio.preload = 'auto'
+      audio.volume = Math.max(0, Math.min(0.5, ambientAudio.volume / 100))
+      audio.load()
+    }
+
+    const opticalProfile = viewerProfile ?? defaultCardboardViewerProfile
+    const eyeTarget = new THREE.WebGLRenderTarget(1, 1, {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      depthBuffer: true,
+      stencilBuffer: false,
+    })
+    const distortionScene = new THREE.Scene()
+    const distortionCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+    const distortionGeometry = new THREE.PlaneGeometry(2, 2)
+    const distortionMaterial = new THREE.ShaderMaterial({
+      depthTest: false,
+      depthWrite: false,
+      uniforms: {
+        sourceTexture: { value: eyeTarget.texture },
+        distortionStrength: { value: opticalProfile.lensDistortionPercent / 100 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position.xy, 0.0, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D sourceTexture;
+        uniform float distortionStrength;
+        varying vec2 vUv;
+        void main() {
+          vec2 centered = vUv * 2.0 - 1.0;
+          float radiusSquared = dot(centered, centered);
+          float radialScale = 1.0 + distortionStrength * radiusSquared + distortionStrength * 0.35 * radiusSquared * radiusSquared;
+          vec2 sampleUv = centered * radialScale * 0.5 + 0.5;
+          if (sampleUv.x < 0.0 || sampleUv.x > 1.0 || sampleUv.y < 0.0 || sampleUv.y > 1.0) {
+            gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+          } else {
+            gl_FragColor = texture2D(sourceTexture, sampleUv);
+          }
+        }
+      `,
+    })
+    distortionScene.add(new THREE.Mesh(distortionGeometry, distortionMaterial))
+
     let texture: THREE.Texture | null = null
     const mediaUrl = immersiveMediaUrl(scenario, device ?? 'vr_box')
     if (!mediaUrl) {
@@ -88,6 +202,9 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
           return
         }
         loaded.colorSpace = THREE.SRGBColorSpace
+        loaded.minFilter = THREE.LinearMipmapLinearFilter
+        loaded.magFilter = THREE.LinearFilter
+        loaded.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy())
         texture = loaded
         material.map = loaded
         material.needsUpdate = true
@@ -117,6 +234,9 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
       }, { once: true })
       texture = new THREE.VideoTexture(video)
       texture.colorSpace = THREE.SRGBColorSpace
+      texture.minFilter = THREE.LinearFilter
+      texture.magFilter = THREE.LinearFilter
+      texture.generateMipmaps = false
       material.map = texture
       material.needsUpdate = true
       video.load()
@@ -129,6 +249,10 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
       camera.aspect = device === 'vr_box' ? width / 2 / height : width / height
       camera.fov = viewerProfile?.verticalFovDegrees ?? 75
       camera.updateProjectionMatrix()
+      if (device === 'vr_box') {
+        const pixelRatio = renderer.getPixelRatio()
+        eyeTarget.setSize(Math.max(1, Math.round(width / 2 * pixelRatio)), Math.max(1, Math.round(height * pixelRatio)))
+      }
     }
     const observer = new ResizeObserver(resize)
     observer.observe(container)
@@ -145,10 +269,16 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
     }, { rootMargin: '120px' })
     visibilityObserver?.observe(container)
 
-    const render = () => {
+    let displayedPose: CardboardHeadPose | null = null
+    let previousRenderTime: number | null = null
+    const render = (time: number) => {
       if (!visible && !renderer.xr.isPresenting) return
       if (!renderer.xr.isPresenting) {
-        const pose = device === 'vr_box' ? headPoseRef.current : null
+        const frameDelta = previousRenderTime === null ? 16 : Math.min(100, time - previousRenderTime)
+        previousRenderTime = time
+        const targetPose = device === 'vr_box' ? headPoseRef.current : null
+        displayedPose = targetPose ? smoothCardboardHeadPose(displayedPose, targetPose, frameDelta) : null
+        const pose = displayedPose
         const view = manualViewRef.current
         camera.rotation.order = 'YXZ'
         camera.rotation.set(pose?.pitchRadians ?? view.pitch, pose?.yawRadians ?? view.yaw, pose ? -pose.rollRadians : 0)
@@ -157,13 +287,21 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
         const width = renderer.domElement.width / renderer.getPixelRatio()
         const height = renderer.domElement.height / renderer.getPixelRatio()
         const eyeWidth = width / 2
-        renderer.setScissorTest(true)
-        renderer.setViewport(0, 0, eyeWidth, height)
-        renderer.setScissor(0, 0, eyeWidth, height)
-        renderer.render(scene, camera)
-        renderer.setViewport(eyeWidth, 0, eyeWidth, height)
-        renderer.setScissor(eyeWidth, 0, eyeWidth, height)
-        renderer.render(scene, camera)
+        const renderEye = (eye: CardboardEye, viewportX: number) => {
+          const frustum = cardboardEyeProjectionFrustum(opticalProfile, eye, camera.near)
+          camera.projectionMatrix.makePerspective(frustum.left, frustum.right, frustum.top, frustum.bottom, camera.near, camera.far)
+          camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert()
+          renderer.setScissorTest(false)
+          renderer.setRenderTarget(eyeTarget)
+          renderer.render(scene, camera)
+          renderer.setRenderTarget(null)
+          renderer.setScissorTest(true)
+          renderer.setViewport(viewportX, 0, eyeWidth, height)
+          renderer.setScissor(viewportX, 0, eyeWidth, height)
+          renderer.render(distortionScene, distortionCamera)
+        }
+        renderEye('left', 0)
+        renderEye('right', eyeWidth)
         renderer.setScissorTest(false)
       } else renderer.render(scene, camera)
     }
@@ -181,9 +319,18 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
       videoRef.current?.removeAttribute('src')
       videoRef.current?.load()
       videoRef.current = null
+      audioRef.current?.pause()
+      audioRef.current?.removeAttribute('src')
+      audioRef.current?.load()
+      audioRef.current = null
       texture?.dispose()
+      targetTexture?.dispose()
+      targetMaterial?.dispose()
       material.dispose()
       geometry.dispose()
+      eyeTarget.dispose()
+      distortionMaterial.dispose()
+      distortionGeometry.dispose()
       renderer.dispose()
       renderer.domElement.remove()
       rendererRef.current = null
@@ -198,7 +345,7 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
       disposed = true
       release?.()
     }
-  }, [activated, device, onDemand, scenario, viewerProfile?.verticalFovDegrees])
+  }, [activated, ambientAudio?.enabled, ambientAudio?.volume, device, onDemand, scenario, spatialTarget?.azimuthDegrees, spatialTarget?.color, spatialTarget?.elevationDegrees, spatialTarget?.enabled, spatialTarget?.shape, spatialTarget?.size, viewerProfile])
 
   const enterQuestImmersion = async () => {
     const renderer = rendererRef.current
@@ -210,6 +357,7 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
       return
     }
     try {
+      if (audioRef.current && !pausedRef.current) void audioRef.current.play().catch(() => undefined)
       if (!await xr.isSessionSupported('immersive-vr')) {
         setStatus('unsupported')
         setMessage('Este dispositivo no informa compatibilidad con WebXR inmersivo.')
@@ -282,17 +430,19 @@ export function ImmersivePanorama({ scenario, device, paused = false, headPose =
   }
 
   return <div ref={containerRef} className={`relative isolate size-full overflow-hidden bg-[#081113] ${className}`} onPointerDown={beginDrag} onPointerMove={drag} onPointerUp={() => { pointerRef.current = null }} onPointerCancel={() => { pointerRef.current = null }} aria-label={`Visor panorámico: ${scenario.title}`}>
-    {status !== 'xr_active' && <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-between bg-gradient-to-b from-black/75 to-transparent p-4 text-white">
+    {status !== 'xr_active' && (device !== 'vr_box' || controlsVisible) && <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-between bg-gradient-to-b from-black/75 to-transparent p-4 text-white">
       <div><p className="text-xs font-black">{scenario.shortTitle}</p><p className="mt-1 text-[10px] text-white/65">360° real · {scenario.mediaKind === 'video' ? 'video continuo' : 'cámara fija'}</p></div>
       {device !== 'vr_box' && <span className="rounded-full bg-black/45 px-3 py-2 text-[10px] font-black">Arrastrá para explorar</span>}
     </div>}
     {(status === 'loading' || status === 'error' || status === 'unsupported') && <div role={status === 'error' ? 'alert' : 'status'} className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-[#081113]/88 p-6 text-center text-white"><div><Scan className="mx-auto text-[#E49A02]" size={36}/><p className="mt-4 text-sm font-black">{message}</p></div></div>}
-    {device === 'quest' && status !== 'xr_active' && <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 to-transparent p-5 text-center text-white">
-      <p className="text-[11px] leading-5 text-white/70">El tiempo clínico comienza recién cuando WebXR confirma la inmersión.</p>
-      <button type="button" disabled={status === 'loading'} onClick={() => void enterQuestImmersion()} className="mt-3 inline-flex h-12 items-center gap-2 rounded-2xl bg-[#E49A02] px-5 text-xs font-black text-white disabled:opacity-40"><Scan size={17}/> Entrar en inmersión Quest</button>
+    {device === 'quest' && status !== 'xr_active' && canEnterImmersion && <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 to-transparent p-5 text-center text-white">
+      <p className="text-[11px] font-bold leading-5 text-white/85">Escenario preparado. El ejercicio todavía no comenzó.</p>
+      <p className="mt-1 text-[10px] leading-5 text-white/60">Tocá el botón una vez. El cronómetro empieza únicamente cuando Quest confirma la inmersión.</p>
+      <button type="button" disabled={status !== 'ready'} onClick={() => void enterQuestImmersion()} className="mt-3 inline-flex h-12 items-center gap-2 rounded-2xl bg-[#E49A02] px-5 text-xs font-black text-white disabled:opacity-40"><Scan size={17}/> Iniciar ejercicio en inmersión</button>
       {onExit && <button type="button" onClick={onExit} className="ml-2 h-12 rounded-2xl bg-[#c74750] px-5 text-xs font-black text-white">Salir</button>}
     </div>}
-    {device === 'quest' && status === 'xr_active' && <div className="absolute inset-x-0 bottom-0 z-40 flex justify-center gap-2 p-5 [contain:layout]" data-webxr-dom-overlay>
+    {device === 'quest' && status === 'xr_active' && <div className="absolute inset-x-0 bottom-0 z-40 flex flex-wrap items-center justify-center gap-2 p-5 [contain:layout]" data-webxr-dom-overlay>
+      {formattedTime && <span className="rounded-2xl bg-black/65 px-4 py-3 text-xs font-black tabular-nums text-white">{formattedTime}</span>}
       {onTogglePause && <button type="button" onClick={onTogglePause} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-white px-4 text-xs font-black text-[#171717]">{paused ? <Play size={16}/> : <Pause size={16}/>} {paused ? 'Continuar' : 'Pausar'}</button>}
       <button type="button" onClick={() => void leaveQuestImmersion()} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-white/90 px-4 text-xs font-black text-[#171717]"><RotateCcw size={16}/> Salir de inmersión</button>
       {onExit && <button type="button" onClick={onExit} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#c74750] px-4 text-xs font-black text-white"><LogOut size={16}/> Salir de sesión</button>}

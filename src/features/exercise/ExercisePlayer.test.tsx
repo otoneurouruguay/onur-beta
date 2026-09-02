@@ -6,10 +6,29 @@ import { defaultExerciseConfig } from './types'
 
 vi.mock('./ExerciseCanvas', () => ({ ExerciseCanvas: () => <div>Vista visual</div> }))
 vi.mock('./StereoscopicExerciseCanvas', () => ({ StereoscopicExerciseCanvas: () => <div>Vista VR</div> }))
+vi.mock('../immersive/ImmersivePanorama', () => ({
+  ImmersivePanorama: ({ canEnterImmersion, formattedTime, onImmersionChange, onExit }: { canEnterImmersion?: boolean; formattedTime?: string; onImmersionChange?: (active: boolean) => void; onExit?: () => void }) => <div>
+    <p>Panorama Quest</p>
+    {canEnterImmersion && <button type="button" onClick={() => onImmersionChange?.(true)}>Iniciar ejercicio en inmersión</button>}
+    {formattedTime && <span>{formattedTime}</span>}
+    {onExit && <button type="button" onClick={onExit}>Salir del panorama</button>}
+  </div>,
+}))
 
 afterEach(() => { cleanup(); vi.useRealTimers() })
 
 describe('avance del reproductor', () => {
+  it('solicita pantalla completa sobre el contenedor estable de la sesión', () => {
+    const fullscreenTarget = document.createElement('div')
+    const requestFullscreen = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(fullscreenTarget, 'requestFullscreen', { value: requestFullscreen })
+
+    render(<ExercisePlayer fullscreenTargetRef={{ current: fullscreenTarget }} config={{ ...defaultExerciseConfig, preparationSeconds: 0 }} onExit={vi.fn()}/>)
+    fireEvent.click(screen.getByRole('button', { name: 'Pantalla completa' }))
+
+    expect(requestFullscreen).toHaveBeenCalledOnce()
+  })
+
   it('finaliza automáticamente un ejercicio VR Box por tiempo', async () => {
     vi.useFakeTimers()
     const onComplete = vi.fn()
@@ -25,15 +44,21 @@ describe('avance del reproductor', () => {
     expect(onComplete.mock.calls[0][1]).toMatchObject({ doseMode: 'time', completion: 'target_completed' })
   })
 
-  it('Cardboard muestra controles binoculares para pausar, omitir y salir', () => {
+  it('Cardboard muestra los controles al tocar la pantalla y vuelve a ocultarlos', async () => {
+    vi.useFakeTimers()
     const onSkip = vi.fn()
     const onExit = vi.fn()
     render(<ExercisePlayer config={{ ...applyExercisePurpose(defaultExerciseConfig, 'optokinetic'), displayMode: 'vr_box', cardboardEnabled: true, doseMode: 'time', advanceMode: 'automatic', durationSeconds: 30, preparationSeconds: 0 }} onExit={onExit} onSkip={onSkip}/>)
 
+    expect(screen.queryByRole('button', { name: 'Pausar · lado izquierdo' })).not.toBeInTheDocument()
+    fireEvent.pointerDown(screen.getByRole('application'))
     expect(screen.getByRole('button', { name: 'Pausar · lado izquierdo' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Omitir ejercicio · lado izquierdo' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Salir de la sesión · lado derecho' })).toBeInTheDocument()
+    await act(async () => { vi.advanceTimersByTime(3_000) })
+    expect(screen.queryByRole('button', { name: 'Pausar · lado izquierdo' })).not.toBeInTheDocument()
 
+    fireEvent.pointerDown(screen.getByRole('application'))
     fireEvent.click(screen.getByRole('button', { name: 'Pausar · lado izquierdo' }))
     expect(screen.getByRole('button', { name: 'Continuar · lado derecho' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Omitir ejercicio · lado derecho' }))
@@ -46,6 +71,7 @@ describe('avance del reproductor', () => {
     const onExit = vi.fn()
     render(<ExercisePlayer config={{ ...applyExercisePurpose(defaultExerciseConfig, 'saccades'), displayMode: 'vr_box', cardboardEnabled: true, doseMode: 'time', advanceMode: 'automatic', preparationSeconds: 0 }} onExit={onExit}/>)
 
+    fireEvent.pointerDown(screen.getByRole('application'))
     fireEvent.click(screen.getByRole('button', { name: 'Salir de la sesión · lado izquierdo' }))
     expect(onExit).toHaveBeenCalledOnce()
   })
@@ -59,6 +85,32 @@ describe('avance del reproductor', () => {
     expect(onComplete).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Continuar' }))
     expect(onComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it('en Quest 360 espera la inmersión, no superpone controles y recién entonces inicia el tiempo', async () => {
+    vi.useFakeTimers()
+    const onComplete = vi.fn()
+    const config = {
+      ...applyExercisePurpose(defaultExerciseConfig, 'immersive_context'),
+      displayMode: 'quest_browser' as const,
+      durationSeconds: 10,
+      preparationSeconds: 5 as const,
+    }
+    render(<ExercisePlayer config={config} onExit={vi.fn()} onComplete={onComplete}/>)
+
+    expect(screen.queryByRole('button', { name: 'Iniciar ejercicio en inmersión' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Pantalla completa' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Pausar' })).not.toBeInTheDocument()
+    for (let second = 0; second < 5; second += 1) {
+      await act(async () => { vi.advanceTimersByTime(1_000) })
+    }
+    expect(screen.getByRole('button', { name: 'Iniciar ejercicio en inmersión' })).toBeInTheDocument()
+
+    await act(async () => { vi.advanceTimersByTime(12_000) })
+    expect(onComplete).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar ejercicio en inmersión' }))
+    await act(async () => { vi.advanceTimersByTime(10_000) })
+    expect(onComplete).toHaveBeenCalledOnce()
   })
 
   it('en repeticiones acepta una cantidad parcial', () => {

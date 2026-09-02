@@ -41,13 +41,35 @@ describe('plan práctico de ejecución', () => {
     expect(plan.warnings.join(' ')).toContain('fusionen en uno solo')
   })
 
-  it('identifica el perfil óptico manual sin prometer distorsión de lentes ni posición 6DoF', () => {
+  it('identifica la corrección radial manual sin prometer calibración QR ni posición 6DoF', () => {
     const config = { ...applyExercisePurpose(defaultExerciseConfig, 'optokinetic'), displayMode: 'vr_box' as const, cardboardEnabled: true, doseMode: 'time' as const, advanceMode: 'automatic' as const }
     const plan = buildExerciseExecutionPlan(config, 'home')
     expect(plan.equipment).toContain('Visor compatible con Cardboard preparado y abierto')
-    expect(plan.warnings.join(' ')).toContain('perfil local ajusta centros y campo visual')
-    expect(plan.warnings.join(' ')).toContain('no interpreta códigos QR')
+    expect(plan.warnings.join(' ')).toContain('perfil local ajusta centros, campo visual y una corrección radial manual')
+    expect(plan.warnings.join(' ')).toContain('interpreta el código QR específico')
     expect(plan.warnings.join(' ')).toContain('anclaje angular 3DoF')
     expect(plan.warnings.join(' ')).toContain('no mide traslación 6DoF')
+  })
+
+  it('explica la logística de fijación ante fondo móvil sin rotularla como RVO', () => {
+    const config = applyExercisePurpose(defaultExerciseConfig, 'visual_motion_fixation')
+    const plan = buildExerciseExecutionPlan(config, 'home')
+    expect(plan.feasibility).toBe('ready')
+    expect(plan.steps.join(' ')).toContain('Mantené la cabeza quieta')
+    expect(plan.warnings.join(' ')).toContain('no es RVO x1')
+  })
+
+  it('explica que el seguimiento con fondo móvil es una tarea combinada', () => {
+    const config = applyExercisePurpose(defaultExerciseConfig, 'pursuit_visual_conflict')
+    const plan = buildExerciseExecutionPlan(config, 'in_person')
+    expect(plan.feasibility).toBe('ready')
+    expect(plan.steps.join(' ')).toContain('seguí el blanco')
+    expect(plan.warnings.join(' ')).toContain('tarea combinada')
+  })
+
+  it('diferencia el flujo óptico radial de marcha, 360° y optocinético lineal', () => {
+    const plan = buildExerciseExecutionPlan(applyExercisePurpose(defaultExerciseConfig, 'optic_flow'))
+    expect(plan.warnings.join(' ')).toContain('No representa marcha')
+    expect(plan.warnings.join(' ')).toContain('estimulación optocinética lineal')
   })
 })

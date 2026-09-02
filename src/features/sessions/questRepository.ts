@@ -44,7 +44,7 @@ interface DemoPairing extends QuestPairingRecord {
 }
 
 const DEMO_PAIRINGS_KEY = 'onur-demo-quest-pairings-v1'
-const CODE_ALPHABET = '0123456789ABCDEF'
+const QUEST_CODE_LENGTH = 4
 
 function readDemoPairings(): DemoPairing[] {
   const raw = localStorage.getItem(DEMO_PAIRINGS_KEY)
@@ -57,8 +57,9 @@ function writeDemoPairings(pairings: DemoPairing[]) {
 }
 
 function randomCode() {
-  const bytes = crypto.getRandomValues(new Uint8Array(8))
-  return Array.from(bytes, (value) => CODE_ALPHABET[value % CODE_ALPHABET.length]).join('')
+  const bytes = crypto.getRandomValues(new Uint8Array(2))
+  const value = ((bytes[0] << 8) | bytes[1]) % (10 ** QUEST_CODE_LENGTH)
+  return String(value).padStart(QUEST_CODE_LENGTH, '0')
 }
 
 function normalizeCapture(value: unknown): QuestCaptureResult | null {
@@ -87,12 +88,28 @@ function pairingRecord(value: Record<string, unknown>): QuestPairingRecord {
 export function isQuestClinicAssignment(assignment: Pick<SessionAssignmentRecord, 'mode' | 'exercises'>) {
   return assignment.mode === 'in_person'
     && assignment.exercises.length > 0
-    && assignment.exercises.every((exercise) => exercise.displayMode === 'quest_browser')
+    && assignment.exercises.some((exercise) => exercise.displayMode === 'quest_browser')
+}
+
+export function getQuestBlockExercises(assignment: Pick<SessionAssignmentRecord, 'exercises'>) {
+  return assignment.exercises.filter((exercise) => exercise.displayMode === 'quest_browser')
+}
+
+export function getNonQuestBlockExercises(assignment: Pick<SessionAssignmentRecord, 'exercises'>) {
+  return assignment.exercises.filter((exercise) => exercise.displayMode !== 'quest_browser')
+}
+
+export function isMixedQuestClinicAssignment(assignment: Pick<SessionAssignmentRecord, 'mode' | 'exercises'>) {
+  return isQuestClinicAssignment(assignment) && getNonQuestBlockExercises(assignment).length > 0
+}
+
+export function questBlockSession(assignment: SessionAssignmentRecord): SessionAssignmentRecord {
+  return { ...assignment, exercises: getQuestBlockExercises(assignment) }
 }
 
 export async function createQuestSessionPairing(assignment: SessionAssignmentRecord): Promise<QuestPairingCreated> {
   if (!isQuestClinicAssignment(assignment) || assignment.status !== 'started') {
-    throw new Error('Quest solo admite una sesión presencial iniciada y compuesta íntegramente por ejercicios Quest.')
+    throw new Error('Quest necesita una sesión presencial iniciada con al menos un ejercicio destinado al visor.')
   }
 
   if (!isSupabaseConfigured || !supabase) {
@@ -110,7 +127,7 @@ export async function createQuestSessionPairing(assignment: SessionAssignmentRec
       capturedResult: null,
       deviceToken: '',
       patientLabel: assignment.patientName.split(' ').slice(0, 2).map((part, index) => index === 0 ? part : `${part[0]}.`).join(' '),
-      session: assignment,
+      session: questBlockSession(assignment),
     }
     const previous = readDemoPairings().map((pairing) => pairing.assignmentId === assignment.id && ['ready', 'claimed'].includes(pairing.status) ? { ...pairing, status: 'revoked' as const } : pairing)
     writeDemoPairings([created, ...previous])
@@ -159,8 +176,8 @@ export async function findQuestSessionPairingForAssignment(assignmentId: string)
 }
 
 export async function claimQuestSessionPairing(code: string): Promise<ClaimedQuestSession> {
-  const normalizedCode = code.trim().toUpperCase()
-  if (!/^[0-9A-F]{8}$/.test(normalizedCode)) throw new Error('Ingresá los ocho caracteres del código Quest.')
+  const normalizedCode = code.trim()
+  if (!/^[0-9]{4}$/.test(normalizedCode)) throw new Error('Ingresá los cuatro números del código Quest.')
 
   if (!isSupabaseConfigured || !supabase) {
     const pairings = readDemoPairings()
@@ -202,7 +219,9 @@ export async function claimQuestSessionPairing(code: string): Promise<ClaimedQue
       title: String(session.title),
       instructions: String(session.instructions ?? ''),
       mode: 'in_person',
-      exercises: exercises.map((exercise) => normalizeExerciseConfig(exercise as Record<string, unknown>, 0)),
+      exercises: exercises
+        .map((exercise) => normalizeExerciseConfig(exercise as Record<string, unknown>, 0))
+        .filter((exercise) => exercise.displayMode === 'quest_browser'),
       availableFrom: '',
       availableUntil: '',
       status: 'started',

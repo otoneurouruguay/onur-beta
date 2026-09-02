@@ -2,12 +2,12 @@ import {
   BarChart3,
   BookOpenCheck,
   BrainCircuit,
+  ChevronDown,
   ClipboardList,
   FileText,
   Globe2,
   LayoutDashboard,
   LogOut,
-  Menu,
   MonitorPlay,
   ShieldCheck,
   Upload,
@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Brand } from './Brand'
 import { useAuth } from '../features/auth/AuthProvider'
+import { useStatisticalSuggestions } from '../features/studies/hooks'
 import { GlobalSearch } from './GlobalSearch'
 
 interface NavigationItem {
@@ -26,30 +27,118 @@ interface NavigationItem {
   to: string
   icon: LucideIcon
   end?: boolean
+  badge?: number
+  children?: NavigationItem[]
 }
-
-const navigation: NavigationItem[] = [
-  { label: 'Inicio', to: '/app', icon: LayoutDashboard, end: true },
-  { label: 'Pacientes', to: '/app/pacientes', icon: Users },
-  { label: 'Sesiones', to: '/app/sesiones', icon: MonitorPlay },
-  { label: 'Ejercicios', to: '/app/ejercicios', icon: BrainCircuit },
-  { label: 'Escenarios 360°', to: '/app/escenarios-360', icon: Globe2 },
-  { label: 'Estudios', to: '/app/estudios', icon: Upload },
-  { label: 'Evaluaciones', to: '/app/evaluaciones', icon: ClipboardList },
-  { label: 'Informes', to: '/app/informes', icon: FileText },
-  { label: 'Sugerencias', to: '/app/sugerencias', icon: BookOpenCheck },
-  { label: 'Estadísticas', to: '/app/estadisticas', icon: BarChart3 },
-]
 
 export function ProfessionalShell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const accountRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const location = useLocation()
   const auth = useAuth()
+  const suggestionsQuery = useStatisticalSuggestions()
+  const pendingSuggestions = (suggestionsQuery.data ?? []).filter((suggestion) => suggestion.status === 'pending').length
+  const primaryNavigation: NavigationItem[] = [
+    { label: 'Inicio', to: '/app', icon: LayoutDashboard, end: true },
+    { label: 'Pacientes', to: '/app/pacientes', icon: Users },
+    { label: 'Sesiones', to: '/app/sesiones', icon: MonitorPlay },
+    {
+      label: 'Ejercicios',
+      to: '/app/ejercicios',
+      icon: BrainCircuit,
+      children: [{ label: 'Escenarios 360°', to: '/app/escenarios-360', icon: Globe2 }],
+    },
+    {
+      label: 'Estudios',
+      to: '/app/estudios',
+      icon: Upload,
+      badge: pendingSuggestions,
+      children: [{ label: 'Sugerencias', to: '/app/sugerencias', icon: BookOpenCheck }],
+    },
+    { label: 'Informes', to: '/app/informes', icon: FileText },
+  ]
+  const followUpNavigation: NavigationItem[] = [
+    { label: 'Evaluaciones', to: '/app/evaluaciones', icon: ClipboardList },
+    { label: 'Estadísticas', to: '/app/estadisticas', icon: BarChart3 },
+  ]
+  const navigation = [...primaryNavigation.flatMap((item) => [item, ...(item.children ?? [])]), ...followUpNavigation]
   const initials = auth.displayName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'ON'
   const currentSection = [...navigation].reverse().find((item) => location.pathname.startsWith(item.to))?.label ?? 'Inicio'
+
+  const renderNavigationItem = (item: NavigationItem, nested = false) => {
+    return (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        end={item.end}
+        onClick={() => setMenuOpen(false)}
+        className={({ isActive }) => {
+          return `group relative flex items-center gap-3 rounded-lg font-semibold transition-colors ${
+            nested ? 'h-9 px-2.5 text-[12px]' : 'h-10 px-3 text-[13px]'
+          } ${isActive ? 'bg-[#FFF7E8] text-[#171717]' : 'text-[#747474] hover:bg-[#F7F6F4] hover:text-[#171717]'}`
+        }}
+      >
+        {({ isActive }) => {
+          return (
+            <>
+              {isActive && !nested && <span className="absolute left-0 h-5 w-[3px] rounded-r-full bg-[#E49A02]" aria-hidden="true" />}
+              <item.icon aria-hidden="true" size={nested ? 15 : 17} strokeWidth={isActive ? 2.2 : 1.8} className={isActive ? 'text-[#A36B00]' : ''} />
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              {Boolean(item.badge) && (
+                <span
+                  className="grid min-w-5 place-items-center rounded-full bg-[#E49A02] px-1.5 py-0.5 text-[10px] font-black leading-4 text-white"
+                  aria-label={`${item.badge} revisiones pendientes`}
+                >
+                  {item.badge}
+                </span>
+              )}
+            </>
+          )
+        }}
+      </NavLink>
+    )
+  }
+
+  const renderNavigationGroup = (item: NavigationItem) => {
+    const groupActive = location.pathname.startsWith(item.to) || (item.children?.some((child) => location.pathname.startsWith(child.to)) ?? false)
+    const expanded = expandedGroups[item.to] ?? groupActive
+    const panelId = `navigation-group-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+    return (
+      <div key={item.to}>
+        <button
+          type="button"
+          onClick={() => setExpandedGroups((current) => ({ ...current, [item.to]: !expanded }))}
+          className={`group relative flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-[13px] font-semibold transition-colors ${
+            groupActive ? 'bg-[#FFF7E8] text-[#171717]' : 'text-[#747474] hover:bg-[#F7F6F4] hover:text-[#171717]'
+          }`}
+          aria-expanded={expanded}
+          aria-controls={panelId}
+        >
+          {groupActive && <span className="absolute left-0 h-5 w-[3px] rounded-r-full bg-[#E49A02]" aria-hidden="true" />}
+          <item.icon aria-hidden="true" size={17} strokeWidth={groupActive ? 2.2 : 1.8} className={groupActive ? 'text-[#A36B00]' : ''} />
+          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+          {Boolean(item.badge) && (
+            <span
+              className="grid min-w-5 place-items-center rounded-full bg-[#E49A02] px-1.5 py-0.5 text-[10px] font-black leading-4 text-white"
+              aria-label={`${item.badge} revisiones pendientes`}
+            >
+              {item.badge}
+            </span>
+          )}
+          <ChevronDown aria-hidden="true" size={15} className={`shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
+        {expanded && (
+          <div id={panelId} className="ml-5 mt-1 space-y-1 border-l border-[#E9E7E7] pl-2">
+            {renderNavigationItem({ ...item, label: item.label === 'Ejercicios' ? 'Crear ejercicio' : 'Todos los estudios', children: undefined, badge: undefined }, true)}
+            {item.children?.map((child) => renderNavigationItem(child, true))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const logout = async () => {
     await auth.signOut()
@@ -91,29 +180,12 @@ export function ProfessionalShell() {
 
         <p className="mb-2 mt-8 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#A1A1A1]">Consultorio</p>
         <nav className="space-y-1" aria-label="Navegación principal">
-          {navigation.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              onClick={() => setMenuOpen(false)}
-              className={({ isActive }) =>
-                `group relative flex h-10 items-center gap-3 rounded-lg px-3 text-[13px] font-semibold transition-colors ${
-                  isActive
-                    ? 'bg-[#FFF7E8] text-[#171717]'
-                    : 'text-[#747474] hover:bg-[#F7F6F4] hover:text-[#171717]'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && <span className="absolute left-0 h-5 w-[3px] rounded-r-full bg-[#E49A02]" aria-hidden="true" />}
-                  <item.icon aria-hidden="true" size={17} strokeWidth={isActive ? 2.2 : 1.8} className={isActive ? 'text-[#A36B00]' : ''} />
-                  {item.label}
-                </>
-              )}
-            </NavLink>
+          {primaryNavigation.map((item) => (
+            item.children ? renderNavigationGroup(item) : renderNavigationItem(item)
           ))}
+
+          <p className="mb-2 mt-6 px-3 pt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[#A1A1A1]">Seguimiento</p>
+          {followUpNavigation.map((item) => renderNavigationItem(item))}
         </nav>
 
         <div className="mt-auto">
@@ -155,8 +227,15 @@ export function ProfessionalShell() {
               onClick={() => setMenuOpen(true)}
               aria-label="Abrir menú"
             >
-              <Menu size={19} />
+              <span className="flex w-[19px] flex-col gap-1" aria-hidden="true">
+                <span className="h-0.5 w-full rounded-full bg-current" />
+                <span className="h-0.5 w-full rounded-full bg-current" />
+                <span className="h-0.5 w-full rounded-full bg-current" />
+              </span>
             </button>
+            <div className="lg:hidden">
+              <Brand compact />
+            </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#A36B00]">ONUr Beta</p>
               <p className="mt-0.5 text-sm font-semibold text-[#171717]">{currentSection}</p>

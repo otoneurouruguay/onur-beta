@@ -16,6 +16,12 @@ const cognitive = (overrides: Partial<ExerciseConfig> = {}): ExerciseConfig => (
 const immersive = (overrides: Partial<ExerciseConfig> = {}): ExerciseConfig => ({ ...applyExercisePurpose(defaultExerciseConfig, 'immersive_context'), ...overrides })
 
 describe('validación de sesión',()=>{
+  it('acepta una sesión presencial libre sin ejercicios y rechaza su uso domiciliario', () => {
+    const freeSession = { ...session([], 'in_person'), kind: 'free_note' as const }
+    expect(validateSession(freeSession)).toEqual({})
+    expect(validateSession({ ...freeSession, mode: 'home' }).kind).toContain('presencial')
+  })
+
   it.each([
     ['pantalla 2D por tiempo', config()],
     ['pantalla 2D por repeticiones', config({ doseMode: 'repetitions', advanceMode: 'manual' })],
@@ -32,9 +38,20 @@ describe('validación de sesión',()=>{
     expect(validateSession(session([exercise], 'in_person'))).toEqual({})
   })
 
-  it('acepta una única exposición 360° presencial en Quest o Cardboard', () => {
+  it('acepta estroboscópico solo en sesión presencial supervisada', () => {
+    const strobe = { ...applyExercisePurpose(defaultExerciseConfig, 'visual_habituation'), strobeEnabled: true, supervision: 'direct_clinician' as const, advanceMode: 'manual' as const, durationSeconds: 20, rounds: 1 }
+    expect(validateSession(session([strobe], 'in_person'))).toEqual({})
+    expect(validateSession(session([strobe], 'home')).exercises).toContain('solo puede asignarse')
+  })
+
+  it('acepta una o varias exposiciones 360° presenciales en Quest o Cardboard', () => {
     expect(validateSession(session([immersive()], 'in_person'))).toEqual({})
+    expect(validateSession(session([immersive({ name: 'Escenario 1' }), immersive({ name: 'Escenario 2' })], 'in_person'))).toEqual({})
     expect(validateSession(session([immersive({ displayMode: 'vr_box', cardboardEnabled: true })], 'in_person'))).toEqual({})
+    expect(validateSession(session([
+      immersive({ name: 'Escenario 1', displayMode: 'vr_box', cardboardEnabled: true }),
+      immersive({ name: 'Escenario 2', displayMode: 'vr_box', cardboardEnabled: true }),
+    ], 'in_person'))).toEqual({})
   })
 
   it('simula sesiones separadas y ejecutables para Galaxy S21+ y PC de consultorio', () => {
@@ -76,9 +93,9 @@ describe('validación de sesión',()=>{
     expect(validateSession(session([desktop], 'in_person'))).toEqual({})
   })
 
-  it('bloquea exposición 360° domiciliaria, mezclada o sin seguimiento Cardboard', () => {
+  it('bloquea exposición 360° domiciliaria, bloque Quest heterogéneo o sin seguimiento Cardboard', () => {
     expect(validateSession(session([immersive()], 'home')).exercises).toContain('únicamente en clínica')
-    expect(validateSession(session([immersive(), optokinetic({ displayMode: 'quest_browser', supervision: 'direct_clinician', advanceMode: 'automatic' })], 'in_person')).exercises).toContain('único escenario')
+    expect(validateSession(session([immersive(), optokinetic({ displayMode: 'quest_browser', supervision: 'direct_clinician', advanceMode: 'automatic' })], 'in_person')).exercises).toContain('homogéneo')
     expect(validateSession(session([immersive({ displayMode: 'vr_box', cardboardEnabled: false })], 'in_person')).exercises).toContain('Cardboard 3DoF')
   })
 
@@ -89,6 +106,20 @@ describe('validación de sesión',()=>{
   })
 
   it('rechaza una fecha final anterior',()=>expect(validateSession({...session([defaultExerciseConfig]),availableUntil:'2026-07-15'}).availableUntil).toBeTruthy())
+
+  it.each([
+    ['duración menor al mínimo', config({ durationSeconds: 9 }), 'duración'],
+    ['descanso fuera de rango', config({ restSeconds: 181 }), 'descanso'],
+    ['cero vueltas', config({ rounds: 0 }), 'vueltas'],
+    ['vueltas fraccionarias', config({ rounds: 1.5 }), 'vueltas'],
+    ['preparación arbitraria', config({ preparationSeconds: 7 as ExerciseConfig['preparationSeconds'] }), 'preparación'],
+  ])('rechaza %s aunque el valor no venga del formulario HTML', (_label, exercise, message) => {
+    expect(validateSession(session([exercise])).exercises?.toLowerCase()).toContain(message)
+  })
+
+  it('ignora un identificador 360° residual cuando la finalidad ya no es inmersiva', () => {
+    expect(validateSession(session([config({ immersiveScenarioId: 'street_quiet', durationSeconds: 120 })]))).toEqual({})
+  })
 
   it.each([
     ['repeticiones dentro de VR Box', optokinetic({ displayMode: 'vr_box', doseMode: 'repetitions', advanceMode: 'manual' }), 'VR Box'],
@@ -132,7 +163,7 @@ describe('validación de sesión',()=>{
     expect(validateSession(session([vrBox, cardboard])).exercises).toContain('único perfil de visor')
   })
 
-  it('no mezcla Quest con ejercicios para otro dispositivo', () => {
+  it('acepta una sesión mixta con PC primero y un único bloque Quest al final', () => {
     const questExercise = optokinetic({
       displayMode: 'quest_browser',
       doseMode: 'time',
@@ -141,7 +172,16 @@ describe('validación de sesión',()=>{
       surface: 'firm',
       supervision: 'direct_clinician',
     })
-    expect(validateSession(session([questExercise, defaultExerciseConfig], 'in_person')).exercises).toContain('exclusivamente ejercicios Quest')
+    expect(validateSession(session([defaultExerciseConfig, questExercise], 'in_person'))).toEqual({})
+    expect(validateSession(session([questExercise, defaultExerciseConfig], 'in_person')).exercises).toContain('primero los ejercicios sin Quest')
+  })
+
+  it('no combina Quest con VR Box o Cardboard como tercer dispositivo', () => {
+    const questExercise = optokinetic({
+      displayMode: 'quest_browser', doseMode: 'time', advanceMode: 'automatic', posture: 'seated', surface: 'firm', supervision: 'direct_clinician',
+    })
+    const vrBox = optokinetic({ displayMode: 'vr_box', doseMode: 'time', advanceMode: 'automatic' })
+    expect(validateSession(session([vrBox, questExercise], 'in_person')).exercises).toContain('tercer dispositivo')
   })
 
   it('ignora condiciones físicas residuales al volver a un estímulo visual', () => {

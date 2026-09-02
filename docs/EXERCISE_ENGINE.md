@@ -35,6 +35,10 @@ Las tareas cognitivas son una capa opcional de los estímulos visuales:
 
 La consigna completa aparece antes del ejercicio y el temporizador no comienza hasta que la persona confirma que la comprendió. Las secuencias de figuras son deterministas. En respuesta táctil se registran aciertos y respuestas fuera del objetivo; en conteo se conserva el total informado y la cantidad real de eventos presentados. Estos registros describen la ejecución de la tarea y no constituyen una evaluación diagnóstica.
 
+La biblioteca incorpora secuencias de imágenes geométricas a 2, 1,25 y 0,75 segundos por imagen. El seguimiento ocular continuo permite velocidades desde 0,05 hasta 2 Hz, con accesos directos desde muy lento hasta muy rápido. El metrónomo admite ritmos de 0,1 a 4 señales por segundo y tonos graves, medios o agudos entre 220 y 1320 Hz en la interfaz.
+
+Las variantes estroboscópicas son experimentales: reducen parcialmente la información visual en pantalla 2D entre 0,5 y 2,5 Hz, con contraste limitado, una sola vuelta de hasta 30 segundos, posición sentada y supervisión profesional directa. La vista previa permanece inmóvil hasta que el profesional inicia la prueba. No se habilitan en visor ni se presentan como tratamiento demostrado; se excluyen ante fotosensibilidad, aura, fotofobia activa o crisis de migraña vestibular.
+
 La configuración inicial es pantalla 2D, sentado, superficie firme, ritmo lento, una sola tarea y memoria de una posición. Las tareas cognitivas se bloquean en VR Box y Quest en esta versión porque no existe un flujo fiable para leer la consigna y confirmar la respuesta. También se bloquea tocar la pantalla durante RVO x1, RVO x2 u objetivo recordado, porque altera la posición de ejecución. La combinación con una tarea vestibular u oculomotora se identifica como doble tarea y exige comprobar previamente la tarea aislada.
 
 Fondo y objeto usan parámetros independientes. Los movimientos se calculan como funciones continuas del tiempo o pasos por Hz, de modo que el patrón no termina antes de la fase.
@@ -42,50 +46,55 @@ Fondo y objeto usan parámetros independientes. Los movimientos se calculan como
 ## Reproductor y dispositivos
 
 - pausa, continuación, omisión, salida y pantalla completa;
-- preparación inicial una sola vez;
+- preparación propia antes de cada fase;
 - tiempo activo sin pausas ni descansos;
 - metrónomo configurable fuera de VR Box;
 - confirmación táctil, mouse o teclado en pantalla 2D;
 - VR Box con dos vistas sincronizadas, exclusivamente para ejercicios por tiempo, sentado en superficie firme y con finalización automática;
 - Quest en navegador BETA con selección mediante controlador, manos o puntero compatible.
 
-Antes de entrar a VR Box aparece un aviso en pantalla normal. Al confirmar, comienza una transición de 20 segundos para colocar el celular y el visor. Cada mitad muestra el mismo marcador de fusión: la persona debe percibir uno solo, nítido y cómodo; si lo ve doble o borroso, debe retirar el visor y no comenzar. Durante el estímulo no se superponen controles, textos ni contadores no duplicados. Al terminar el bloque VR se reservan otros 20 segundos para retirarlo. No se implementa ningún mecanismo de confirmación dentro del visor.
+Antes de entrar a VR Box aparece un aviso en pantalla normal. Al confirmar, comienza una transición de 20 segundos para colocar el celular y el visor. Cada mitad muestra el mismo marcador de fusión: la persona debe percibir uno solo, nítido y cómodo; si lo ve doble o borroso, debe retirar el visor y no comenzar. VR Box 2D no superpone controles ni requiere confirmación dentro del visor. Cardboard sí muestra controles duplicados para pausar, recentrar, omitir o salir. Al terminar el bloque se reservan otros 20 segundos para retirarlo.
 
 Cuando una sesión mezcla cualquier tarea sin visor y VR Box, el constructor recomienda realizar primero todas las fases 2D o manuales y dejar un único bloque VR al final. Esto incluye tareas 2D temporizadas, no solo repeticiones. Si se conserva otro orden, se inserta una transición por cada cambio de equipamiento.
 
-Quest navegador todavía no equivale a una escena WebXR controlada por la aplicación. Por ese motivo, una sesión Quest debe contener únicamente ejercicios Quest: la versión actual no transfiere una ejecución activa entre el visor y otro dispositivo.
+En Quest el profesional elige de forma explícita entre `panel_2d` e `immersive_webxr`; las configuraciones antiguas conservan el panel 2D. La inmersión procedural está disponible para seguimiento, sacadas, optocinético, flujo óptico, habituación, fijación con fondo móvil, seguimiento con conflicto y Libre técnicamente representable. Una batería procedural mantiene una única `XRSession` local: los cambios de ejercicio y descansos no obligan a salir y volver a entrar. Los escenarios contextuales 360° conservan su reproductor panorámico separado.
+
+Los patrones procedurales usan unidades angulares propias: cobertura 90°/180°/360°, velocidad del fondo en grados por segundo, tamaño angular del patrón y tamaño/amplitud angular del blanco. Barras, damero y puntos se generan sobre el interior de una esfera envolvente; la espiral usa un disco frontal; el flujo radial usa un túnel real de puntos 3D. El modo Libre también permite elegir cilindro o panel curvo cuando el objetivo lo justifica. El fondo y el blanco son objetos separados. Tras entrar a WebXR se toma una referencia `local`, se muestran 2 segundos de centro frontal y se permite recentrar sin exigir una estabilidad artificial. Un aviso no bloqueante aparece tras desviarse más de 10° durante aproximadamente un segundo.
 
 ## Compatibilidad espacial obligatoria
 
 | Finalidad | Pantalla 2D inmóvil | VR Box | Quest navegador actual | Acción del paciente |
 | --- | --- | --- | --- | --- |
-| RVO x1 / estabilización de mirada | Sí | No | No, hasta validar anclaje WebXR | Fijar el blanco y mover la cabeza |
+| RVO x1 / estabilización de mirada | Sí | Solo Cardboard 3DoF presencial | No en el lienzo Quest 2D | Fijar el blanco y mover la cabeza |
 | RVO x2 / estabilización de mirada | Sí | No | No, hasta validar anclaje WebXR | Seguir el blanco y mover la cabeza en sentido opuesto |
 | Objetivo recordado / sustitución (alias RVO x3) | Sí | No | No | Mirar, cerrar ojos, girar cabeza y comprobar al reabrir |
-| Seguimiento ocular suave | Sí | Sí | Sí | Mantener cabeza quieta y seguir el blanco con los ojos |
-| Sacadas | Sí | Sí | Sí | Mantener cabeza quieta y cambiar la mirada |
-| Optocinético | Sí | Sí | Sí | Sentado, cabeza quieta, observar el patrón móvil |
-| Habituación visual | Sí | Sí | Sí | Sentado, cabeza quieta, observar el movimiento dosificado |
+| Seguimiento ocular suave | Sí | Sí | Sí, panel o WebXR frontal | Mantener cabeza quieta y seguir el blanco con los ojos |
+| Sacadas | Sí | Sí | Sí, panel o WebXR frontal | Mantener cabeza quieta y cambiar la mirada |
+| Optocinético | Sí | Sí | Sí, panel o esfera WebXR | Sentado, cabeza quieta, observar el patrón móvil |
+| Flujo óptico | Sí | Sí | Sí, panel o túnel WebXR 3D | Sentado, cabeza quieta, mirar el centro del flujo |
+| Habituación visual | Sí | Sí | Sí, panel o esfera WebXR | Sentado, cabeza quieta, observar el movimiento dosificado |
+| Exposición contextual 360° | No | Solo Cardboard 3DoF presencial | Sí, WebXR presencial | Explorar el entorno desde postura sentada |
 | Tarea cognitivo-visual | Sí | No | No | Sentado, comprender la consigna y responder según el estímulo |
 | Tarea física o funcional | Sí | No | No | Ejecutar fuera del visor con el entorno visible |
 | Libre | Según configuración | Según límites técnicos | Según límites técnicos | Definido y revisado por el profesional |
 
-En VR Box, el lienzo del celular acompaña la cabeza. En Quest, la aplicación actual no inicia una sesión WebXR ni controla o verifica la referencia espacial. Por criterio conservador no se habilitan RVO x1, RVO x2 ni objetivo recordado en visores. Seguimiento y sacadas con cabeza quieta son tareas oculomotoras y no se rotulan como sustitutos de la estabilización de mirada.
+En VR Box 2D el lienzo acompaña la cabeza. Cardboard 3DoF contrarresta la orientación tras una calibración frontal y por eso admite RVO x1 bajo supervisión clínica, pero no RVO x2 ni objetivo recordado. Quest ofrece panel 2D o WebXR procedural solo en las finalidades listadas; RVO x1, x2 y objetivo recordado continúan excluidos de este motor. Seguimiento y sacadas con cabeza quieta son tareas oculomotoras y no se rotulan como sustitutos de la estabilización de mirada.
 
 ## Modo Libre
 
 `custom_free` permite conservar como plantilla cualquier combinación de fondo, objeto, trayectoria, colores, amplitud, frecuencia, dosis, postura y dispositivo, incluso si no cumple las reglas de una finalidad clínica cerrada. La biblioteca no bloquea su guardado. La interfaz lo identifica en amarillo como configuración profesional no validada y no infiere que sea RVO, sustitución, habituación u optocinético.
 
-Guardar y asignar son operaciones distintas. Al crear una sesión se mantienen los límites técnicos de VR Box (tiempo, avance automático, sin metrónomo, postura sentada y superficie firme), las reglas de ayuda para superficie inestable o marcha domiciliaria y la exclusividad de dispositivo en Quest.
+Guardar y asignar son operaciones distintas. Al crear una sesión se mantienen los límites técnicos de VR Box (tiempo, avance automático, sin metrónomo, postura sentada y superficie firme), las reglas de ayuda para superficie inestable o marcha domiciliaria y un único traspaso PC → Quest cuando la sesión es mixta.
 
 ## Límites clínicos y técnicos
 
 - Los rangos de velocidad, frecuencia, amplitud y diagonal son controles técnicos, no dosis clínicamente validadas.
 - El generador visual no mide técnica, postura, velocidad cefálica ni repeticiones reales.
 - El sonido puede requerir una primera interacción si el navegador bloquea audio automático; por ese motivo el metrónomo se deshabilita en VR Box.
-- VR Box duplica el estímulo 2D; no simula profundidad, no sigue la cabeza y no aplica corrección de lente específica del modelo de visor.
+- VR Box 2D duplica el estímulo sin seguimiento. Cardboard 3DoF agrega orientación, corrección radial manual y perfil óptico por combinación teléfono–visor, pero no posición 6DoF ni calibración oficial por código QR.
 - El blanco se limita a la zona visible de cada mitad para evitar que su tamaño o amplitud lo recorten en el borde.
-- Quest navegador muestra el lienzo 2D; el código actual no solicita `XRSession`, poses ni espacios de referencia WebXR.
+- Quest conserva el panel 2D como opción y solicita una `XRSession` con espacio de referencia `local` para patrones procedurales o escenarios 360° compatibles.
+- La batería procedural registra modo, geometría, cobertura, parámetros angulares, recentrados, avisos y pérdidas de sesión; no guarda poses ni trayectorias crudas de cabeza.
 - Las tareas físicas se bloquean en ambos visores, incluso con supervisión, porque el entorno queda oculto y el reproductor no controla la ejecución corporal.
 - Se requieren pruebas físicas en celulares, VR Box, tablets, HDMI y Meta Quest antes del piloto.
 

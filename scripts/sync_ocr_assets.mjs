@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, rm } from 'node:fs/promises'
+import { cp, mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const projectRoot = process.cwd()
@@ -11,10 +11,16 @@ await mkdir(join(target, 'core'), { recursive: true })
 await mkdir(join(target, 'lang'), { recursive: true })
 await cp(workerSource, join(target, 'worker.min.js'))
 
-for (const filename of await readdir(coreSource)) {
-  if (/^tesseract-core.*\.(?:js|wasm)$/.test(filename)) {
-    await cp(join(coreSource, filename), join(target, 'core', filename))
-  }
+// ONUr siempre crea el worker con OEM.LSTM_ONLY. El cargador web elige una
+// de estas variantes según el soporte SIMD; los otros cores no se solicitan.
+const lstmBrowserCores = [
+  'tesseract-core-relaxedsimd-lstm.wasm.js',
+  'tesseract-core-simd-lstm.wasm.js',
+  'tesseract-core-lstm.wasm.js',
+]
+
+for (const filename of lstmBrowserCores) {
+  await cp(join(coreSource, filename), join(target, 'core', filename))
 }
 
 for (const language of ['spa', 'eng']) {

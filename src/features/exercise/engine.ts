@@ -24,6 +24,61 @@ function deterministicUnit(seed: number) {
   return value - Math.floor(value)
 }
 
+function smoothStep(value: number) {
+  const clamped = Math.max(0, Math.min(1, value))
+  return clamped * clamped * (3 - 2 * clamped)
+}
+
+export function backgroundRampEnvelope(config: ExerciseConfig, elapsedSeconds: number) {
+  if (config.backgroundRampSeconds <= 0) return 1
+  return smoothStep(elapsedSeconds / config.backgroundRampSeconds)
+}
+
+export function backgroundMotionOffset(
+  config: ExerciseConfig,
+  elapsedSeconds: number,
+  referenceSpan: number,
+) {
+  if (config.backgroundMotionMode === 'oscillating') {
+    const amplitude = referenceSpan * (config.backgroundAmplitudePercent / 100)
+    const relationSign = config.targetBackgroundRelation === 'counter_phase' ? -1 : 1
+    return relationSign * Math.sin(elapsedSeconds * Math.PI * 2 * config.backgroundFrequencyHz)
+      * amplitude
+      * backgroundRampEnvelope(config, elapsedSeconds)
+  }
+
+  const speed = config.backgroundSpeed
+  const ramp = Math.max(0, config.backgroundRampSeconds)
+  if (ramp === 0 || elapsedSeconds >= ramp) {
+    return speed * (ramp === 0 ? elapsedSeconds : elapsedSeconds - ramp / 2)
+  }
+  return speed * elapsedSeconds * elapsedSeconds / (2 * ramp)
+}
+
+export function backgroundRotationRadians(config: ExerciseConfig, elapsedSeconds: number) {
+  const direction = config.backgroundDirection === 'counterclockwise' ? -1 : 1
+  if (config.backgroundMotionMode === 'oscillating') {
+    const amplitudeRadians = Math.PI * (config.backgroundAmplitudePercent / 100)
+    return direction
+      * Math.sin(elapsedSeconds * Math.PI * 2 * config.backgroundFrequencyHz)
+      * amplitudeRadians
+      * backgroundRampEnvelope(config, elapsedSeconds)
+  }
+  return direction * (backgroundMotionOffset(config, elapsedSeconds, 1) / 45)
+}
+
+export function backgroundCoverageRect(width: number, height: number, coveragePercent: number) {
+  const scale = Math.max(25, Math.min(100, coveragePercent)) / 100
+  const coveredWidth = width * scale
+  const coveredHeight = height * scale
+  return {
+    x: (width - coveredWidth) / 2,
+    y: (height - coveredHeight) / 2,
+    width: coveredWidth,
+    height: coveredHeight,
+  }
+}
+
 export function calculateTrackingPosition(
   elapsedSeconds: number,
   width: number,
@@ -90,7 +145,7 @@ function drawBars(
   const period = stripe * 2
   const { x: directionX, y: directionY } = linearMotionVector(config.backgroundDirection)
   const angle = Math.atan2(directionY, directionX)
-  const offset = positiveModulo(elapsedSeconds * config.backgroundSpeed, period)
+  const offset = positiveModulo(backgroundMotionOffset(config, elapsedSeconds, Math.min(width, height)), period)
   const radius = Math.hypot(width, height)
   context.fillStyle = config.foregroundColor
   context.save()
@@ -121,8 +176,9 @@ function drawCheckerboard(
 ) {
   const tile = Math.max(config.stripeWidth, 18)
   const direction = linearMotionVector(config.backgroundDirection)
-  const offsetX = positiveModulo(elapsedSeconds * config.backgroundSpeed * direction.x, tile * 2)
-  const offsetY = positiveModulo(elapsedSeconds * config.backgroundSpeed * direction.y, tile * 2)
+  const motionOffset = backgroundMotionOffset(config, elapsedSeconds, Math.min(width, height))
+  const offsetX = positiveModulo(motionOffset * direction.x, tile * 2)
+  const offsetY = positiveModulo(motionOffset * direction.y, tile * 2)
   context.fillStyle = config.foregroundColor
 
   for (let row = -2; row < Math.ceil(height / tile) + 2; row += 1) {
@@ -145,8 +201,9 @@ function drawDots(
   const gap = Math.max(config.stripeWidth, 22)
   const radius = Math.max(3, gap * 0.12)
   const direction = linearMotionVector(config.backgroundDirection)
-  const offsetX = positiveModulo(elapsedSeconds * config.backgroundSpeed * direction.x, gap)
-  const offsetY = positiveModulo(elapsedSeconds * config.backgroundSpeed * direction.y, gap)
+  const motionOffset = backgroundMotionOffset(config, elapsedSeconds, Math.min(width, height))
+  const offsetX = positiveModulo(motionOffset * direction.x, gap)
+  const offsetY = positiveModulo(motionOffset * direction.y, gap)
   context.fillStyle = config.foregroundColor
 
   for (let y = -gap; y < height + gap; y += gap) {
@@ -165,8 +222,7 @@ function drawSpiral(
   width: number,
   height: number,
 ) {
-  const direction = config.backgroundDirection === 'counterclockwise' ? -1 : 1
-  const rotation = elapsedSeconds * direction * (config.backgroundSpeed / 45)
+  const rotation = backgroundRotationRadians(config, elapsedSeconds)
   const maxRadius = Math.hypot(width, height) * 0.62
   const lineWidth = Math.max(7, config.stripeWidth * 0.42)
   context.save()
@@ -187,6 +243,50 @@ function drawSpiral(
   context.restore()
 }
 
+export interface RadialFlowParticle extends Point {
+  size: number
+  progress: number
+}
+
+export function radialFlowParticleAt(
+  config: ExerciseConfig,
+  elapsedSeconds: number,
+  width: number,
+  height: number,
+  index: number,
+): RadialFlowParticle {
+  const span = Math.max(1, Math.min(width, height))
+  const directionSign = config.backgroundDirection === 'away' ? -1 : 1
+  const travel = directionSign * backgroundMotionOffset(config, elapsedSeconds, span) / span
+  const progress = positiveModulo(deterministicUnit(index * 17 + 3) + travel, 1)
+  const angle = deterministicUnit(index * 29 + 11) * Math.PI * 2
+  const maxRadius = Math.hypot(width, height) * 0.55
+  const radius = Math.pow(progress, 1.35) * maxRadius
+  return {
+    x: width / 2 + Math.cos(angle) * radius,
+    y: height / 2 + Math.sin(angle) * radius,
+    size: 1.5 + progress * Math.max(3, config.stripeWidth * 0.08),
+    progress,
+  }
+}
+
+function drawRadialFlow(
+  context: CanvasRenderingContext2D,
+  config: ExerciseConfig,
+  elapsedSeconds: number,
+  width: number,
+  height: number,
+) {
+  const particleCount = Math.max(36, Math.min(160, Math.round((width * height) / 8500)))
+  context.fillStyle = config.foregroundColor
+  for (let index = 0; index < particleCount; index += 1) {
+    const particle = radialFlowParticleAt(config, elapsedSeconds, width, height, index)
+    context.beginPath()
+    context.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2)
+    context.fill()
+  }
+}
+
 export function renderExerciseBackground(
   context: CanvasRenderingContext2D,
   config: ExerciseConfig,
@@ -201,10 +301,44 @@ export function renderExerciseBackground(
     context.fillRect(0, 0, width, height)
   }
 
+  if (config.backgroundType === 'solid') return
+
+  const coverage = backgroundCoverageRect(width, height, config.backgroundCoveragePercent)
+  context.save()
+  context.beginPath()
+  context.rect(coverage.x, coverage.y, coverage.width, coverage.height)
+  context.clip()
+  context.globalAlpha = Math.max(5, Math.min(100, config.backgroundContrastPercent)) / 100
   if (config.backgroundType === 'bars') drawBars(context, config, elapsedSeconds, width, height)
   if (config.backgroundType === 'checkerboard') drawCheckerboard(context, config, elapsedSeconds, width, height)
   if (config.backgroundType === 'dots') drawDots(context, config, elapsedSeconds, width, height)
   if (config.backgroundType === 'spiral') drawSpiral(context, config, elapsedSeconds, width, height)
+  if (config.backgroundType === 'radial_flow') drawRadialFlow(context, config, elapsedSeconds, width, height)
+  context.restore()
+}
+
+export function strobeOcclusionAlphaAt(config: ExerciseConfig, elapsedSeconds: number) {
+  if (!config.strobeEnabled) return 0
+  const frequencyHz = Math.max(0.5, Math.min(2.5, config.strobeFrequencyHz))
+  const dutyCycle = Math.max(50, Math.min(80, config.strobeDutyCyclePercent)) / 100
+  const phase = positiveModulo(elapsedSeconds * frequencyHz, 1)
+  return phase < dutyCycle ? 0 : Math.max(5, Math.min(35, config.strobeContrastPercent)) / 100
+}
+
+function renderStrobeOcclusion(
+  context: CanvasRenderingContext2D,
+  config: ExerciseConfig,
+  elapsedSeconds: number,
+  width: number,
+  height: number,
+) {
+  const alpha = strobeOcclusionAlphaAt(config, elapsedSeconds)
+  if (alpha <= 0) return
+  context.save()
+  context.globalAlpha = alpha
+  context.fillStyle = config.backgroundColor
+  context.fillRect(0, 0, width, height)
+  context.restore()
 }
 
 export function renderExerciseObject(
@@ -260,6 +394,7 @@ export function renderExerciseFrame(
 ) {
   renderExerciseBackground(context, config, elapsedSeconds, width, height)
   renderExerciseObject(context, config, elapsedSeconds, width, height)
+  renderStrobeOcclusion(context, config, elapsedSeconds, width, height)
 }
 
 function drawObjectShape(context: CanvasRenderingContext2D, symbol: CognitiveSymbol, position: Point, size: number) {

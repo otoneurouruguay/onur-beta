@@ -1,14 +1,13 @@
 import { suggestions as demoSuggestionSeed } from '../../data/demo'
 import { isSupabaseConfigured, supabase } from '../../lib/supabase'
+import type { CycleStudyPhase } from '../documents/types'
 import type { SuggestionStatus } from '../../types/domain'
-import { metricLabel } from './catalog'
 import type { ClinicalStudyReview, ClinicalStudySummary, MetricRowInput, NormalizedMetricRow, SaveStudyImportInput, SaveStudyImportResult, StatisticalSuggestionRecord, StudyType } from './types'
 
 const IMPORT_STORAGE_KEY = 'onur-demo-study-imports-v1'
 const SUGGESTION_STORAGE_KEY = 'onur-demo-statistical-suggestions-v2'
 const DOCUMENT_STORAGE_KEY = 'onur-demo-documents-v1'
 const PATIENT_STORAGE_KEY = 'onur-demo-patients-v1'
-const DIRECT_CAPTURE_STORAGE_KEY = 'onur-demo-bap-direct-captures-v1'
 
 interface StoredImport {
   metrics: MetricRowInput[]
@@ -17,20 +16,13 @@ interface StoredImport {
   interpretable: boolean
 }
 
-export interface DirectBapCaptureDraftInput {
-  patientId: string
-  treatmentCycleId: string
-  performedAt: string
-  durationSeconds: 10 | 20 | 30
-}
-
 const demoPatients: Record<string, string> = {
   'ana-p': 'Ana Pereira', 'luis-s': 'Luis Silva', 'marta-r': 'Marta Rodríguez', 'jorge-m': 'Jorge Martínez', 'elena-f': 'Elena Fernández',
 }
 
 const demoStudies: Record<string, ClinicalStudyReview> = {
   'study-demo-1': {
-    id: 'study-demo-1', patientId: 'ana-p', patientName: 'Ana Pereira', treatmentCycleId: 'cycle-ana-2', sourceDocumentId: 'doc-ana-posturo', sourceFilename: 'posturografia-ejemplo.pdf', studyType: 'posturography', performedAt: '2026-07-15T12:00:00.000Z', deviceName: 'Equipo de demostración', softwareVersion: '', protocolCode: 'bap-a-d', protocolVersion: '1', calculationMethodVersion: 'onur-normalization-1.0', status: 'draft', qualityNotes: '', interpretable: false,
+    id: 'study-demo-1', patientId: 'ana-p', patientName: 'Ana Pereira', treatmentCycleId: 'cycle-ana-2', sourceDocumentId: 'doc-ana-posturo', sourceFilename: 'posturografia-ejemplo.pdf', studyType: 'posturography', cyclePhase: 'follow_up', performedAt: '2026-07-15T12:00:00.000Z', deviceName: 'Equipo de demostración', softwareVersion: '', protocolCode: 'bap-a-d', protocolVersion: '1', calculationMethodVersion: 'onur-normalization-1.0', status: 'draft', qualityNotes: '', interpretable: false,
     metrics: [
       { clientId: 'demo-a', metricCode: 'condition_score', rawValue: '82,4', unitCode: 'percent', conditionCode: 'A', side: '', axis: '', trialNumber: '1', sourceLocation: 'Página 1 · condición A' },
       { clientId: 'demo-b', metricCode: 'condition_score', rawValue: '76,8', unitCode: 'percent', conditionCode: 'B', side: '', axis: '', trialNumber: '1', sourceLocation: 'Página 1 · condición B' },
@@ -39,7 +31,7 @@ const demoStudies: Record<string, ClinicalStudyReview> = {
     ],
   },
   'study-demo-2': {
-    id: 'study-demo-2', patientId: 'ana-p', patientName: 'Ana Pereira', treatmentCycleId: 'cycle-ana-2', sourceDocumentId: 'doc-ana-vhit', sourceFilename: 'vhit-ejemplo.png', studyType: 'vhit', performedAt: '2026-07-10T12:00:00.000Z', deviceName: 'Equipo de demostración', softwareVersion: '', protocolCode: 'vhit-bilateral', protocolVersion: '1', calculationMethodVersion: 'onur-normalization-1.0', status: 'draft', qualityNotes: '', interpretable: false,
+    id: 'study-demo-2', patientId: 'ana-p', patientName: 'Ana Pereira', treatmentCycleId: 'cycle-ana-2', sourceDocumentId: 'doc-ana-vhit', sourceFilename: 'vhit-ejemplo.png', studyType: 'vhit', cyclePhase: 'unspecified', performedAt: '2026-07-10T12:00:00.000Z', deviceName: 'Equipo de demostración', softwareVersion: '', protocolCode: 'vhit-bilateral', protocolVersion: '1', calculationMethodVersion: 'onur-normalization-1.0', status: 'draft', qualityNotes: '', interpretable: false,
     metrics: [
       { clientId: 'demo-gain-left', metricCode: 'gain', rawValue: '0,82', unitCode: 'ratio', conditionCode: '', side: 'left', axis: '', trialNumber: '1', sourceLocation: 'Imagen · canal horizontal' },
       { clientId: 'demo-gain-right', metricCode: 'gain', rawValue: '0,88', unitCode: 'ratio', conditionCode: '', side: 'right', axis: '', trialNumber: '1', sourceLocation: 'Imagen · canal horizontal' },
@@ -55,9 +47,6 @@ function readJson<T>(key: string, fallback: T): T {
 
 function readStoredImports() { return readJson<Record<string, StoredImport>>(IMPORT_STORAGE_KEY, {}) }
 function writeStoredImports(value: Record<string, StoredImport>) { localStorage.setItem(IMPORT_STORAGE_KEY, JSON.stringify(value)) }
-function readDirectCaptures() { return readJson<Record<string, ClinicalStudyReview>>(DIRECT_CAPTURE_STORAGE_KEY, {}) }
-function writeDirectCaptures(value: Record<string, ClinicalStudyReview>) { localStorage.setItem(DIRECT_CAPTURE_STORAGE_KEY, JSON.stringify(value)) }
-
 function demoPatientName(patientId: string) {
   const patients = readJson<Array<{ id: string; fullName: string }>>(PATIENT_STORAGE_KEY, [])
   return patients.find((patient) => patient.id === patientId)?.fullName ?? demoPatients[patientId] ?? 'Paciente'
@@ -76,6 +65,7 @@ function demoStudyFromDocument(studyId: string): ClinicalStudyReview | null {
     sourceDocumentId: String(document.id),
     sourceFilename: String(document.originalFilename),
     studyType: type,
+    cyclePhase: String(document.cyclePhase ?? 'unspecified') as CycleStudyPhase,
     performedAt: `${String(document.documentDate)}T12:00:00.000Z`,
     deviceName: String(document.deviceName ?? ''),
     softwareVersion: '',
@@ -94,7 +84,7 @@ function rowToMetric(row: Record<string, unknown>): MetricRowInput {
 
 export async function getStudyReview(studyId: string): Promise<ClinicalStudyReview | null> {
   if (!isSupabaseConfigured || !supabase) {
-    const base = demoStudies[studyId] ?? readDirectCaptures()[studyId] ?? demoStudyFromDocument(studyId)
+    const base = demoStudies[studyId] ?? demoStudyFromDocument(studyId)
     if (!base) return null
     const stored = readStoredImports()[studyId]
     return stored ? { ...base, ...stored } : base
@@ -109,43 +99,21 @@ export async function getStudyReview(studyId: string): Promise<ClinicalStudyRevi
   const patient = study.patients as unknown as { full_name?: string } | null
   const document = study.source_documents as unknown as { original_filename?: string } | null
   return {
-    id: study.id, patientId: study.patient_id, patientName: patient?.full_name ?? 'Paciente', treatmentCycleId: study.treatment_cycle_id ?? '', sourceDocumentId: study.source_document_id ?? '', sourceFilename: document?.original_filename ?? (String(study.calculation_method_version ?? '').startsWith('onur-bap-webserial-') ? 'Captura directa BAP' : 'Documento original'), studyType: study.study_type as StudyType, performedAt: study.performed_at, deviceName: study.device_name ?? '', softwareVersion: study.software_version ?? '', protocolCode: study.protocol_code, protocolVersion: study.protocol_version, calculationMethodVersion: study.calculation_method_version ?? 'onur-normalization-1.0', status: study.status, qualityNotes: study.quality_notes ?? '', interpretable: study.interpretable ?? false, metrics: (metrics ?? []).map((row) => rowToMetric(row as Record<string, unknown>)),
+    id: study.id, patientId: study.patient_id, patientName: patient?.full_name ?? 'Paciente', treatmentCycleId: study.treatment_cycle_id ?? '', sourceDocumentId: study.source_document_id ?? '', sourceFilename: document?.original_filename ?? (String(study.calculation_method_version ?? '').startsWith('onur-bap-webserial-') ? 'Captura directa BAP (legado)' : 'Documento original'), studyType: study.study_type as StudyType, cyclePhase: String(study.cycle_phase ?? 'unspecified') as CycleStudyPhase, performedAt: study.performed_at, deviceName: study.device_name ?? '', softwareVersion: study.software_version ?? '', protocolCode: study.protocol_code, protocolVersion: study.protocol_version, calculationMethodVersion: study.calculation_method_version ?? 'onur-normalization-1.0', status: study.status, qualityNotes: study.quality_notes ?? '', interpretable: study.interpretable ?? false, metrics: (metrics ?? []).map((row) => rowToMetric(row as Record<string, unknown>)),
   }
 }
 
-function summaryFromReview(study:ClinicalStudyReview):ClinicalStudySummary{return{id:study.id,patientId:study.patientId,patientName:study.patientName,sourceFilename:study.sourceFilename,studyType:study.studyType,performedAt:study.performedAt,deviceName:study.deviceName,protocolCode:study.protocolCode,protocolVersion:study.protocolVersion,status:study.status,interpretable:study.interpretable,metricCount:study.metrics.length,issueCount:0}}
+function summaryFromReview(study:ClinicalStudyReview):ClinicalStudySummary{return{id:study.id,patientId:study.patientId,patientName:study.patientName,treatmentCycleId:study.treatmentCycleId,sourceFilename:study.sourceFilename,studyType:study.studyType,cyclePhase:study.cyclePhase,performedAt:study.performedAt,deviceName:study.deviceName,protocolCode:study.protocolCode,protocolVersion:study.protocolVersion,status:study.status,interpretable:study.interpretable,metricCount:study.metrics.length,issueCount:0}}
 
 export async function listClinicalStudies():Promise<ClinicalStudySummary[]>{
   if(!isSupabaseConfigured||!supabase){
     const dynamicIds=readJson<Array<Record<string,unknown>>>(DOCUMENT_STORAGE_KEY,[]).map(item=>String(item.studyId??'')).filter(Boolean)
-    const ids=[...new Set([...Object.keys(demoStudies),...Object.keys(readDirectCaptures()),...dynamicIds])]
+    const ids=[...new Set([...Object.keys(demoStudies),...dynamicIds])]
     const studies=(await Promise.all(ids.map(id=>getStudyReview(id)))).filter((study):study is ClinicalStudyReview=>Boolean(study))
     return studies.map(summaryFromReview).sort((a,b)=>b.performedAt.localeCompare(a.performedAt))
   }
   const{data,error}=await supabase.from('clinical_studies').select('*, patients(full_name), source_documents(original_filename), metric_values(id), data_quality_issues(id)').order('performed_at',{ascending:false});if(error)throw error
-  return(data??[]).map(row=>{const patient=row.patients as unknown as{full_name?:string}|null;const document=row.source_documents as unknown as{original_filename?:string}|null;const direct=String(row.calculation_method_version??'').startsWith('onur-bap-webserial-');return{id:String(row.id),patientId:String(row.patient_id),patientName:patient?.full_name??'Paciente',sourceFilename:document?.original_filename??(direct?'Captura directa BAP':'Documento original'),studyType:row.study_type as StudyType,performedAt:String(row.performed_at),deviceName:String(row.device_name??''),protocolCode:String(row.protocol_code),protocolVersion:String(row.protocol_version),status:row.status as ClinicalStudyReview['status'],interpretable:Boolean(row.interpretable),metricCount:Array.isArray(row.metric_values)?row.metric_values.length:0,issueCount:Array.isArray(row.data_quality_issues)?row.data_quality_issues.length:0}})
-}
-
-export async function createDirectBapCaptureDraft(input: DirectBapCaptureDraftInput): Promise<string> {
-  if (!isSupabaseConfigured || !supabase) {
-    const id = crypto.randomUUID()
-    const study: ClinicalStudyReview = {
-      id, patientId: input.patientId, patientName: demoPatientName(input.patientId), treatmentCycleId: input.treatmentCycleId,
-      sourceDocumentId: '', sourceFilename: 'Captura directa BAP', studyType: 'posturography', performedAt: input.performedAt,
-      deviceName: 'BAP · captura directa por Web Serial', softwareVersion: 'BAP 2.32 · Web Serial', protocolCode: 'bap-1-6', protocolVersion: '2.32-direct-beta', calculationMethodVersion: 'onur-bap-webserial-1.0-beta', status: 'draft', qualityNotes: '', interpretable: false, metrics: [],
-    }
-    writeDirectCaptures({ ...readDirectCaptures(), [id]: study })
-    return id
-  }
-  const { data, error } = await supabase.rpc('create_direct_bap_capture_draft', {
-    target_patient_id: input.patientId,
-    target_treatment_cycle_id: input.treatmentCycleId || null,
-    performed_at_input: input.performedAt,
-    condition_count_input: 6,
-    duration_seconds_input: input.durationSeconds,
-  })
-  if (error) throw error
-  return String(data)
+  return(data??[]).map(row=>{const patient=row.patients as unknown as{full_name?:string}|null;const document=row.source_documents as unknown as{original_filename?:string}|null;const direct=String(row.calculation_method_version??'').startsWith('onur-bap-webserial-');return{id:String(row.id),patientId:String(row.patient_id),patientName:patient?.full_name??'Paciente',treatmentCycleId:String(row.treatment_cycle_id??''),sourceFilename:document?.original_filename??(direct?'Captura directa BAP (legado)':'Documento original'),studyType:row.study_type as StudyType,cyclePhase:String(row.cycle_phase??'unspecified') as CycleStudyPhase,performedAt:String(row.performed_at),deviceName:String(row.device_name??''),protocolCode:String(row.protocol_code),protocolVersion:String(row.protocol_version),status:row.status as ClinicalStudyReview['status'],interpretable:Boolean(row.interpretable),metricCount:Array.isArray(row.metric_values)?row.metric_values.length:0,issueCount:Array.isArray(row.data_quality_issues)?row.data_quality_issues.length:0}})
 }
 
 function issueCount(metrics: NormalizedMetricRow[]) { return metrics.reduce((sum, metric) => sum + metric.issues.length, 0) }
@@ -240,9 +208,4 @@ export async function reviewStatisticalSuggestion(id: string, status: Exclude<Su
   }
   const { error } = await supabase.rpc('review_statistical_suggestion', { target_suggestion_id: id, review_decision: status, review_text: professionalText || null })
   if (error) throw error
-}
-
-export function metricSummary(metric: NormalizedMetricRow) {
-  if (metric.normalizedNumericValue !== null) return `${metricLabel(metric.metricCode)}: ${metric.normalizedNumericValue} ${metric.unitCode || ''}`.trim()
-  return `${metricLabel(metric.metricCode)}: ${metric.normalizedTextValue ?? 'sin valor normalizado'}`
 }

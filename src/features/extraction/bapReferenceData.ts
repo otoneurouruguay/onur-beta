@@ -36,12 +36,6 @@ export const BAP_AGE_REFERENCES: readonly BapAgeReference[] = [
   { minAge: 85, maxAge: 89, label: '85 a 89 años', conditions: [90, 85, 84, 54, 1.5, 1.5], composite: 43, sensory: { somatosensory: 94.4, visual: 60, vestibular: 1.7, visualPreference: 98.8 }, patternUpperLimits: { mixedVestibularSomatosensory: 37.5, mixedVestibularVisual: 24.1, aphysiological: 39 } },
 ]
 
-export const BAP_AUTOMATIC_REPORT_SOURCES = [
-  '09_TABLA_VALORES_NORMALES_BAP.xlsx: condiciones, compuesto y cocientes por edad',
-  '08_VALORES_REFERENCIA_BAP.xlsx: límites superiores de patrones por edad',
-  '04_INTERPRETACION_BAP.md: lectura funcional y orientación de rehabilitación',
-] as const
-
 export function bapReferenceForAge(age: number) {
   return BAP_AGE_REFERENCES.find((reference) => age >= reference.minAge && age <= reference.maxAge) ?? null
 }

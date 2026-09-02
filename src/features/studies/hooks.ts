@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createDirectBapCaptureDraft, finalizeClinicalStudy, getStudyReview, listClinicalStudies, listStatisticalSuggestions, reviewStatisticalSuggestion, saveStudyImport } from './repository'
+import { finalizeClinicalStudy, getStudyReview, listClinicalStudies, listStatisticalSuggestions, reviewStatisticalSuggestion, saveStudyImport } from './repository'
 
 export const studyKeys = { all:['studies'] as const,detail: (id: string) => ['study', id] as const, suggestions: ['statistical-suggestions'] as const }
 
@@ -17,11 +17,6 @@ export function useSaveStudyImport(studyId: string) {
 export function useFinalizeStudy(studyId: string) {
   const client = useQueryClient()
   return useMutation({ mutationFn: () => finalizeClinicalStudy(studyId), onSuccess: () => {client.invalidateQueries({ queryKey: studyKeys.detail(studyId) });client.invalidateQueries({queryKey:studyKeys.all})} })
-}
-
-export function useCreateDirectBapCapture() {
-  const client = useQueryClient()
-  return useMutation({ mutationFn: createDirectBapCaptureDraft, onSuccess: () => client.invalidateQueries({ queryKey: studyKeys.all }) })
 }
 
 export function useStatisticalSuggestions() {

@@ -9,21 +9,21 @@ import { SessionRunner } from './SessionRunner'
 const exercisePlayerMock = vi.hoisted(() => vi.fn())
 const trackingPermissionMock = vi.hoisted(() => vi.fn<() => Promise<CardboardTrackingActivation>>(async () => ({ permission: 'granted', signalSource: 'relative' })))
 
-afterEach(() => { cleanup(); vi.useRealTimers(); trackingPermissionMock.mockReset(); trackingPermissionMock.mockResolvedValue({ permission: 'granted', signalSource: 'relative' }) })
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); trackingPermissionMock.mockReset(); trackingPermissionMock.mockResolvedValue({ permission: 'granted', signalSource: 'relative' }) })
 
 vi.mock('../exercise/ExercisePlayer', () => ({
-  ExercisePlayer: (props: { config: ExerciseConfig; preparationSeconds?: number; onComplete?: (activeSeconds: number, report?: ExerciseCompletionReport) => void }) => {
-    exercisePlayerMock(props)
-    return <button type="button" onClick={() => props.onComplete?.(1, {
+  ExercisePlayer: (props: { config: ExerciseConfig; preparationSeconds?: number; fullscreenTargetRef?: React.RefObject<HTMLElement | null>; onComplete?: (activeSeconds: number, report?: ExerciseCompletionReport) => void; onExit?: (activeSeconds: number, report: ExerciseCompletionReport) => void }) => {
+    exercisePlayerMock({ config: props.config, preparationSeconds: props.preparationSeconds, fullscreenTargetRef: props.fullscreenTargetRef })
+    return <><button type="button" onClick={() => props.onComplete?.(1, {
       doseMode: props.config.doseMode,
       completion: 'target_completed',
       targetRepetitions: props.config.doseMode === 'repetitions' ? props.config.targetRepetitions : undefined,
       reportedRepetitions: props.config.doseMode === 'repetitions' ? props.config.targetRepetitions : undefined,
       headTracking: props.config.cardboardEnabled ? {
         mode: 'orientation_3dof', spatialAnchor: 'calibrated_direction', recenterCount: 1, trackingLossCount: 0, finalStatus: 'tracking',
-        opticalProfile: { name: 'VR Box clínica', imageSeparationPercent: 4, verticalOffsetPercent: -2, horizontalFovDegrees: 92, verticalFovDegrees: 78 },
+        opticalProfile: { name: 'VR Box clínica', imageSeparationPercent: 4, verticalOffsetPercent: -2, horizontalFovDegrees: 92, verticalFovDegrees: 78, lensDistortionPercent: 18 },
       } : undefined,
-    })}>Completar ejercicio</button>
+    })}>Completar ejercicio</button><button type="button" onClick={() => props.onExit?.(4, { doseMode: props.config.doseMode, completion: 'partial' })}>Salir ejercicio</button></>
   },
 }))
 
@@ -47,14 +47,96 @@ describe('SessionRunner', () => {
     expect(document.body.dataset.onurSessionRunning).toBeUndefined()
   })
 
-  it('aplica la preparación únicamente al primer ejercicio', async () => {
+  it('aplica la preparación configurada antes de cada ejercicio', async () => {
     exercisePlayerMock.mockClear()
     render(<SessionRunner session={session} onFinish={vi.fn()} onExit={vi.fn()} />)
 
     expect(exercisePlayerMock.mock.calls.at(-1)?.[0]).toMatchObject({ preparationSeconds: 20 })
     fireEvent.click(screen.getByRole('button', { name: 'Completar ejercicio' }))
 
-    await waitFor(() => expect(exercisePlayerMock.mock.calls.at(-1)?.[0]).toMatchObject({ preparationSeconds: 0 }))
+    await waitFor(() => expect(exercisePlayerMock.mock.calls.at(-1)?.[0]).toMatchObject({ preparationSeconds: 10 }))
+  })
+
+  it('completa la cuenta regresiva del descanso sin detenerse', async () => {
+    vi.useFakeTimers()
+    const restSession = {
+      ...session,
+      exercises: [
+        { ...session.exercises[0], preparationSeconds: 0 as const, restSeconds: 3 },
+        { ...session.exercises[1], preparationSeconds: 0 as const },
+      ],
+    }
+    render(<SessionRunner session={restSession} onFinish={vi.fn()} onExit={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Completar ejercicio' }))
+    expect(screen.getByText('3')).toBeInTheDocument()
+    await act(async () => { vi.advanceTimersByTime(1_000) })
+    expect(screen.getByText('2')).toBeInTheDocument()
+    await act(async () => { vi.advanceTimersByTime(1_000) })
+    expect(screen.getByText('1')).toBeInTheDocument()
+    await act(async () => { vi.advanceTimersByTime(1_000) })
+    expect(screen.getByText('Descanso finalizado')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Iniciar siguiente fase' })).toBeInTheDocument()
+  })
+
+  it('conserva el mismo contenedor de pantalla completa entre ejercicio, descanso y ejercicio', async () => {
+    vi.useFakeTimers()
+    exercisePlayerMock.mockClear()
+    const restSession = {
+      ...session,
+      exercises: [
+        { ...session.exercises[0], preparationSeconds: 0 as const, restSeconds: 1 },
+        { ...session.exercises[1], preparationSeconds: 0 as const },
+      ],
+    }
+    render(<SessionRunner session={restSession} onFinish={vi.fn()} onExit={vi.fn()} />)
+
+    const firstRef = exercisePlayerMock.mock.calls.at(-1)?.[0].fullscreenTargetRef as React.RefObject<HTMLElement | null>
+    const fullscreenTarget = firstRef.current
+    expect(fullscreenTarget).toBe(screen.getByTestId('session-runner-viewport'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Completar ejercicio' }))
+    expect(screen.getByTestId('session-runner-viewport')).toBe(fullscreenTarget)
+    await act(async () => { vi.advanceTimersByTime(1_000) })
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar siguiente fase' }))
+
+    const secondRef = exercisePlayerMock.mock.calls.at(-1)?.[0].fullscreenTargetRef as React.RefObject<HTMLElement | null>
+    expect(secondRef).toBe(firstRef)
+    expect(secondRef.current).toBe(fullscreenTarget)
+    expect(screen.getByTestId('session-runner-viewport')).toBe(fullscreenTarget)
+  })
+
+  it('advierte antes de salir y entrega el avance parcial para guardarlo', () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const onExit = vi.fn()
+    render(<SessionRunner session={session} onFinish={vi.fn()} onExit={onExit}/>)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Salir ejercicio' }))
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(onExit).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Salir ejercicio' }))
+    expect(onExit).toHaveBeenCalledWith(4, 1, expect.arrayContaining([
+      expect.objectContaining({ type: 'exercise_partial', active_seconds: 4 }),
+      expect.objectContaining({ type: 'interrupted', skipped_exercises: 1 }),
+    ]))
+  })
+
+  it('deja una transición mínima antes del segundo escenario WebXR', async () => {
+    exercisePlayerMock.mockClear()
+    const questSession = {
+      ...session,
+      mode: 'in_person' as const,
+      exercises: [
+        { ...defaultExerciseConfig, name: 'Escenario 1', purpose: 'immersive_context' as const, displayMode: 'quest_browser' as const, preparationSeconds: 0 as const, restSeconds: 0, rounds: 1 },
+        { ...defaultExerciseConfig, name: 'Escenario 2', purpose: 'immersive_context' as const, displayMode: 'quest_browser' as const, preparationSeconds: 0 as const, restSeconds: 0, rounds: 1 },
+      ],
+    }
+    render(<SessionRunner session={questSession} onFinish={vi.fn()} onExit={vi.fn()} />)
+
+    expect(exercisePlayerMock.mock.calls.at(-1)?.[0]).toMatchObject({ preparationSeconds: 0 })
+    fireEvent.click(screen.getByRole('button', { name: 'Completar ejercicio' }))
+    await waitFor(() => expect(exercisePlayerMock.mock.calls.at(-1)?.[0]).toMatchObject({ preparationSeconds: 5 }))
   })
 
   it('registra la cantidad informada y finaliza la fase por repeticiones solo tras confirmación', async () => {
@@ -110,7 +192,7 @@ describe('SessionRunner', () => {
 
     expect(onFinish.mock.calls[0][2]).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: 'vr_box_put_on', viewer_profile: 'cardboard' }),
-      expect.objectContaining({ type: 'exercise_completed', viewer_profile: 'cardboard', head_tracking_mode: 'orientation_3dof', spatial_anchor: 'calibrated_direction', cardboard_optical_profile: 'VR Box clínica', cardboard_image_separation_percent: 4, cardboard_vertical_offset_percent: -2, cardboard_horizontal_fov_degrees: 92, cardboard_vertical_fov_degrees: 78 }),
+      expect.objectContaining({ type: 'exercise_completed', viewer_profile: 'cardboard', head_tracking_mode: 'orientation_3dof', spatial_anchor: 'calibrated_direction', cardboard_optical_profile: 'VR Box clínica', cardboard_image_separation_percent: 4, cardboard_vertical_offset_percent: -2, cardboard_horizontal_fov_degrees: 92, cardboard_vertical_fov_degrees: 78, cardboard_lens_distortion_percent: 18 }),
       expect.objectContaining({ type: 'vr_box_take_off', viewer_profile: 'cardboard' }),
     ]))
   })

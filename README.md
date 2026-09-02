@@ -65,11 +65,13 @@ Decimotercer incremento técnico ejecutable:
 - modo Libre para guardar combinaciones profesionales no validadas sin forzarlas a una finalidad clínica;
 - reproductor continuo con pausa, omitir, salir, fullscreen y controles auto-ocultables;
 - tiempo activo sin contar pausas ni descansos y metrónomo configurable;
-- salida 2D, VR Box con dos vistas sincronizadas y Quest navegador BETA desde el mismo panel;
-- VR Box como presentación binocular 2D temporizada, sin botones, mirada, seguimiento de cabeza ni metrónomo, con transiciones guiadas de 20 segundos y comprobación de fusión;
+- salida 2D, VR Box binocular, Cardboard 3DoF, Quest en panel 2D y Quest WebXR para patrones procedurales o escenarios 360°;
+- batería Quest procedural persistente con esfera envolvente, panel curvo, disco frontal, flujo de puntos 3D, blanco independiente, recentrado breve y trazabilidad angular sin guardar poses crudas;
+- sesiones presenciales mixtas con un único traspaso PC → Quest: la estación recibe solo su bloque y el cierre profesional combina ambos resultados;
+- VR Box 2D temporizado sin seguimiento ni controles, y Cardboard opcional con giroscopio, calibración frontal, perfil óptico transportable y controles duplicados;
 - advertencia y reordenamiento recomendado cuando una sesión mezcla cualquier tarea sin visor con un bloque VR Box;
 - controles de postura, superficie y supervisión, con bloqueos domiciliarios para tareas de mayor riesgo;
-- catálogo de 33 fuentes y compuerta validada para futuros borradores clínicamente gobernados;
+- catálogo de 38 fuentes, orientación por patologías frecuentes y compuerta validada para futuros borradores clínicamente gobernados;
 - sesión domiciliaria de demostración;
 - PWA instalable;
 - esquema PostgreSQL/Supabase con RLS;
@@ -146,7 +148,7 @@ La cuenta profesional se prepara después de desplegar Supabase con `npm run adm
 - Las sugerencias estadísticas no son visibles para el paciente sin revisión y publicación profesional.
 - Los archivos originales y los valores normalizados permanecen separados.
 
-Ver [arquitectura](docs/ARCHITECTURE.md), [importación estructurada](docs/STRUCTURED_STUDY_IMPORT.md), [despliegue de staging](docs/STAGING_DEPLOYMENT.md), [checklist de staging](docs/STAGING_CHECKLIST.md), [motor de ejercicios](docs/EXERCISE_ENGINE.md), [ciclos y sesiones](docs/SESSIONS.md), [generación clínicamente gobernada](docs/CLINICAL_EXERCISE_GENERATION.md), [documentos e informes](docs/DOCUMENTS_ASSESSMENTS_REPORTS.md) y [seguridad](docs/SECURITY.md).
+Ver [arquitectura](docs/ARCHITECTURE.md), [importación estructurada](docs/STRUCTURED_STUDY_IMPORT.md), [despliegue de staging](docs/STAGING_DEPLOYMENT.md), [checklist de staging](docs/STAGING_CHECKLIST.md), [checklist recurrente de release](docs/RECURRING_RELEASE_CHECKLIST.md), [motor de ejercicios](docs/EXERCISE_ENGINE.md), [ciclos y sesiones](docs/SESSIONS.md), [generación clínicamente gobernada](docs/CLINICAL_EXERCISE_GENERATION.md), [documentos e informes](docs/DOCUMENTS_ASSESSMENTS_REPORTS.md) y [seguridad](docs/SECURITY.md).
 
 ## Alcance clínico
 

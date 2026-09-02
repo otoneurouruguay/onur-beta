@@ -1,8 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QuestStationPage } from './QuestStationPage'
 
 const mocks = vi.hoisted(() => ({ claim: vi.fn(), submit: vi.fn() }))
+
+afterEach(cleanup)
 
 vi.mock('../features/sessions/questRepository', () => ({
   claimQuestSessionPairing: mocks.claim,
@@ -18,14 +20,24 @@ describe('página pública de estación Quest', () => {
     sessionStorage.clear()
     mocks.claim.mockReset().mockResolvedValue({
       pairingId: 'pairing-fictitious', deviceToken: 'device-token-fictitious', expiresAt: '2099-01-01T00:00:00.000Z', patientLabel: 'Paciente F.',
-      session: { id: 'assignment-fictitious', title: 'Sesión Quest ficticia', instructions: 'Indicación ficticia', exercises: [{ displayMode: 'quest_browser' }] },
+      session: { id: 'assignment-fictitious', title: 'Sesión Quest ficticia', instructions: 'Indicación ficticia', exercises: [{ displayMode: 'quest_browser', purpose: 'optokinetic' }] },
     })
     mocks.submit.mockReset().mockResolvedValue('pairing-fictitious')
   })
 
+  it('acepta únicamente cuatro dígitos y abre teclado numérico', () => {
+    render(<QuestStationPage/>)
+    const input = screen.getByLabelText(/código temporal/i)
+    expect(input).toHaveAttribute('inputmode', 'numeric')
+    expect(input).toHaveAttribute('maxlength', '4')
+    fireEvent.change(input, { target: { value: '12A345' } })
+    expect(input).toHaveValue('1234')
+    expect(screen.getByRole('button', { name: /cargar sesión/i })).toBeEnabled()
+  })
+
   it('reclama por código, ejecuta y envía para revisión profesional', async () => {
     render(<QuestStationPage/>)
-    fireEvent.change(screen.getByLabelText(/código temporal/i), { target: { value: 'AB12CD34' } })
+    fireEvent.change(screen.getByLabelText(/código temporal/i), { target: { value: '1234' } })
     fireEvent.click(screen.getByRole('button', { name: /cargar sesión/i }))
     expect(await screen.findByRole('heading', { name: /sesión quest ficticia/i })).toBeInTheDocument()
     expect(screen.getByText(/ventana 2D del navegador/i)).toBeInTheDocument()
@@ -41,7 +53,7 @@ describe('página pública de estación Quest', () => {
   it('conserva el resultado y permite reenviarlo si falla la conexión', async () => {
     mocks.submit.mockRejectedValueOnce(new Error('Sin conexión')).mockResolvedValueOnce('pairing-fictitious')
     render(<QuestStationPage/>)
-    fireEvent.change(screen.getByLabelText(/código temporal/i), { target: { value: 'AB12CD34' } })
+    fireEvent.change(screen.getByLabelText(/código temporal/i), { target: { value: '1234' } })
     fireEvent.click(screen.getByRole('button', { name: /cargar sesión/i }))
     fireEvent.click(await screen.findByRole('button', { name: /comenzar ejecución/i }))
     fireEvent.click(screen.getByRole('button', { name: /terminar quest/i }))
@@ -50,5 +62,25 @@ describe('página pública de estación Quest', () => {
     fireEvent.click(screen.getByRole('button', { name: /reintentar envío/i }))
     expect(await screen.findByRole('heading', { name: /ejecución enviada/i })).toBeInTheDocument()
     expect(mocks.submit).toHaveBeenCalledTimes(2)
+  })
+
+  it('explica WebXR y muestra criterios de detención para una sesión 360°', async () => {
+    mocks.claim.mockResolvedValueOnce({
+      pairingId: 'pairing-immersive', deviceToken: 'device-token-immersive', expiresAt: '2099-01-01T00:00:00.000Z', patientLabel: 'Paciente F.',
+      session: {
+        id: 'assignment-immersive', title: 'Exposición contextual', instructions: 'Indicación ficticia',
+        exercises: [
+          { displayMode: 'quest_browser', purpose: 'immersive_context', stopCriteria: 'Pausar si supera el techo acordado.' },
+          { displayMode: 'quest_browser', purpose: 'immersive_context', stopCriteria: 'Pausar si supera el techo acordado.' },
+        ],
+      },
+    })
+    render(<QuestStationPage/>)
+    fireEvent.change(screen.getByLabelText(/código temporal/i), { target: { value: '1234' } })
+    fireEvent.click(screen.getByRole('button', { name: /cargar sesión/i }))
+
+    expect(await screen.findByText(/abrirá WebXR inmersivo/i)).toBeInTheDocument()
+    expect(screen.getByText('Pausar si supera el techo acordado.')).toBeInTheDocument()
+    expect(screen.queryByText(/modo WebXR inmersivo se habilitará/i)).not.toBeInTheDocument()
   })
 })

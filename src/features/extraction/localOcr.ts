@@ -1,15 +1,21 @@
 import { createWorker, OEM, PSM } from 'tesseract.js'
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { bapRecognitionRegions, binarizeBapDarkText } from './bapOcrProfile'
+import { bapRecognitionProfile, binarizeBapDarkText, binarizeBapLightText, detectBapTemplate, expandedBapRegion, type BapPreprocessMode, type BapRecognitionRegion } from './bapOcrProfile'
 import { classifyPage, comparePatientIdentity, EXTRACTOR_VERSION, extractFields, type PatientIdentityForMatch } from './extractor'
-import { clinicalReportSummaryRegion } from './reportOcrProfile'
 import type { ExtractedPage, ExtractionProgress, IntakeKind, LocalExtractionDraft, OcrLine } from './types'
+import { detectVestibularTemplate, expandedVestibularRegion, vestibularReportRecognitionProfile, vhitRecognitionProfile, type VestibularRecognitionRegion } from './vestibularOcrProfile'
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 const acceptedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
 const maxFileSize = 25 * 1024 * 1024
+
+function localIsoDate(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
 
 function inferredMime(file: File) {
   const extension = file.name.split('.').pop()?.toLowerCase()
@@ -76,6 +82,7 @@ function resultLines(
   result: Awaited<ReturnType<Awaited<ReturnType<typeof createWorker>>['recognize']>>,
   canvas: HTMLCanvasElement,
   target: { x: number; y: number; width: number; height: number } = { x: 0, y: 0, width: 1, height: 1 },
+  metadata: Pick<OcrLine, 'regionId' | 'method' | 'passId'> = {},
 ) {
   const lines: OcrLine[] = []
   for (const block of result.data.blocks ?? []) for (const paragraph of block.paragraphs) for (const line of paragraph.lines) {
@@ -88,17 +95,18 @@ function resultLines(
         width: (line.bbox.x1 - line.bbox.x0) / canvas.width * target.width,
         height: (line.bbox.y1 - line.bbox.y0) / canvas.height * target.height,
       },
+      ...metadata,
     })
   }
   return lines.filter((line) => line.text)
 }
 
-function darkTextRegion(source: HTMLCanvasElement, region: { x: number; y: number; width: number; height: number }, threshold = 145) {
+function bapRegionCanvas(source: HTMLCanvasElement, region: { x: number; y: number; width: number; height: number }, requestedScale: number, mode: BapPreprocessMode) {
   const sourceX = Math.round(source.width * region.x)
   const sourceY = Math.round(source.height * region.y)
   const sourceWidth = Math.max(1, Math.round(source.width * region.width))
   const sourceHeight = Math.max(1, Math.round(source.height * region.height))
-  const scale = Math.min(3, 2600 / Math.max(sourceWidth, sourceHeight))
+  const scale = Math.min(requestedScale, 3000 / Math.max(sourceWidth, sourceHeight))
   const target = document.createElement('canvas')
   target.width = Math.max(1, Math.round(sourceWidth * scale))
   target.height = Math.max(1, Math.round(sourceHeight * scale))
@@ -107,34 +115,30 @@ function darkTextRegion(source: HTMLCanvasElement, region: { x: number; y: numbe
   context.imageSmoothingEnabled = true
   context.imageSmoothingQuality = 'high'
   context.drawImage(source, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, target.width, target.height)
-  const image = context.getImageData(0, 0, target.width, target.height)
-  binarizeBapDarkText(image.data, threshold)
-  context.putImageData(image, 0, 0)
+  if (mode !== 'original') {
+    const image = context.getImageData(0, 0, target.width, target.height)
+    if (mode === 'light_text') binarizeBapLightText(image.data)
+    else binarizeBapDarkText(image.data, mode === 'grayscale' ? 155 : mode === 'dark_text_low' ? 128 : 145)
+    context.putImageData(image, 0, 0)
+  }
   return target
 }
 
-function textRegion(source: HTMLCanvasElement, region: { x: number; y: number; width: number; height: number }) {
-  const sourceX = Math.round(source.width * region.x)
-  const sourceY = Math.round(source.height * region.y)
-  const sourceWidth = Math.max(1, Math.round(source.width * region.width))
-  const sourceHeight = Math.max(1, Math.round(source.height * region.height))
-  const scale = Math.min(3, 3000 / Math.max(sourceWidth, sourceHeight))
-  const target = document.createElement('canvas')
-  target.width = Math.max(1, Math.round(sourceWidth * scale))
-  target.height = Math.max(1, Math.round(sourceHeight * scale))
-  const context = target.getContext('2d')
-  if (!context) throw new Error('El navegador no permite preparar el bloque de texto clinico.')
-  context.imageSmoothingEnabled = true
-  context.imageSmoothingQuality = 'high'
-  context.drawImage(source, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, target.width, target.height)
-  return target
+function regionPsm(region: BapRecognitionRegion) {
+  if (region.psm === 'line') return PSM.SINGLE_LINE
+  if (region.psm === 'block') return PSM.SINGLE_BLOCK
+  return PSM.SPARSE_TEXT
+}
+
+function vestibularPsm(region: VestibularRecognitionRegion) {
+  return region.psm === 'single_block' ? PSM.SINGLE_BLOCK : PSM.SPARSE_TEXT
 }
 
 function mergeOcrLines(groups: OcrLine[][]) {
   const merged: OcrLine[] = []
   for (const line of groups.flat()) {
     const key = line.text.toLocaleLowerCase('es-UY').replace(/\s+/g, ' ').trim()
-    const duplicate = merged.findIndex((candidate) => candidate.text.toLocaleLowerCase('es-UY').replace(/\s+/g, ' ').trim() === key && Math.abs(candidate.region.y - line.region.y) < .025)
+    const duplicate = merged.findIndex((candidate) => candidate.passId === line.passId && candidate.text.toLocaleLowerCase('es-UY').replace(/\s+/g, ' ').trim() === key && Math.abs(candidate.region.y - line.region.y) < .025)
     if (duplicate < 0) merged.push(line)
     else if (line.confidence > merged[duplicate].confidence) merged[duplicate] = line
   }
@@ -159,39 +163,48 @@ async function recognizeCanvas(canvas: HTMLCanvasElement, intakeKind: IntakeKind
     }
     const selected = candidates.sort((a, b) => recognitionScore(b.result.data.text, b.result.data.confidence) - recognitionScore(a.result.data.text, a.result.data.confidence))[0]
     const results = [selected.result]
-    const lineGroups = [resultLines(selected.result, selected.canvas)]
+    const lineGroups = [resultLines(selected.result, selected.canvas, undefined, { regionId: 'full_page', method: 'ocr_original', passId: 'full-original' })]
     if (intakeKind === 'posturography_bap' || selected.result.data.confidence < 72) {
       const contrasted = improveContrast(selected.canvas)
       const contrastedResult = await worker.recognize(contrasted, { rotateAuto: false }, { text: true, blocks: true })
       results.push(contrastedResult)
-      lineGroups.push(resultLines(contrastedResult, contrasted))
+      lineGroups.push(resultLines(contrastedResult, contrasted, undefined, { regionId: 'full_page', method: 'ocr_grayscale', passId: 'full-grayscale' }))
     }
     if (intakeKind === 'vestibular_and_reports') {
-      // Los informes escaneados suelen concentrar "En suma" y "Conducta" en
-      // el tercio inferior. PSM.SPARSE_TEXT separa esas frases en fragmentos;
-      // una segunda lectura como bloque preserva sus renglones y continuidad.
-      const prepared = textRegion(selected.canvas, clinicalReportSummaryRegion)
-      await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_BLOCK, preserve_interword_spaces: '1', user_defined_dpi: '300' })
-      const summaryResult = await worker.recognize(prepared, { rotateAuto: false }, { text: true, blocks: true })
-      results.push(summaryResult)
-      lineGroups.push(resultLines(summaryResult, prepared, clinicalReportSummaryRegion))
+      const detected = detectVestibularTemplate(selected.result.data.text, selected.canvas.width, selected.canvas.height)
+      const profile = detected.type === 'vhit_labeled' ? vhitRecognitionProfile : detected.type === 'vestibular_report' ? vestibularReportRecognitionProfile : []
+      for (const region of profile) {
+        const target = expandedVestibularRegion(region.bbox)
+        const passCount = Math.max(region.scales.length, region.modes.length)
+        for (let pass = 0; pass < passCount; pass += 1) {
+          const scale = region.scales[pass % region.scales.length]
+          const mode = region.modes[pass % region.modes.length]
+          const prepared = bapRegionCanvas(selected.canvas, target, scale, mode)
+          await worker.setParameters({ tessedit_pageseg_mode: vestibularPsm(region), preserve_interword_spaces: '1', user_defined_dpi: '300' })
+          const regionResult = await worker.recognize(prepared, { rotateAuto: false }, { text: true, blocks: true })
+          results.push(regionResult)
+          const method = mode === 'original' ? 'ocr_original' : mode === 'grayscale' ? 'ocr_grayscale' : 'ocr_threshold'
+          lineGroups.push(resultLines(regionResult, prepared, target, { regionId: region.id, method, passId: `${region.id}-${mode}-${scale}` }))
+        }
+      }
       await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT, preserve_interword_spaces: '1', user_defined_dpi: '300' })
     }
     if (intakeKind === 'posturography_bap') {
-      // Un OCR de página completa suele perder los valores impresos sobre las
-      // barras de color. Las regiones en blanco y negro los vuelven legibles y
-      // conservan sus coordenadas respecto del documento original.
-      for (const [regionIndex, region] of bapRecognitionRegions.entries()) {
-        // El gráfico se lee con dos umbrales: uno conserva dígitos borrosos y
-        // el otro recupera texto de capturas con contraste bajo.
-        const thresholds = regionIndex === 1 ? [128, 145] : [145]
-        for (const threshold of thresholds) {
-          const prepared = darkTextRegion(selected.canvas, region, threshold)
+      for (const region of bapRecognitionProfile) {
+        const target = expandedBapRegion(region.bbox, region.id.endsWith('_high_priority') ? 0 : .03)
+        const passCount = Math.max(region.scales.length, region.modes.length)
+        for (let pass = 0; pass < passCount; pass += 1) {
+          const scale = region.scales[pass % region.scales.length]
+          const mode = region.modes[pass % region.modes.length]
+          const prepared = bapRegionCanvas(selected.canvas, target, scale, mode)
+          await worker.setParameters({ tessedit_pageseg_mode: regionPsm(region), preserve_interword_spaces: '1', user_defined_dpi: '300' })
           const regionResult = await worker.recognize(prepared, { rotateAuto: false }, { text: true, blocks: true })
           results.push(regionResult)
-          lineGroups.push(resultLines(regionResult, prepared, region))
+          const method = mode === 'original' ? 'ocr_original' : mode === 'grayscale' ? 'ocr_grayscale' : 'ocr_threshold'
+          lineGroups.push(resultLines(regionResult, prepared, target, { regionId: region.id, method, passId: `${region.id}-${mode}-${scale}` }))
         }
       }
+      await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT, preserve_interword_spaces: '1', user_defined_dpi: '300' })
     }
     const lines = mergeOcrLines(lineGroups)
     return {
@@ -221,9 +234,20 @@ async function imageCanvas(file: File) {
 
 async function analyzeCanvas(canvas: HTMLCanvasElement, pageNumber: number, intakeKind: IntakeKind, embeddedText = '', embeddedLines: OcrLine[] = []): Promise<ExtractedPage> {
   const ocr = embeddedText.trim().length > 80 ? { text: embeddedText, confidence: 95, rotationDegrees: 0, lines: embeddedLines, canvas } : await recognizeCanvas(canvas, intakeKind)
-  const classification = classifyPage(ocr.text)
+  const bapTemplate = detectBapTemplate(ocr.text, ocr.canvas.width, ocr.canvas.height)
+  const vestibularTemplate = detectVestibularTemplate(ocr.text, ocr.canvas.width, ocr.canvas.height)
+  const template = intakeKind === 'posturography_bap' ? bapTemplate : vestibularTemplate
+  const templateType = intakeKind === 'posturography_bap' ? bapTemplate.detected ? 'bap_2_32' as const : 'generic' as const : vestibularTemplate.type
+  const genericClassification = classifyPage(ocr.text)
+  const classification = intakeKind === 'posturography_bap' && bapTemplate.detected
+    ? { classification: 'posturography' as const, confidence: Math.max(bapTemplate.confidence, genericClassification.confidence) }
+    : intakeKind === 'vestibular_and_reports' && vestibularTemplate.type === 'vhit_labeled'
+      ? { classification: 'vhit_graph' as const, confidence: Math.max(vestibularTemplate.confidence, genericClassification.confidence) }
+      : intakeKind === 'vestibular_and_reports' && vestibularTemplate.type === 'vestibular_report'
+        ? { classification: 'vestibular_report' as const, confidence: Math.max(vestibularTemplate.confidence, genericClassification.confidence) }
+        : genericClassification
   const previewUrl = URL.createObjectURL(await canvasBlob(ocr.canvas))
-  return { pageNumber, proposedClassification: classification.classification, classification: classification.classification, classificationConfidence: classification.confidence, rotationDegrees: ocr.rotationDegrees, width: ocr.canvas.width, height: ocr.canvas.height, previewUrl, text: ocr.text, lines: ocr.lines }
+  return { pageNumber, proposedClassification: classification.classification, classification: classification.classification, classificationConfidence: classification.confidence, rotationDegrees: ocr.rotationDegrees, width: ocr.canvas.width, height: ocr.canvas.height, previewUrl, text: ocr.text, lines: ocr.lines, template: { type: templateType, confidence: template.confidence, matchedSignals: template.matchedSignals, aspectRatio: template.aspectRatio } }
 }
 
 async function analyzePdf(file: File, intakeKind: IntakeKind, progress: (value: ExtractionProgress) => void) {
@@ -265,7 +289,9 @@ export async function analyzeClinicalFile(file: File, intakeKind: IntakeKind, pa
   }
   const match = comparePatientIdentity(pages, patient)
   onProgress({ currentPage: pages.length, totalPages: pages.length, phase: 'done' })
-  return { intakeKind, extractorVersion: EXTRACTOR_VERSION, pages, fields: extractFields(pages, intakeKind), patientMatchStatus: match.status, mismatchFields: match.mismatchFields }
+  const fields = extractFields(pages, intakeKind)
+  const studyDate = typeof fields.find((field) => field.code === 'study_date')?.value === 'string' ? String(fields.find((field) => field.code === 'study_date')?.value) : ''
+  return { intakeKind, extractorVersion: EXTRACTOR_VERSION, pages, fields, patientMatchStatus: match.status, mismatchFields: match.mismatchFields, studyDate, uploadDate: localIsoDate() }
 }
 
 export function releaseExtractionPreviews(draft: LocalExtractionDraft | null) {

@@ -2,30 +2,7 @@ interface StatusBadgeProps {
   status: string
 }
 
-const labels: Record<string, string> = {
-  active: 'Activo',
-  inactive: 'Inactivo',
-  enabled: 'Habilitado',
-  disabled: 'Deshabilitado',
-  pending: 'Pendiente',
-  assigned: 'Asignada',
-  paused: 'Pausado',
-  revoked: 'Revocada',
-  completed: 'Completada',
-  partial: 'Parcial',
-  interrupted: 'Interrumpida',
-  accepted: 'Aceptada',
-  edited: 'Editada',
-  discarded: 'Descartada',
-  ok: 'Correcto',
-  review: 'Revisar',
-  quarantine: 'Cuarentena',
-  blocked: 'Bloqueado',
-  not_applicable: 'No aplica',
-  draft: 'Borrador',
-  reviewed: 'Revisado',
-  finalized: 'Finalizado',
-}
+import { statusLabel } from './statusLabels'
 
 const tones: Record<string, string> = {
   active: 'border border-[#D6E6DA] bg-[#EEF5F0] text-[#496451]',
@@ -35,6 +12,7 @@ const tones: Record<string, string> = {
   ok: 'border border-[#D6E6DA] bg-[#EEF5F0] text-[#496451]',
   pending: 'border border-[#E8CE99] bg-[#FFF7E8] text-[#8A5B00]',
   assigned: 'border border-[#E8CE99] bg-[#FFF7E8] text-[#8A5B00]',
+  started: 'border border-[#DEDCD9] bg-[#F1EFEC] text-[#5E5E5E]',
   paused: 'border border-[#DEDCD9] bg-[#F1EFEC] text-[#5E5E5E]',
   revoked: 'border border-[#DEDCD9] bg-[#F1EFEC] text-[#696969]',
   review: 'border border-[#E8CE99] bg-[#FFF7E8] text-[#8A5B00]',
@@ -43,7 +21,9 @@ const tones: Record<string, string> = {
   inactive: 'border border-[#DEDCD9] bg-[#F1EFEC] text-[#696969]',
   disabled: 'border border-[#DEDCD9] bg-[#F1EFEC] text-[#696969]',
   interrupted: 'bg-[#fceced] text-[#a94952]',
+  omitted: 'border border-[#DEDCD9] bg-[#F1EFEC] text-[#696969]',
   discarded: 'border border-[#DEDCD9] bg-[#F1EFEC] text-[#696969]',
+  cancelled: 'border border-[#DEDCD9] bg-[#F1EFEC] text-[#696969]',
   quarantine: 'bg-[#fceced] text-[#a94952]',
   blocked: 'bg-[#fceced] text-[#a94952]',
   not_applicable: 'border border-[#DEDCD9] bg-[#F1EFEC] text-[#696969]',
@@ -55,7 +35,7 @@ const tones: Record<string, string> = {
 export function StatusBadge({ status }: StatusBadgeProps) {
   return (
     <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ${tones[status] ?? tones.inactive}`}>
-      {labels[status] ?? status}
+      {statusLabel(status)}
     </span>
   )
 }

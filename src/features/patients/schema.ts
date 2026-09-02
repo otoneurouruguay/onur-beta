@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 export const patientFormSchema = z.object({
   fullName: z.string().trim().min(3, 'Ingresá nombre y apellido.'),
+  documentNumber: z.string().trim().optional(),
   birthDate: z.string().optional(),
   insurer: z.string().trim().max(120).optional(),
   affiliateNumber: z.string().trim().max(80).optional(),
@@ -14,6 +15,9 @@ export const patientFormSchema = z.object({
 }).superRefine((value, context) => {
   if (value.birthDate && value.birthDate > new Date().toISOString().slice(0, 10)) {
     context.addIssue({ code: 'custom', path: ['birthDate'], message: 'La fecha no puede ser futura.' })
+  }
+  if (value.documentNumber && !/^\d{6,12}$/.test(value.documentNumber)) {
+    context.addIssue({ code: 'custom', path: ['documentNumber'], message: 'Ingresá la cédula, solo números.' })
   }
   if (value.createPortalAccount && !/^[A-Za-zÀ-ÿ0-9._-]{4,80}$/.test(value.username ?? '')) {
     context.addIssue({ code: 'custom', path: ['username'], message: 'Usá entre 4 y 80 caracteres, sin espacios.' })

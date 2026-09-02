@@ -8,14 +8,16 @@ const record = (id: string, name: string, overrides: Partial<ExerciseTemplateRec
 })
 
 describe('agrupación de plantillas', () => {
-  it('separa las tres familias PPPD, las generales y las personales', () => {
+  it('separa las familias PPPD, estroboscópicas, imágenes rápidas, generales y personales', () => {
     const groups = groupExerciseTemplates([
       record('template-h1', 'H1', { clinicalProtocol: 'pppd', purpose: 'visual_habituation' }),
       record('template-o1', 'O1', { clinicalProtocol: 'pppd', purpose: 'optokinetic' }),
       record('template-f1', 'F1', { clinicalProtocol: 'pppd', purpose: 'guided_functional' }),
+      record('template-strobe', 'Estrobo', { clinicalProtocol: 'stroboscopic_experimental', purpose: 'visual_habituation' }),
+      record('template-rapid-images-soft', 'Imágenes rápidas', { purpose: 'cognitive_visual' }),
       record('template-base', 'Base'),
       record('custom', 'Mía'),
     ])
-    expect(groups.map((group) => group.label)).toEqual(['PPPD · Habituación visual', 'PPPD · Optocinético', 'PPPD · Funcional', 'Mis plantillas', 'Plantillas generales'])
+    expect(groups.map((group) => group.label)).toEqual(['PPPD · Habituación visual', 'PPPD · Optocinético', 'PPPD · Funcional', 'Estroboscópicos · experimental', 'Imágenes rápidas · cognitivo-visual', 'Mis plantillas', 'Plantillas generales'])
   })
 })

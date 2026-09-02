@@ -1,7 +1,8 @@
 /* oxlint-disable react/only-export-components -- el hook y el proveedor comparten el mismo contexto */
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from '../../lib/supabase'
+import { getPatientAccessState } from '../../lib/auth'
 
 export type AppRole = 'professional' | 'patient'
 
@@ -10,6 +11,8 @@ interface AuthState {
   role: AppRole | null
   user: User | null
   displayName: string
+  mustChangePatientPin: boolean
+  refreshPatientAccess: () => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -20,6 +23,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<AppRole | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [displayName, setDisplayName] = useState('')
+  const [mustChangePatientPin, setMustChangePatientPin] = useState(false)
+  const verifiedUserIdRef = useRef('')
+
+  const refreshPatientAccess = useCallback(async () => {
+    const state = await getPatientAccessState()
+    if (!state.enabled) throw new Error('La cuenta domiciliaria está deshabilitada.')
+    setMustChangePatientPin(state.mustChangePin)
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -31,6 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null)
       setRole(null)
       setDisplayName('')
+      setMustChangePatientPin(false)
+      verifiedUserIdRef.current = ''
       setReady(true)
     }
 
@@ -46,6 +59,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (!active) return
+      if (verifiedUserIdRef.current === next.id) {
+        setUser(next)
+        return
+      }
       setReady(false)
       setUser(next)
       const { data, error } = await client.from('profiles').select('role, display_name').eq('id', next.id).maybeSingle()
@@ -56,7 +73,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setRole(data.role)
+      verifiedUserIdRef.current = next.id
       setDisplayName(String(data.display_name ?? (data.role === 'professional' ? 'Profesional' : 'Paciente')))
+      if (data.role === 'patient') {
+        try {
+          await refreshPatientAccess()
+        } catch {
+          await client.auth.signOut()
+          denyAccess()
+          return
+        }
+      } else {
+        setMustChangePatientPin(false)
+      }
       setReady(true)
     }
 
@@ -69,21 +98,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       active = false
       listener.subscription.unsubscribe()
     }
-  }, [])
+  }, [refreshPatientAccess])
 
   const value = useMemo<AuthState>(() => ({
     ready,
     role,
     user,
     displayName,
+    mustChangePatientPin,
+    refreshPatientAccess,
     signOut: async () => {
       localStorage.removeItem('onur-demo-role')
       if (supabase) await supabase.auth.signOut()
       setRole(null)
       setUser(null)
       setDisplayName('')
+      setMustChangePatientPin(false)
     },
-  }), [displayName, ready, role, user])
+  }), [displayName, mustChangePatientPin, ready, refreshPatientAccess, role, user])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

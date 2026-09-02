@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { CARDBOARD_VIEWER_PROFILE_STORAGE_KEY, cardboardEyeOpticalOffset, defaultCardboardViewerProfile, normalizeCardboardViewerProfile, readCardboardViewerProfileStore } from './cardboardViewerProfiles'
+import { CARDBOARD_VIEWER_PROFILE_STORAGE_KEY, cardboardEyeOpticalOffset, cardboardEyeProjectionFrustum, defaultCardboardViewerProfile, normalizeCardboardViewerProfile, readCardboardViewerProfileStore } from './cardboardViewerProfiles'
 
 beforeEach(() => localStorage.clear())
 
@@ -21,6 +21,17 @@ describe('perfiles ópticos Cardboard', () => {
     const profile = { ...defaultCardboardViewerProfile, imageSeparationPercent: 5, verticalOffsetPercent: -4 }
     expect(cardboardEyeOpticalOffset(profile, 'left', 400, 300)).toEqual({ offsetX: -20, offsetY: -12 })
     expect(cardboardEyeOpticalOffset(profile, 'right', 400, 300)).toEqual({ offsetX: 20, offsetY: -12 })
+  })
+
+  it('aplica separación, altura y ambos campos visuales a la proyección del video 360°', () => {
+    const profile = { ...defaultCardboardViewerProfile, imageSeparationPercent: -5, verticalOffsetPercent: 4, horizontalFovDegrees: 96, verticalFovDegrees: 82 }
+    const left = cardboardEyeProjectionFrustum(profile, 'left')
+    const right = cardboardEyeProjectionFrustum(profile, 'right')
+    expect(left.left + left.right).toBeLessThan(0)
+    expect(right.left + right.right).toBeGreaterThan(0)
+    expect(left.top + left.bottom).toBeGreaterThan(0)
+    expect(left.right - left.left).toBeCloseTo(2 * 0.1 * Math.tan(96 * Math.PI / 360))
+    expect(left.top - left.bottom).toBeCloseTo(2 * 0.1 * Math.tan(82 * Math.PI / 360))
   })
 
   it('descarta almacenamiento inválido sin romper el reproductor', () => {

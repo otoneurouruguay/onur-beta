@@ -13,8 +13,11 @@ export interface ExerciseTemplateRecord {
 
 const STORAGE_KEY = 'onur-demo-exercise-templates-v1'
 const SEED_VERSION_KEY = 'onur-demo-exercise-templates-seed-version'
-const SEED_VERSION = '5'
+const SEED_VERSION = '10'
 const seedDate = '2026-07-20T00:00:00.000Z'
+const expandedSeedDate = '2026-08-11T00:00:00.000Z'
+const visualMotionSeedDate = '2026-08-31T00:00:00.000Z'
+const visualMotionExpandedSeedDate = '2026-09-01T00:00:00.000Z'
 
 const rvoX2Horizontal = {
   ...applyExercisePurpose(defaultExerciseConfig, 'gaze_stabilization_x2'),
@@ -25,6 +28,11 @@ const rvoX2Diagonal = {
   ...applyExercisePurpose(defaultExerciseConfig, 'gaze_stabilization_x2'),
   name: 'RVO X2 · diagonal',
   objectDirection: 'diagonal_down' as const,
+}
+const rvoX2Vertical = {
+  ...applyExercisePurpose(defaultExerciseConfig, 'gaze_stabilization_x2'),
+  name: 'RVO X2 · vertical',
+  objectDirection: 'vertical' as const,
 }
 const rememberedTarget = {
   ...applyExercisePurpose(defaultExerciseConfig, 'gaze_substitution_remembered'),
@@ -61,19 +69,322 @@ const shortMemory = {
   cognitiveMemorySpan: 1 as const,
 }
 
-const immersiveTemplates: ExerciseTemplateRecord[] = immersiveScenarios.map((scenario) => ({
+const generalTemplates: ExerciseTemplateRecord[] = [
+  {
+    id: 'template-pursuit-very-slow', name: 'Seguimiento suave · muy lento',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'smooth_pursuit'),
+      name: 'Seguimiento suave · muy lento', objectDirection: 'horizontal', objectSpeedHz: 0.1,
+      durationSeconds: 30, rounds: 2, restSeconds: 25,
+    }, createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+  {
+    id: 'template-pursuit-horizontal', name: 'Seguimiento suave · horizontal',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'smooth_pursuit'),
+      name: 'Seguimiento suave · horizontal', objectDirection: 'horizontal', objectSpeedHz: 0.4,
+      durationSeconds: 40, rounds: 2, restSeconds: 25,
+    }, createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+  {
+    id: 'template-pursuit-vertical-slow', name: 'Seguimiento suave · vertical lento',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'smooth_pursuit'),
+      name: 'Seguimiento suave · vertical lento', objectDirection: 'vertical', objectSpeedHz: 0.25,
+      durationSeconds: 35, rounds: 2, restSeconds: 25,
+    }, createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+  {
+    id: 'template-saccades-horizontal', name: 'Sacadas · horizontal',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'saccades'),
+      name: 'Sacadas · horizontal', saccadePattern: 'horizontal', saccadeFrequencyHz: 0.7,
+      durationSeconds: 35, rounds: 2, restSeconds: 25,
+    }, createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+  {
+    id: 'template-saccades-vertical', name: 'Sacadas · vertical',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'saccades'),
+      name: 'Sacadas · vertical', saccadePattern: 'vertical', saccadeFrequencyHz: 0.7,
+      durationSeconds: 35, rounds: 2, restSeconds: 25,
+    }, createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+  {
+    id: 'template-optokinetic-low', name: 'Optocinético · barras lentas',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'optokinetic'),
+      name: 'Optocinético · barras lentas', backgroundType: 'bars', backgroundDirection: 'left',
+      backgroundSpeed: 20, stripeWidth: 82, durationSeconds: 20, rounds: 1, restSeconds: 40,
+    }, createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+  {
+    id: 'template-visual-motion-fixation-low', name: 'Fijación · fondo móvil suave',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'visual_motion_fixation'),
+      name: 'Fijación · fondo móvil suave',
+      patientInstruction: 'Sentado, mantené la cabeza quieta y el blanco central nítido mientras se mueven lentamente las barras del fondo.',
+      targetImpairment: 'Tolerancia a movimiento visual conservando una referencia central',
+      clinicalRationale: 'Combina fijación central con movimiento periférico del campo visual; no es RVO x1 ni estimulación optocinética pura.',
+      clinicalDoseNote: 'Exposición inicial breve definida por el profesional; registrar malestar y tiempo de recuperación.',
+      clinicalProgressionNote: 'Cambiar una sola variable: duración, velocidad, tamaño del patrón, contraste o postura.',
+      clinicalRegressionNote: 'Reducir duración o velocidad, aumentar el tamaño del patrón y volver a posición sentada.',
+      progressionCriteria: 'Avanzar solo si conserva el blanco nítido, mantiene la cabeza quieta y recupera dentro de la ventana acordada.',
+      stopCriteria: 'Pausar ante diplopía, cefalea intensa, náusea marcada, síntomas neurológicos nuevos o malestar por encima del techo definido.',
+      posture: 'seated', surface: 'firm', backgroundType: 'bars', backgroundDirection: 'left',
+      backgroundSpeed: 15, backgroundRampSeconds: 2, backgroundCoveragePercent: 75, backgroundContrastPercent: 60,
+      stripeWidth: 88, objectEnabled: true, objectMode: 'fixed', objectSize: 34,
+      durationSeconds: 20, rounds: 1, restSeconds: 40,
+    }, createdAt: visualMotionSeedDate, updatedAt: visualMotionSeedDate,
+  },
+  {
+    id: 'template-pursuit-structured-background', name: 'Seguimiento · fondo estructurado inmóvil',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'smooth_pursuit'),
+      name: 'Seguimiento · fondo estructurado inmóvil',
+      patientInstruction: 'Sentado, mantené la cabeza quieta y seguí el blanco únicamente con los ojos. El damero del fondo permanece inmóvil.',
+      targetImpairment: 'Seguimiento ocular ante mayor complejidad visual estática',
+      clinicalRationale: 'Agrega estructura visual sin movimiento de fondo; continúa siendo seguimiento ocular y no una tarea de conflicto visual móvil.',
+      clinicalDoseNote: 'Comenzar con un bloque breve y velocidad baja; registrar claridad del blanco y respuesta sintomática.',
+      clinicalProgressionNote: 'Aumentar primero una sola variable del blanco: duración, amplitud o velocidad.',
+      clinicalRegressionNote: 'Volver a fondo sólido, menor amplitud o menor velocidad del blanco.',
+      progressionCriteria: 'Avanzar solo si sigue el blanco sin mover la cabeza y recupera dentro de la ventana acordada.',
+      stopCriteria: 'Pausar ante diplopía, cefalea intensa, náusea marcada, síntomas neurológicos nuevos o malestar por encima del techo definido.',
+      posture: 'seated', surface: 'firm', backgroundType: 'checkerboard', backgroundDirection: 'right',
+      backgroundSpeed: 0, backgroundCoveragePercent: 100, backgroundContrastPercent: 35,
+      stripeWidth: 92, foregroundColor: '#A8AAA8', backgroundColor: '#F4F2EE',
+      objectEnabled: true, objectMode: 'tracking', objectDirection: 'horizontal', objectSpeedHz: 0.2, objectAmplitude: 24,
+      durationSeconds: 30, rounds: 1, restSeconds: 30,
+    }, createdAt: visualMotionSeedDate, updatedAt: visualMotionSeedDate,
+  },
+  {
+    id: 'template-visual-motion-oscillating-low', name: 'Movimiento visual · oscilación suave',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'visual_habituation'),
+      name: 'Movimiento visual · oscilación suave',
+      patientInstruction: 'Sentado y con la cabeza quieta, mirá al centro de la pantalla mientras las barras se desplazan suavemente de un lado al otro.',
+      targetImpairment: 'Tolerancia inicial a movimiento visual horizontal reversible',
+      clinicalRationale: 'Presenta movimiento oscilante sin blanco superpuesto y evita la deriva continua de una estimulación unidireccional.',
+      clinicalDoseNote: 'Comenzar con una exposición breve; registrar malestar, recuperación y respuesta tardía.',
+      clinicalProgressionNote: 'Cambiar una sola variable: duración, amplitud, frecuencia, cobertura o contraste.',
+      clinicalRegressionNote: 'Reducir amplitud, cobertura, contraste o duración y mantener posición sentada.',
+      progressionCriteria: 'Avanzar sólo si mantiene la cabeza quieta y recupera dentro de la ventana acordada.',
+      stopCriteria: 'Pausar ante diplopía, cefalea intensa, náusea marcada, síntomas neurológicos nuevos o malestar por encima del techo definido.',
+      backgroundType: 'bars', backgroundDirection: 'right', backgroundMotionMode: 'oscillating',
+      backgroundFrequencyHz: 0.15, backgroundAmplitudePercent: 15, backgroundRampSeconds: 2,
+      backgroundCoveragePercent: 65, backgroundContrastPercent: 45, stripeWidth: 90,
+      durationSeconds: 20, rounds: 1, restSeconds: 40,
+    }, createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+  {
+    id: 'template-pursuit-counterphase-low', name: 'Seguimiento · contrafase suave',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'pursuit_visual_conflict'),
+      name: 'Seguimiento · contrafase suave',
+      patientInstruction: 'Sentado y con la cabeza quieta, seguí solamente el blanco con los ojos mientras el fondo se mueve en el sentido opuesto.',
+      targetImpairment: 'Tolerancia a seguimiento ocular con conflicto visual sincronizado',
+      clinicalRationale: 'El blanco y el fondo comparten eje y frecuencia, pero se desplazan en contrafase; es una tarea combinada y no seguimiento aislado.',
+      clinicalDoseNote: 'Usar sólo después de comprobar seguimiento aislado y tolerancia a fondo móvil por separado.',
+      clinicalProgressionNote: 'Aumentar una sola variable y conservar sincronía: duración, amplitud, cobertura o contraste.',
+      clinicalRegressionNote: 'Volver a fondo estático o separar el seguimiento y la habituación en dos ejercicios.',
+      progressionCriteria: 'Avanzar si sigue el blanco sin mover la cabeza ni perderlo y recupera dentro de la ventana acordada.',
+      stopCriteria: 'Pausar si pierde reiteradamente el blanco, aparece diplopía, náusea marcada o supera el techo definido.',
+      backgroundType: 'bars', backgroundDirection: 'right', backgroundMotionMode: 'oscillating',
+      backgroundFrequencyHz: 0.2, backgroundAmplitudePercent: 18, backgroundRampSeconds: 2,
+      backgroundCoveragePercent: 70, backgroundContrastPercent: 45, stripeWidth: 92,
+      targetBackgroundRelation: 'counter_phase', objectDirection: 'horizontal', objectSpeedHz: 0.2, objectAmplitude: 20,
+      durationSeconds: 20, rounds: 1, restSeconds: 45,
+    }, createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+  {
+    id: 'template-optic-flow-expansion-low', name: 'Flujo óptico · expansión suave',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'optic_flow'),
+      name: 'Flujo óptico · expansión suave',
+      patientInstruction: 'Sentado y con la cabeza quieta, mirá al centro mientras los puntos se expanden lentamente hacia la periferia.',
+      targetImpairment: 'Tolerancia inicial a flujo óptico radial de expansión',
+      clinicalRationale: 'Simula una señal visual radial de avance sin presentarla como optocinético lineal, marcha virtual ni escenario 360°.',
+      clinicalDoseNote: 'Comenzar con baja velocidad, cobertura parcial y exposición breve.',
+      clinicalProgressionNote: 'Aumentar una sola variable: duración, velocidad, cobertura o contraste.',
+      clinicalRegressionNote: 'Reducir cobertura, contraste, velocidad o duración.',
+      progressionCriteria: 'Avanzar si mantiene cabeza quieta, postura estable y recuperación dentro de la ventana acordada.',
+      stopCriteria: 'Pausar ante inestabilidad marcada, náusea, cefalea intensa, oscilopsia persistente o síntomas neurológicos nuevos.',
+      backgroundDirection: 'toward', backgroundSpeed: 25, backgroundRampSeconds: 2,
+      backgroundCoveragePercent: 70, backgroundContrastPercent: 45, stripeWidth: 42,
+      durationSeconds: 20, rounds: 1, restSeconds: 45,
+    }, createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+  {
+    id: 'template-habituation-low', name: 'Habituación visual · damero lento',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'visual_habituation'),
+      name: 'Habituación visual · damero lento', backgroundType: 'checkerboard', backgroundDirection: 'right',
+      backgroundSpeed: 15, stripeWidth: 84, durationSeconds: 20, rounds: 1, restSeconds: 40,
+    }, createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+  {
+    id: 'template-functional-weight-shifts', name: 'Funcional · transferencias de peso',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'guided_functional'),
+      name: 'Funcional · transferencias de peso',
+      patientInstruction: 'De pie junto a un apoyo estable, trasladá el peso hacia cada lado y volvé al centro con control.',
+      posture: 'standing', surface: 'firm', supervision: 'trained_helper', targetRepetitions: 10, rounds: 1, restSeconds: 30,
+    }, createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+  {
+    id: 'template-functional-gait-head-turns', name: 'Funcional · marcha con giros cefálicos',
+    config: {
+      ...applyExercisePurpose(defaultExerciseConfig, 'guided_functional'),
+      name: 'Funcional · marcha con giros cefálicos',
+      patientInstruction: 'Caminá por el recorrido despejado y alterná giros suaves de cabeza según la indicación profesional, con un ayudante a tu lado.',
+      posture: 'walking', surface: 'firm', supervision: 'trained_helper', targetRepetitions: 8, rounds: 1, restSeconds: 45,
+    }, createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+]
+
+const rapidImageTemplates: ExerciseTemplateRecord[] = [
+  {
+    id: 'template-rapid-images-soft', name: 'Imágenes rápidas · suave 2 s',
+    config: {
+      ...cognitiveBase, name: 'Imágenes rápidas · suave 2 s',
+      patientInstruction: 'Observá cada figura y contá mentalmente los rombos. Al terminar, informá cuántos viste.',
+      cognitiveTaskMode: 'rare_target', cognitiveTargetSymbol: 'diamond', cognitiveResponseMode: 'count_at_end',
+      cognitiveStimulusSeconds: 2, durationSeconds: 40,
+    }, createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+  {
+    id: 'template-rapid-images-medium', name: 'Imágenes rápidas · media 1,25 s',
+    config: {
+      ...cognitiveBase, name: 'Imágenes rápidas · media 1,25 s',
+      patientInstruction: 'Mantené la cabeza quieta y decí “sí” solamente cuando aparezca la estrella.',
+      cognitiveTaskMode: 'go_no_go', cognitiveTargetSymbol: 'star', cognitiveResponseMode: 'verbal',
+      cognitiveStimulusSeconds: 1.25, durationSeconds: 35,
+    }, createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+  {
+    id: 'template-rapid-images-fast', name: 'Imágenes rápidas · alta 0,75 s',
+    config: {
+      ...cognitiveBase, name: 'Imágenes rápidas · alta 0,75 s',
+      patientInstruction: 'Mantené la cabeza quieta y decí “igual” cuando una figura coincida con la anterior.',
+      cognitiveTaskMode: 'short_memory', cognitiveResponseMode: 'verbal', cognitiveMemorySpan: 1,
+      cognitiveStimulusSeconds: 0.75, durationSeconds: 30,
+    }, createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+]
+
+function stroboscopicTemplate(
+  name: string,
+  overrides: Partial<ExerciseConfig>,
+): ExerciseConfig {
+  return {
+    ...applyExercisePurpose(defaultExerciseConfig, 'visual_habituation'),
+    name,
+    clinicalProtocol: 'stroboscopic_experimental',
+    patientInstruction: 'Sentado y con supervisión directa, observá el patrón sin perseguir un elemento. Avisá de inmediato ante cefalea, fotofobia, náusea marcada o síntomas visuales nuevos.',
+    displayMode: 'standard', cardboardEnabled: false, doseMode: 'time', advanceMode: 'manual',
+    posture: 'seated', surface: 'firm', supervision: 'direct_clinician', objectEnabled: false,
+    strobeEnabled: true, durationSeconds: 20, rounds: 1, restSeconds: 60,
+    ...overrides,
+  }
+}
+
+const stroboscopicTemplates: ExerciseTemplateRecord[] = [
+  {
+    id: 'template-strobe-low', name: 'Estroboscópico experimental · suave 0,5 Hz',
+    config: stroboscopicTemplate('Estroboscópico experimental · suave 0,5 Hz', {
+      backgroundType: 'bars', backgroundDirection: 'left', backgroundSpeed: 15, stripeWidth: 88,
+      strobeFrequencyHz: 0.5, strobeDutyCyclePercent: 80, strobeContrastPercent: 15, durationSeconds: 20,
+    }), createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+  {
+    id: 'template-strobe-medium', name: 'Estroboscópico experimental · horizontal 1 Hz',
+    config: stroboscopicTemplate('Estroboscópico experimental · horizontal 1 Hz', {
+      backgroundType: 'checkerboard', backgroundDirection: 'right', backgroundSpeed: 20, stripeWidth: 76,
+      strobeFrequencyHz: 1, strobeDutyCyclePercent: 70, strobeContrastPercent: 22, durationSeconds: 20,
+    }), createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+  {
+    id: 'template-strobe-diagonal', name: 'Estroboscópico experimental · diagonal 2 Hz',
+    config: stroboscopicTemplate('Estroboscópico experimental · diagonal 2 Hz', {
+      backgroundType: 'dots', backgroundDirection: 'up_right', backgroundSpeed: 25, stripeWidth: 68,
+      strobeFrequencyHz: 2, strobeDutyCyclePercent: 60, strobeContrastPercent: 30, durationSeconds: 15,
+    }), createdAt: expandedSeedDate, updatedAt: expandedSeedDate,
+  },
+]
+
+const pppdProgressionCriteria = 'Avanzar cuando complete dos exposiciones separadas con técnica segura, dificultad percibida hasta 3/5 y aumento de malestar no mayor de 2/10 al finalizar.'
+const pppdStopCriteria = 'Pausar y revisar si hay caída o casi caída, visión doble, cefalea intensa, náusea marcada, síntomas neurológicos nuevos o aumento de malestar mayor de 3/10.'
+
+const immersiveTemplates: ExerciseTemplateRecord[] = [...immersiveScenarios].sort((a, b) => a.intensity - b.intensity).map((scenario) => ({
   id: `template-immersive-${scenario.id}`,
   name: `360° · ${scenario.shortTitle}`,
   config: {
     ...applyExercisePurpose({ ...defaultExerciseConfig, immersiveScenarioId: scenario.id }, 'immersive_context'),
     name: `360° · ${scenario.shortTitle}`,
+    clinicalProtocol: 'pppd',
+    progressionLevel: scenario.intensity,
+    progressionCriteria: pppdProgressionCriteria,
+    stopCriteria: pppdStopCriteria,
   },
   createdAt: seedDate,
   updatedAt: seedDate,
 }))
 
-const pppdProgressionCriteria = 'Avanzar cuando complete dos exposiciones separadas con técnica segura, dificultad percibida hasta 3/5 y aumento de malestar no mayor de 2/10 al finalizar.'
-const pppdStopCriteria = 'Pausar y revisar si hay caída o casi caída, visión doble, cefalea intensa, náusea marcada, síntomas neurológicos nuevos o aumento de malestar mayor de 3/10.'
+function questProceduralTemplate(name: string, purpose: ExerciseConfig['purpose'], overrides: Partial<ExerciseConfig>): ExerciseConfig {
+  return {
+    ...applyExercisePurpose(defaultExerciseConfig, purpose),
+    name,
+    displayMode: 'quest_browser', questPresentationMode: 'immersive_webxr',
+    doseMode: 'time', advanceMode: 'automatic', posture: 'seated', surface: 'firm', supervision: 'direct_clinician',
+    metronomeEnabled: false, cognitiveTaskMode: 'none', rounds: 2, restSeconds: 30,
+    questImmersiveCoverage: 180, questBackgroundAngularSpeed: 10, questPatternAngularSize: 14,
+    questTargetAngularSize: 3, questTargetAmplitudeDegrees: 22, questHeadStillGuard: true,
+    ...overrides,
+  }
+}
+
+const questProceduralTemplates: ExerciseTemplateRecord[] = [
+  {
+    id: 'template-quest-webxr-optokinetic-bars-low', name: 'Quest WebXR · barras optocinéticas suaves',
+    config: questProceduralTemplate('Quest WebXR · barras optocinéticas suaves', 'optokinetic', {
+      backgroundType: 'bars', backgroundDirection: 'left', backgroundSpeed: 20, objectEnabled: false,
+      questImmersiveGeometry: 'sphere', questImmersiveCoverage: 90, questBackgroundAngularSpeed: 6,
+      questPatternAngularSize: 18, durationSeconds: 20, rounds: 1, restSeconds: 40,
+    }), createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+  {
+    id: 'template-quest-webxr-optokinetic-checker', name: 'Quest WebXR · damero envolvente',
+    config: questProceduralTemplate('Quest WebXR · damero envolvente', 'visual_habituation', {
+      backgroundType: 'checkerboard', backgroundDirection: 'right', backgroundSpeed: 24, objectEnabled: false,
+      questImmersiveGeometry: 'sphere', questImmersiveCoverage: 180, questBackgroundAngularSpeed: 10,
+      durationSeconds: 25,
+    }), createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+  {
+    id: 'template-quest-webxr-fixation-background', name: 'Quest WebXR · fijación con fondo móvil',
+    config: questProceduralTemplate('Quest WebXR · fijación con fondo móvil', 'visual_motion_fixation', {
+      backgroundType: 'bars', backgroundDirection: 'left', backgroundSpeed: 20, objectEnabled: true, objectMode: 'fixed',
+      questImmersiveGeometry: 'sphere', questImmersiveCoverage: 180, questBackgroundAngularSpeed: 8,
+      questTargetAngularSize: 3, durationSeconds: 25,
+    }), createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+  {
+    id: 'template-quest-webxr-saccades', name: 'Quest WebXR · sacadas frontales',
+    config: questProceduralTemplate('Quest WebXR · sacadas frontales', 'saccades', {
+      backgroundType: 'solid', backgroundSpeed: 0, objectEnabled: true, objectMode: 'saccades',
+      questImmersiveGeometry: 'curved_panel', questImmersiveCoverage: 90, questTargetAmplitudeDegrees: 18,
+      durationSeconds: 25,
+    }), createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+  {
+    id: 'template-quest-webxr-optic-flow', name: 'Quest WebXR · flujo óptico 3D',
+    config: questProceduralTemplate('Quest WebXR · flujo óptico 3D', 'optic_flow', {
+      backgroundType: 'radial_flow', backgroundDirection: 'toward', backgroundSpeed: 20, objectEnabled: false,
+      questImmersiveGeometry: 'particle_tunnel', questImmersiveCoverage: 360, questBackgroundAngularSpeed: 6,
+      durationSeconds: 20, rounds: 1, restSeconds: 40,
+    }), createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
+  },
+]
 
 function pppdVisualLevel(
   level: 1 | 2 | 3,
@@ -199,12 +510,17 @@ const pppdTemplates: ExerciseTemplateRecord[] = [
 const seed: ExerciseTemplateRecord[] = [
   { id: 'template-rvo-bars', name: 'RVO X1 · Punto fijo 2D', config: defaultExerciseConfig, createdAt: '2026-07-16T00:00:00.000Z', updatedAt: '2026-07-16T00:00:00.000Z' },
   { id: 'template-rvo-x2-horizontal', name: rvoX2Horizontal.name, config: rvoX2Horizontal, createdAt: seedDate, updatedAt: seedDate },
+  { id: 'template-rvo-x2-vertical', name: rvoX2Vertical.name, config: rvoX2Vertical, createdAt: expandedSeedDate, updatedAt: expandedSeedDate },
   { id: 'template-rvo-x2-diagonal', name: rvoX2Diagonal.name, config: rvoX2Diagonal, createdAt: seedDate, updatedAt: seedDate },
   { id: 'template-remembered-target', name: rememberedTarget.name, config: rememberedTarget, createdAt: seedDate, updatedAt: seedDate },
   { id: 'template-cognitive-rare-target', name: rareTarget.name, config: rareTarget, createdAt: seedDate, updatedAt: seedDate },
   { id: 'template-cognitive-go-no-go', name: goNoGo.name, config: goNoGo, createdAt: seedDate, updatedAt: seedDate },
   { id: 'template-cognitive-short-memory', name: shortMemory.name, config: shortMemory, createdAt: seedDate, updatedAt: seedDate },
+  ...generalTemplates,
+  ...rapidImageTemplates,
+  ...stroboscopicTemplates,
   ...immersiveTemplates,
+  ...questProceduralTemplates,
   ...pppdTemplates,
 ]
 

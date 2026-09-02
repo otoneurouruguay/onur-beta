@@ -7,4 +7,9 @@ describe('StatusBadge', () => {
     render(<StatusBadge status="quarantine" />)
     expect(screen.getByText('Cuarentena')).toBeInTheDocument()
   })
+
+  it('muestra como en curso una sesión iniciada', () => {
+    render(<StatusBadge status="started" />)
+    expect(screen.getByText('En curso')).toBeInTheDocument()
+  })
 })

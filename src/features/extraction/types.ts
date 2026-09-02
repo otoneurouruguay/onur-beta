@@ -2,8 +2,12 @@ import type { MetricSide, StudyType } from '../studies/types'
 
 export type IntakeKind = 'posturography_bap' | 'vestibular_and_reports'
 export type PageClassification = 'posturography' | 'vestibular_report' | 'vhit_graph' | 'referral' | 'other_clinical' | 'unrecognized'
-export type ExtractionFieldStatus = 'read' | 'review' | 'unrecognized'
+export type CanonicalExtractionFieldStatus = 'detected' | 'confirmed' | 'needs_review' | 'unreadable' | 'not_reported' | 'not_performed' | 'invalid' | 'conflicting'
+/** Los tres estados históricos se conservan al leer borradores anteriores. */
+export type ExtractionFieldStatus = CanonicalExtractionFieldStatus | 'read' | 'review' | 'unrecognized'
 export type PatientMatchStatus = 'match' | 'mismatch' | 'not_checked' | 'confirmed_by_professional'
+export type ExtractionSourceMethod = 'ocr_original' | 'ocr_grayscale' | 'ocr_threshold' | 'regex' | 'cross_validation' | 'vision_fallback' | 'professional_edit'
+export type ExtractionTemplateType = 'bap_2_32' | 'vhit_labeled' | 'vestibular_report' | 'generic'
 
 export interface SourceRegion { x: number; y: number; width: number; height: number }
 
@@ -11,6 +15,9 @@ export interface OcrLine {
   text: string
   confidence: number
   region: SourceRegion
+  regionId?: string
+  method?: ExtractionSourceMethod
+  passId?: string
 }
 
 export interface ExtractedPage {
@@ -24,6 +31,7 @@ export interface ExtractedPage {
   previewUrl: string
   text: string
   lines: OcrLine[]
+  template?: { type: ExtractionTemplateType; confidence: number; matchedSignals: number; aspectRatio: number }
 }
 
 export interface ExtractionFieldDefinition {
@@ -60,6 +68,22 @@ export interface ExtractedField {
   extractorVersion: string
   professionalValue: string
   confirmed: boolean
+  value?: string | number | null
+  displayValue?: string
+  warnings?: string[]
+  validation?: {
+    rangeValid: boolean | null
+    crossCheckValid: boolean | null
+    multiPassAgreement: boolean | null
+  }
+  source?: {
+    page: number
+    regionId: string
+    normalizedBbox: SourceRegion | null
+    method: ExtractionSourceMethod
+  }
+  candidates?: Array<{ raw: string; value: string | number | null; confidence: number; method: ExtractionSourceMethod }>
+  correctionHistory?: Array<{ previousValue: string; value: string; correctedAt: string; actor: 'professional' }>
 }
 
 export interface LocalExtractionDraft {
@@ -69,6 +93,8 @@ export interface LocalExtractionDraft {
   fields: ExtractedField[]
   patientMatchStatus: PatientMatchStatus
   mismatchFields: string[]
+  studyDate?: string
+  uploadDate?: string
 }
 
 export interface ExtractionProgress {

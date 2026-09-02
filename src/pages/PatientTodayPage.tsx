@@ -4,8 +4,9 @@ import { Brand } from '../components/Brand'
 import { useAuth } from '../features/auth/AuthProvider'
 import { PatientUseAcknowledgement } from '../features/auth/PatientUseAcknowledgement'
 import { usePatientAcknowledgement } from '../features/auth/patientAcknowledgementHooks'
+import { PatientPortalAssessments } from '../features/assessments/PatientPortalAssessments'
 import { PatientPortalDocuments } from '../features/documents/PatientPortalDocuments'
-import { useCompleteSession, useCurrentPatientAssignment, usePendingSessionSync, useStartSession } from '../features/sessions/hooks'
+import { useCompleteSession, useCurrentPatientAssignment, useInterruptSession, usePendingSessionSync, useStartSession } from '../features/sessions/hooks'
 import { sessionDurationLabel, type SessionEventLogEntry } from '../features/sessions/repository'
 import { SessionRunner } from '../features/sessions/SessionRunner'
 import { ScaleQuestion } from '../features/sessions/ScaleQuestion'
@@ -15,20 +16,41 @@ type RunnerResult = { activeSeconds: number; skippedExercises: number; eventLog:
 export function PatientTodayPage() {
   const [stage, setStage] = useState<'review' | 'running' | 'feedback' | 'finished'>('review')
   const [initialDiscomfort, setInitialDiscomfort] = useState<number | null>(null)
+  const [peakDiscomfort, setPeakDiscomfort] = useState<number | null>(null)
   const [finalDiscomfort, setFinalDiscomfort] = useState<number | null>(null)
+  const [recoveryMinutes, setRecoveryMinutes] = useState<number | null>(null)
   const [perceivedDifficulty, setPerceivedDifficulty] = useState<number | null>(null)
   const [patientComment, setPatientComment] = useState('')
   const [runnerResult, setRunnerResult] = useState<RunnerResult | null>(null)
   const [completionError, setCompletionError] = useState('')
   const [queued, setQueued] = useState(false)
+  const [outcome, setOutcome] = useState<'completed' | 'interrupted'>('completed')
   const { data: session, isPending } = useCurrentPatientAssignment()
   const { data: acknowledgement, isPending: acknowledgementPending } = usePatientAcknowledgement()
   const complete = useCompleteSession()
+  const interrupt = useInterruptSession()
   const startSession = useStartSession()
   const auth = useAuth()
   usePendingSessionSync()
 
-  if (stage === 'running' && session) return <SessionRunner session={session} onExit={() => setStage('review')} onFinish={(activeSeconds, skippedExercises, eventLog) => {
+  const saveInterruption = async (activeSeconds: number, skippedExercises: number, eventLog: SessionEventLogEntry[]) => {
+    if (!session || initialDiscomfort === null) return
+    try {
+      setCompletionError('')
+      const result = await interrupt.mutateAsync({ assignment: session, activeSeconds, skippedExercises, initialDiscomfort, eventLog })
+      setQueued(result.queued)
+      setOutcome('interrupted')
+      setStage('finished')
+    } catch {
+      setRunnerResult({ activeSeconds, skippedExercises, eventLog })
+      setCompletionError('No fue posible guardar la salida parcial automáticamente. Completá las escalas para conservar el resultado.')
+      setStage('feedback')
+    }
+  }
+
+  if (stage === 'running' && session) return <SessionRunner session={session} onExit={(activeSeconds, skippedExercises, eventLog) => {
+    void saveInterruption(activeSeconds, skippedExercises, eventLog)
+  }} onFinish={(activeSeconds, skippedExercises, eventLog) => {
     setRunnerResult({ activeSeconds, skippedExercises, eventLog })
     setStage('feedback')
   }}/>
@@ -43,14 +65,15 @@ export function PatientTodayPage() {
     catch { setCompletionError('No fue posible iniciar la sesión. Revisá la conexión e intentá nuevamente.') }
   }
   const saveCompletion = async () => {
-    if (!session || !runnerResult || initialDiscomfort === null || finalDiscomfort === null || perceivedDifficulty === null) {
-      setCompletionError('Completá las dos escalas para guardar la sesión.')
+    if (!session || !runnerResult || initialDiscomfort === null || peakDiscomfort === null || finalDiscomfort === null || perceivedDifficulty === null) {
+      setCompletionError('Completá las escalas de síntomas y dificultad para guardar la sesión.')
       return
     }
     try {
       setCompletionError('')
-      const result = await complete.mutateAsync({ assignment: session, ...runnerResult, initialDiscomfort, finalDiscomfort, perceivedDifficulty, patientComment })
+      const result = await complete.mutateAsync({ assignment: session, ...runnerResult, initialDiscomfort, peakDiscomfort, finalDiscomfort, recoveryMinutes, perceivedDifficulty, patientComment })
       setQueued(result.queued)
+      setOutcome('completed')
       setStage('finished')
     } catch {
       setCompletionError('La sesión terminó, pero el resultado todavía no se pudo guardar. Revisá la conexión e intentá nuevamente.')
@@ -63,10 +86,12 @@ export function PatientTodayPage() {
     <header className="flex items-center justify-between"><Brand/><button type="button" onClick={logout} className="grid size-10 place-items-center rounded-xl text-[#747474]" aria-label="Cerrar sesión"><LogOut size={18}/></button></header>
     <section className="mt-12"><p className="text-xs font-black uppercase tracking-[0.18em] text-[#E49A02]">Sesión asignada</p><h1 className="mt-3 text-4xl font-black tracking-[-0.04em] text-[#171717] sm:text-5xl">Tu entrenamiento</h1><p className="mt-3 text-sm leading-6 text-[#747474]">Revisá las indicaciones y comenzá cuando estés preparado.</p></section>
     {completionError && <p role="alert" className="mt-6 rounded-2xl bg-[#fceced] p-4 text-sm font-bold text-[#a94952]">{completionError}</p>}
-    {!acknowledgement?.accepted ? <PatientUseAcknowledgement/> : (stage === 'finished' ? <article className="mt-8 rounded-2xl border border-[#E8CE99] bg-white p-8 text-center"><div className="mx-auto grid size-16 place-items-center rounded-full bg-[#FFF7E8] text-2xl">✓</div><h2 className="mt-5 text-2xl font-black text-[#171717]">Sesión completada</h2><p className="mt-3 text-sm leading-6 text-[#747474]">{queued ? 'El resultado quedó guardado en este dispositivo y se enviará automáticamente cuando vuelva la conexión.' : 'El profesional podrá ver que terminaste la sesión y tus respuestas.'}</p></article>
+    {!acknowledgement?.accepted ? <PatientUseAcknowledgement/> : (stage === 'finished' ? <article className="mt-8 rounded-2xl border border-[#E8CE99] bg-white p-8 text-center"><div className="mx-auto grid size-16 place-items-center rounded-full bg-[#FFF7E8] text-2xl">✓</div><h2 className="mt-5 text-2xl font-black text-[#171717]">{outcome === 'interrupted' ? 'Avance parcial guardado' : 'Sesión completada'}</h2><p className="mt-3 text-sm leading-6 text-[#747474]">{queued ? 'El resultado quedó guardado en este dispositivo y se enviará automáticamente cuando vuelva la conexión.' : outcome === 'interrupted' ? 'La sesión quedó registrada como parcial para que tu profesional pueda revisar el avance.' : 'El profesional podrá ver que terminaste la sesión y tus respuestas.'}</p></article>
       : stage === 'feedback' && session ? <article className="mt-8 space-y-5"><div className="rounded-2xl bg-[#171717] p-6 text-white"><p className="text-xs font-black uppercase tracking-[.16em] text-[#E49A02]">Último paso</p><h2 className="mt-3 text-2xl font-black">¿Cómo te resultó la sesión?</h2><p className="mt-2 text-sm leading-6 text-white/65">Estas respuestas describen tu experiencia. No generan decisiones ni recomendaciones automáticas.</p></div>
         <ScaleQuestion label="Malestar ahora" hint="0 significa ningún malestar y 10 el mayor malestar que puedas imaginar." min={0} max={10} value={finalDiscomfort} onChange={setFinalDiscomfort}/>
+        <ScaleQuestion label="Mayor malestar durante la sesión" hint="0 significa ningún malestar y 10 el mayor malestar que hayas sentido durante los ejercicios." min={0} max={10} value={peakDiscomfort} onChange={setPeakDiscomfort}/>
         <ScaleQuestion label="Dificultad de la sesión" hint="1 significa muy fácil y 5 muy difícil." min={1} max={5} value={perceivedDifficulty} onChange={setPerceivedDifficulty}/>
+        <label className="block rounded-2xl border border-[#E9E7E7] bg-white p-5 text-sm font-black text-[#2F2F2F]">Minutos hasta volver a tu nivel habitual <span className="font-normal text-[#747474]">(opcional)</span><input type="number" min="0" max="1440" value={recoveryMinutes ?? ''} onChange={(event) => setRecoveryMinutes(event.target.value === '' ? null : Number(event.target.value))} className="mt-3 h-12 w-full rounded-2xl border border-[#E9E7E7] px-4 text-base font-normal"/></label>
         <label className="block rounded-2xl border border-[#E9E7E7] bg-white p-5 text-sm font-black text-[#2F2F2F]">Comentario opcional<textarea maxLength={500} rows={3} value={patientComment} onChange={(event) => setPatientComment(event.target.value)} className="mt-3 w-full resize-none rounded-2xl border border-[#E9E7E7] p-4 text-base font-normal" placeholder="Si querés, contale algo a tu profesional."/><span className="mt-2 block text-right text-[11px] font-bold text-[#747474]">{patientComment.length}/500</span></label>
         <button type="button" disabled={complete.isPending} onClick={saveCompletion} className="flex h-14 w-full items-center justify-center rounded-2xl bg-[#E49A02] text-sm font-black text-white disabled:opacity-60">{complete.isPending ? 'Guardando…' : 'Guardar y finalizar'}</button>
       </article>
@@ -82,7 +107,7 @@ export function PatientTodayPage() {
           <button type="button" disabled={startSession.isPending} onClick={start} className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#E49A02] text-sm font-black text-white shadow-[0_12px_24px_rgba(11,122,117,0.2)] disabled:opacity-60">{startSession.isPending?'Iniciando…':'Comenzar sesión'} <ChevronRight size={18}/></button>
         </div>
       </article>)}
-    {acknowledgement?.accepted && stage !== 'feedback' && stage !== 'finished' && <PatientPortalDocuments/>}
+    {acknowledgement?.accepted && stage !== 'feedback' && <><PatientPortalAssessments/><PatientPortalDocuments/></>}
     <p className="mt-6 text-center text-[11px] leading-5 text-[#747474]">Realizá la sesión únicamente según las indicaciones de tu profesional.</p>
   </div></main>
 }

@@ -16,7 +16,7 @@ El tablero profesional resume lo que efectivamente está registrado en ONUr. Sir
 - **Porcentaje de realización:** sesiones realizadas dividido sesiones no revocadas del período.
 - **Tiempo activo:** suma de `active_seconds` en ejecuciones completas o parciales.
 - **Progreso de tiempo activo:** tiempo activo dividido duración planificada, limitado al 100 %. No mide calidad de ejecución.
-- **Comparación de percepción:** resta aritmética final menos inicial sobre preguntas comparables del cuestionario ONUr v2. Solo se genera si ambos formularios tienen las 18 respuestas transcritas.
+- **Comparación DHI:** resta aritmética final menos inicial del puntaje total y de las subescalas física, emocional y funcional. Solo se genera cuando ambos DHI están completos y pertenecen al mismo ciclo, instrumento y versión.
 
 ## Límites
 
