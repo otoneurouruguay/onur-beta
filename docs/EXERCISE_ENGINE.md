@@ -59,7 +59,7 @@ Cuando una sesión mezcla cualquier tarea sin visor y VR Box, el constructor rec
 
 En Quest el profesional elige de forma explícita entre `panel_2d` e `immersive_webxr`; las configuraciones antiguas conservan el panel 2D. La inmersión procedural está disponible para seguimiento, sacadas, optocinético, flujo óptico, habituación, fijación con fondo móvil, seguimiento con conflicto y Libre técnicamente representable. Una batería procedural mantiene una única `XRSession` local: los cambios de ejercicio y descansos no obligan a salir y volver a entrar. Los escenarios contextuales 360° conservan su reproductor panorámico separado.
 
-Los patrones procedurales usan unidades angulares propias: cobertura 90°/180°/360°, velocidad del fondo en grados por segundo, tamaño angular del patrón y tamaño/amplitud angular del blanco. Barras, damero y puntos se generan sobre un cilindro o segmento curvo; la espiral usa un disco frontal; el flujo radial usa un túnel real de puntos 3D. El fondo y el blanco son objetos separados. Tras entrar a WebXR se toma una referencia `local`, se muestran 2 segundos de centro frontal y se permite recentrar sin exigir una estabilidad artificial. Un aviso no bloqueante aparece tras desviarse más de 10° durante aproximadamente un segundo.
+Los patrones procedurales usan unidades angulares propias: cobertura 90°/180°/360°, velocidad del fondo en grados por segundo, tamaño angular del patrón y tamaño/amplitud angular del blanco. Barras, damero y puntos se generan sobre el interior de una esfera envolvente; la espiral usa un disco frontal; el flujo radial usa un túnel real de puntos 3D. El modo Libre también permite elegir cilindro o panel curvo cuando el objetivo lo justifica. El fondo y el blanco son objetos separados. Tras entrar a WebXR se toma una referencia `local`, se muestran 2 segundos de centro frontal y se permite recentrar sin exigir una estabilidad artificial. Un aviso no bloqueante aparece tras desviarse más de 10° durante aproximadamente un segundo.
 
 ## Compatibilidad espacial obligatoria
 
@@ -70,9 +70,9 @@ Los patrones procedurales usan unidades angulares propias: cobertura 90°/180°/
 | Objetivo recordado / sustitución (alias RVO x3) | Sí | No | No | Mirar, cerrar ojos, girar cabeza y comprobar al reabrir |
 | Seguimiento ocular suave | Sí | Sí | Sí, panel o WebXR frontal | Mantener cabeza quieta y seguir el blanco con los ojos |
 | Sacadas | Sí | Sí | Sí, panel o WebXR frontal | Mantener cabeza quieta y cambiar la mirada |
-| Optocinético | Sí | Sí | Sí, panel o WebXR curvo | Sentado, cabeza quieta, observar el patrón móvil |
+| Optocinético | Sí | Sí | Sí, panel o esfera WebXR | Sentado, cabeza quieta, observar el patrón móvil |
 | Flujo óptico | Sí | Sí | Sí, panel o túnel WebXR 3D | Sentado, cabeza quieta, mirar el centro del flujo |
-| Habituación visual | Sí | Sí | Sí, panel o WebXR curvo | Sentado, cabeza quieta, observar el movimiento dosificado |
+| Habituación visual | Sí | Sí | Sí, panel o esfera WebXR | Sentado, cabeza quieta, observar el movimiento dosificado |
 | Exposición contextual 360° | No | Solo Cardboard 3DoF presencial | Sí, WebXR presencial | Explorar el entorno desde postura sentada |
 | Tarea cognitivo-visual | Sí | No | No | Sentado, comprender la consigna y responder según el estímulo |
 | Tarea física o funcional | Sí | No | No | Ejecutar fuera del visor con el entorno visible |
@@ -84,7 +84,7 @@ En VR Box 2D el lienzo acompaña la cabeza. Cardboard 3DoF contrarresta la orien
 
 `custom_free` permite conservar como plantilla cualquier combinación de fondo, objeto, trayectoria, colores, amplitud, frecuencia, dosis, postura y dispositivo, incluso si no cumple las reglas de una finalidad clínica cerrada. La biblioteca no bloquea su guardado. La interfaz lo identifica en amarillo como configuración profesional no validada y no infiere que sea RVO, sustitución, habituación u optocinético.
 
-Guardar y asignar son operaciones distintas. Al crear una sesión se mantienen los límites técnicos de VR Box (tiempo, avance automático, sin metrónomo, postura sentada y superficie firme), las reglas de ayuda para superficie inestable o marcha domiciliaria y la exclusividad de dispositivo en Quest.
+Guardar y asignar son operaciones distintas. Al crear una sesión se mantienen los límites técnicos de VR Box (tiempo, avance automático, sin metrónomo, postura sentada y superficie firme), las reglas de ayuda para superficie inestable o marcha domiciliaria y un único traspaso PC → Quest cuando la sesión es mixta.
 
 ## Límites clínicos y técnicos
 

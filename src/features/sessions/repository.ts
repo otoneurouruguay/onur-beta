@@ -9,7 +9,7 @@ export type CycleStatus = 'active' | 'paused' | 'completed'
 export type AssignmentStatus = 'assigned' | 'started' | 'completed' | 'partial' | 'interrupted' | 'omitted' | 'revoked'
 
 export interface SessionEventLogEntry {
-  type: 'exercise_completed' | 'exercise_partial' | 'exercise_skipped' | 'vr_box_put_on' | 'vr_box_take_off' | 'interrupted' | 'finished' | 'free_session_recorded' | 'free_session_cancelled' | 'retrospective_session_recorded' | 'session_cancelled'
+  type: 'exercise_completed' | 'exercise_partial' | 'exercise_skipped' | 'vr_box_put_on' | 'vr_box_take_off' | 'device_handoff' | 'interrupted' | 'finished' | 'free_session_recorded' | 'free_session_cancelled' | 'retrospective_session_recorded' | 'session_cancelled'
   at: string
   exercise_index?: number
   round?: number
@@ -43,7 +43,7 @@ export interface SessionEventLogEntry {
   immersive_scenario_id?: string
   immersive_rendering?: 'webxr_6dof' | 'cardboard_3dof'
   immersive_kind?: 'procedural' | 'contextual'
-  immersive_geometry?: 'curved_panel' | 'cylinder' | 'front_disc' | 'particle_tunnel'
+  immersive_geometry?: 'curved_panel' | 'cylinder' | 'sphere' | 'front_disc' | 'particle_tunnel'
   immersive_coverage_degrees?: 90 | 180 | 360
   immersive_angular_speed_degrees?: number
   immersive_pattern_angular_size_degrees?: number

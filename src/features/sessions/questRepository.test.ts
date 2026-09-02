@@ -52,7 +52,28 @@ describe('estación Quest clínica en modo demo', () => {
   it('rechaza sesiones domiciliarias o no iniciadas', async () => {
     const cycle = await createTreatmentCycle('patient-home', { label: 'Ciclo 1', reason: '', objectives: '', startedOn: '2026-07-21' })
     const assignment = await createSessionAssignment('patient-home', { title: 'Sesión hogar', instructions: '', mode: 'home', treatmentCycleId: cycle.id, availableFrom: '2026-07-21', availableUntil: '', exercises: [defaultExerciseConfig] })
-    await expect(createQuestSessionPairing(assignment)).rejects.toThrow(/Quest solo admite/i)
+    await expect(createQuestSessionPairing(assignment)).rejects.toThrow(/sesión presencial iniciada/i)
+  })
+
+  it('en una sesión mixta entrega al visor solamente el bloque Quest', async () => {
+    const patientId = 'patient-mixed-quest'
+    const cycle = await createTreatmentCycle(patientId, { label: 'Ciclo mixto', reason: '', objectives: '', startedOn: '2026-09-01' })
+    const questExercise = {
+      ...applyExercisePurpose(defaultExerciseConfig, 'optokinetic'),
+      name: 'Barras Quest', displayMode: 'quest_browser' as const, doseMode: 'time' as const, advanceMode: 'automatic' as const,
+      posture: 'seated' as const, surface: 'firm' as const, supervision: 'direct_clinician' as const,
+    }
+    const created = await createSessionAssignment(patientId, {
+      title: 'Sesión PC y Quest', instructions: '', mode: 'in_person', treatmentCycleId: cycle.id,
+      availableFrom: '2026-09-01', availableUntil: '', exercises: [{ ...defaultExerciseConfig, name: 'RVO en PC' }, questExercise],
+    })
+    await startSupervisedInPersonSession(created, 1)
+    const assignment = (await listSessionAssignments(patientId)).find((item) => item.id === created.id)!
+    const pairing = await createQuestSessionPairing(assignment)
+    const claim = await claimQuestSessionPairing(pairing.code)
+
+    expect(claim.session.exercises).toHaveLength(1)
+    expect(claim.session.exercises[0]).toMatchObject({ name: 'Barras Quest', displayMode: 'quest_browser' })
   })
 
   it('invalida el código después del primer uso', async () => {

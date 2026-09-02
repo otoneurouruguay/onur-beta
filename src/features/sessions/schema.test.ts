@@ -93,9 +93,9 @@ describe('validación de sesión',()=>{
     expect(validateSession(session([desktop], 'in_person'))).toEqual({})
   })
 
-  it('bloquea exposición 360° domiciliaria, mezclada o sin seguimiento Cardboard', () => {
+  it('bloquea exposición 360° domiciliaria, bloque Quest heterogéneo o sin seguimiento Cardboard', () => {
     expect(validateSession(session([immersive()], 'home')).exercises).toContain('únicamente en clínica')
-    expect(validateSession(session([immersive(), optokinetic({ displayMode: 'quest_browser', supervision: 'direct_clinician', advanceMode: 'automatic' })], 'in_person')).exercises).toContain('no se mezcla')
+    expect(validateSession(session([immersive(), optokinetic({ displayMode: 'quest_browser', supervision: 'direct_clinician', advanceMode: 'automatic' })], 'in_person')).exercises).toContain('homogéneo')
     expect(validateSession(session([immersive({ displayMode: 'vr_box', cardboardEnabled: false })], 'in_person')).exercises).toContain('Cardboard 3DoF')
   })
 
@@ -163,7 +163,7 @@ describe('validación de sesión',()=>{
     expect(validateSession(session([vrBox, cardboard])).exercises).toContain('único perfil de visor')
   })
 
-  it('no mezcla Quest con ejercicios para otro dispositivo', () => {
+  it('acepta una sesión mixta con PC primero y un único bloque Quest al final', () => {
     const questExercise = optokinetic({
       displayMode: 'quest_browser',
       doseMode: 'time',
@@ -172,7 +172,16 @@ describe('validación de sesión',()=>{
       surface: 'firm',
       supervision: 'direct_clinician',
     })
-    expect(validateSession(session([questExercise, defaultExerciseConfig], 'in_person')).exercises).toContain('exclusivamente ejercicios Quest')
+    expect(validateSession(session([defaultExerciseConfig, questExercise], 'in_person'))).toEqual({})
+    expect(validateSession(session([questExercise, defaultExerciseConfig], 'in_person')).exercises).toContain('primero los ejercicios sin Quest')
+  })
+
+  it('no combina Quest con VR Box o Cardboard como tercer dispositivo', () => {
+    const questExercise = optokinetic({
+      displayMode: 'quest_browser', doseMode: 'time', advanceMode: 'automatic', posture: 'seated', surface: 'firm', supervision: 'direct_clinician',
+    })
+    const vrBox = optokinetic({ displayMode: 'vr_box', doseMode: 'time', advanceMode: 'automatic' })
+    expect(validateSession(session([vrBox, questExercise], 'in_person')).exercises).toContain('tercer dispositivo')
   })
 
   it('ignora condiciones físicas residuales al volver a un estímulo visual', () => {

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { applyExercisePurpose } from '../exercise/compatibility'
 import { defaultExerciseConfig } from '../exercise/types'
-import { analyzeSessionSequence, orderExercisesForVrBox } from './sequence'
+import { analyzeSessionSequence, orderExercisesForQuest, orderExercisesForVrBox } from './sequence'
 
 const repetitions = { ...defaultExerciseConfig, name: 'Sentarse y pararse', doseMode: 'repetitions' as const, displayMode: 'standard' as const }
 const vrBox = { ...applyExercisePurpose(defaultExerciseConfig, 'optokinetic'), name: 'Optocinético VR', doseMode: 'time' as const, displayMode: 'vr_box' as const, advanceMode: 'automatic' as const }
 const cardboard = { ...vrBox, name: 'Optocinético Cardboard', cardboardEnabled: true }
 const standardTimed = { ...defaultExerciseConfig, name: 'Seguimiento 2D', doseMode: 'time' as const, displayMode: 'standard' as const }
+const quest = { ...vrBox, name: 'Optocinético Quest', displayMode: 'quest_browser' as const }
 
 describe('secuencia de equipamiento VR Box', () => {
   it('advierte cuando habría que colocar, retirar y volver a colocar el visor', () => {
@@ -42,6 +43,13 @@ describe('secuencia de equipamiento VR Box', () => {
     expect(ordered.map((exercise) => exercise.name)).toEqual([
       'Marcha asistida', 'Sentarse y pararse', 'Sacadas 2D', 'Seguimiento 2D', 'Optocinético VR', 'Optocinético VR',
     ])
+  })
+
+  it('agrupa Quest al final y conserva el orden clínico dentro de ambos bloques', () => {
+    const ordered = orderExercisesForQuest([quest, repetitions, { ...quest, name: 'Quest 2' }, standardTimed])
+    expect(ordered.map((exercise) => exercise.name)).toEqual(['Sentarse y pararse', 'Seguimiento 2D', 'Optocinético Quest', 'Quest 2'])
+    expect(analyzeSessionSequence(ordered)).toMatchObject({ mixesQuestAndNonQuest: true, questBlockAtEnd: true })
+    expect(analyzeSessionSequence([quest, repetitions])).toMatchObject({ questBlockAtEnd: false })
   })
 
   it('recorre exhaustivamente 1092 secuencias posibles de hasta seis ejercicios', () => {

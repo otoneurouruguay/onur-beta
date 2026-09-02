@@ -88,12 +88,28 @@ function pairingRecord(value: Record<string, unknown>): QuestPairingRecord {
 export function isQuestClinicAssignment(assignment: Pick<SessionAssignmentRecord, 'mode' | 'exercises'>) {
   return assignment.mode === 'in_person'
     && assignment.exercises.length > 0
-    && assignment.exercises.every((exercise) => exercise.displayMode === 'quest_browser')
+    && assignment.exercises.some((exercise) => exercise.displayMode === 'quest_browser')
+}
+
+export function getQuestBlockExercises(assignment: Pick<SessionAssignmentRecord, 'exercises'>) {
+  return assignment.exercises.filter((exercise) => exercise.displayMode === 'quest_browser')
+}
+
+export function getNonQuestBlockExercises(assignment: Pick<SessionAssignmentRecord, 'exercises'>) {
+  return assignment.exercises.filter((exercise) => exercise.displayMode !== 'quest_browser')
+}
+
+export function isMixedQuestClinicAssignment(assignment: Pick<SessionAssignmentRecord, 'mode' | 'exercises'>) {
+  return isQuestClinicAssignment(assignment) && getNonQuestBlockExercises(assignment).length > 0
+}
+
+export function questBlockSession(assignment: SessionAssignmentRecord): SessionAssignmentRecord {
+  return { ...assignment, exercises: getQuestBlockExercises(assignment) }
 }
 
 export async function createQuestSessionPairing(assignment: SessionAssignmentRecord): Promise<QuestPairingCreated> {
   if (!isQuestClinicAssignment(assignment) || assignment.status !== 'started') {
-    throw new Error('Quest solo admite una sesión presencial iniciada y compuesta íntegramente por ejercicios Quest.')
+    throw new Error('Quest necesita una sesión presencial iniciada con al menos un ejercicio destinado al visor.')
   }
 
   if (!isSupabaseConfigured || !supabase) {
@@ -111,7 +127,7 @@ export async function createQuestSessionPairing(assignment: SessionAssignmentRec
       capturedResult: null,
       deviceToken: '',
       patientLabel: assignment.patientName.split(' ').slice(0, 2).map((part, index) => index === 0 ? part : `${part[0]}.`).join(' '),
-      session: assignment,
+      session: questBlockSession(assignment),
     }
     const previous = readDemoPairings().map((pairing) => pairing.assignmentId === assignment.id && ['ready', 'claimed'].includes(pairing.status) ? { ...pairing, status: 'revoked' as const } : pairing)
     writeDemoPairings([created, ...previous])
@@ -203,7 +219,9 @@ export async function claimQuestSessionPairing(code: string): Promise<ClaimedQue
       title: String(session.title),
       instructions: String(session.instructions ?? ''),
       mode: 'in_person',
-      exercises: exercises.map((exercise) => normalizeExerciseConfig(exercise as Record<string, unknown>, 0)),
+      exercises: exercises
+        .map((exercise) => normalizeExerciseConfig(exercise as Record<string, unknown>, 0))
+        .filter((exercise) => exercise.displayMode === 'quest_browser'),
       availableFrom: '',
       availableUntil: '',
       status: 'started',

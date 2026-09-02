@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import migration from '../../../supabase/migrations/202607210001_quest_clinic_pairing.sql?raw'
 import fourDigitMigration from '../../../supabase/migrations/202607270001_quest_four_digit_pairing.sql?raw'
+import mixedSessionMigration from '../../../supabase/migrations/202609010001_mixed_pc_quest_sessions.sql?raw'
 
 describe('contrato backend de la estación Quest', () => {
   it('usa códigos y credenciales efímeras almacenadas como hash', () => {
@@ -46,5 +47,12 @@ describe('contrato backend de la estación Quest', () => {
     expect(migration).toContain("pairing.status in ('ready', 'claimed', 'captured')")
     expect(migration).toContain('public.owns_patient(assignment_row.patient_id)')
     expect(migration).toContain('grant execute on function public.find_quest_session_pairing_for_assignment(uuid) to authenticated')
+  })
+
+  it('acepta un único bloque Quest al final y no entrega al visor el bloque de PC', () => {
+    expect(mixedSessionMigration).toContain('Los ejercicios Quest deben formar un único bloque al final de la sesión.')
+    expect(mixedSessionMigration).toContain("coalesce(source.exercise ->> 'displayMode', 'standard') = 'quest_browser'")
+    expect(mixedSessionMigration).toContain("'exercises', quest_exercises")
+    expect(mixedSessionMigration).toContain("'quest_exercise_count'")
   })
 })

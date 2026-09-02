@@ -96,6 +96,7 @@ function buildSceneRuntime(Three: typeof THREE, scene: THREE.Scene, config: Exer
         uColorA: { value: new Three.Color(hexColor(config.foregroundColor, '#0a1214')) },
         uColorB: { value: new Three.Color(hexColor(config.backgroundColor, '#f7f6f4')) },
         uCoverage: { value: coverage },
+        uVerticalCoverage: { value: geometryMode === 'sphere' ? 180 : 100 },
         uPatternSize: { value: config.questPatternAngularSize },
         uSpeed: { value: config.questBackgroundAngularSpeed },
         uFrequency: { value: config.backgroundFrequencyHz },
@@ -109,12 +110,12 @@ function buildSceneRuntime(Three: typeof THREE, scene: THREE.Scene, config: Exer
       fragmentShader: `
         varying vec2 vUv;
         uniform float uTime; uniform vec3 uColorA; uniform vec3 uColorB;
-        uniform float uCoverage; uniform float uPatternSize; uniform float uSpeed;
+        uniform float uCoverage; uniform float uVerticalCoverage; uniform float uPatternSize; uniform float uSpeed;
         uniform float uFrequency; uniform float uAmplitude; uniform float uMotionMode;
         uniform vec2 uDirection; uniform float uPattern; uniform float uContrast;
         void main(){
           float movement = uMotionMode > 0.5 ? sin(uTime * 6.2831853 * uFrequency) * uAmplitude : uTime * uSpeed;
-          vec2 angular = vec2((vUv.x - 0.5) * uCoverage, (vUv.y - 0.5) * 100.0);
+          vec2 angular = vec2((vUv.x - 0.5) * uCoverage, (vUv.y - 0.5) * uVerticalCoverage);
           float mask = 0.0;
           if (uPattern > 3.5) {
             gl_FragColor = vec4(uColorB, 1.0);
@@ -147,6 +148,12 @@ function buildSceneRuntime(Three: typeof THREE, scene: THREE.Scene, config: Exer
       material.side = Three.DoubleSide
       const mesh = new Three.Mesh(geometry, material)
       mesh.position.set(0, 0, -3)
+      root.add(mesh)
+    } else if (geometryMode === 'sphere') {
+      const coverageRadians = Three.MathUtils.degToRad(coverage)
+      const phiStart = Math.PI * 1.5 - coverageRadians / 2
+      geometry = new Three.SphereGeometry(3, 128, 64, phiStart, coverageRadians, 0.04, Math.PI - 0.08)
+      const mesh = new Three.Mesh(geometry, material)
       root.add(mesh)
     } else {
       const coverageRadians = Three.MathUtils.degToRad(coverage)

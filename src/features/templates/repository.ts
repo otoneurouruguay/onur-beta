@@ -348,7 +348,7 @@ const questProceduralTemplates: ExerciseTemplateRecord[] = [
     id: 'template-quest-webxr-optokinetic-bars-low', name: 'Quest WebXR · barras optocinéticas suaves',
     config: questProceduralTemplate('Quest WebXR · barras optocinéticas suaves', 'optokinetic', {
       backgroundType: 'bars', backgroundDirection: 'left', backgroundSpeed: 20, objectEnabled: false,
-      questImmersiveGeometry: 'cylinder', questImmersiveCoverage: 90, questBackgroundAngularSpeed: 6,
+      questImmersiveGeometry: 'sphere', questImmersiveCoverage: 90, questBackgroundAngularSpeed: 6,
       questPatternAngularSize: 18, durationSeconds: 20, rounds: 1, restSeconds: 40,
     }), createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
   },
@@ -356,7 +356,7 @@ const questProceduralTemplates: ExerciseTemplateRecord[] = [
     id: 'template-quest-webxr-optokinetic-checker', name: 'Quest WebXR · damero envolvente',
     config: questProceduralTemplate('Quest WebXR · damero envolvente', 'visual_habituation', {
       backgroundType: 'checkerboard', backgroundDirection: 'right', backgroundSpeed: 24, objectEnabled: false,
-      questImmersiveGeometry: 'cylinder', questImmersiveCoverage: 180, questBackgroundAngularSpeed: 10,
+      questImmersiveGeometry: 'sphere', questImmersiveCoverage: 180, questBackgroundAngularSpeed: 10,
       durationSeconds: 25,
     }), createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
   },
@@ -364,7 +364,7 @@ const questProceduralTemplates: ExerciseTemplateRecord[] = [
     id: 'template-quest-webxr-fixation-background', name: 'Quest WebXR · fijación con fondo móvil',
     config: questProceduralTemplate('Quest WebXR · fijación con fondo móvil', 'visual_motion_fixation', {
       backgroundType: 'bars', backgroundDirection: 'left', backgroundSpeed: 20, objectEnabled: true, objectMode: 'fixed',
-      questImmersiveGeometry: 'cylinder', questImmersiveCoverage: 180, questBackgroundAngularSpeed: 8,
+      questImmersiveGeometry: 'sphere', questImmersiveCoverage: 180, questBackgroundAngularSpeed: 8,
       questTargetAngularSize: 3, durationSeconds: 25,
     }), createdAt: visualMotionExpandedSeedDate, updatedAt: visualMotionExpandedSeedDate,
   },

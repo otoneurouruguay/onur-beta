@@ -34,7 +34,7 @@ El endpoint o proveedor de IA todavía no se conecta a esta capa. Cuando se cone
 - Seguimiento ocular y sacadas pueden mostrarse en visor únicamente con instrucción explícita de mantener la cabeza quieta. No pueden presentarse como reemplazo de adaptación o sustitución vestibular.
 - La estimulación optocinética o la habituación visual requieren un patrón no sólido, velocidad mayor que cero, blanco oculto, postura sentada y límites sintomáticos definidos por el profesional.
 - Balance, marcha, sentarse-pararse y toda tarea funcional se ejecutan en Pantalla 2D, fuera del visor y con el entorno visible.
-- VR Box exige dosis temporal y avance automático. Quest puede usar panel 2D o WebXR procedural en finalidades compatibles, siempre presencial, por tiempo, con avance automático y supervisión directa. Una batería procedural no se mezcla con paneles, escenarios contextuales u otro dispositivo durante la misma ejecución.
+- VR Box exige dosis temporal y avance automático. Quest puede usar panel 2D o WebXR procedural en finalidades compatibles, siempre presencial, por tiempo, con avance automático y supervisión directa. El bloque Quest conserva un solo modelo de interacción y puede ubicarse al final de una sesión mixta después de las tareas de PC; no se alterna PC → Quest → PC ni se agrega VR Box como tercer dispositivo.
 
 Estas reglas se aplican al guardar una plantilla, validar una sesión y abrir el reproductor; una asignación heredada incompatible se bloquea antes de ejecutarse.
 

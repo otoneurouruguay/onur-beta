@@ -66,7 +66,8 @@ Decimotercer incremento técnico ejecutable:
 - reproductor continuo con pausa, omitir, salir, fullscreen y controles auto-ocultables;
 - tiempo activo sin contar pausas ni descansos y metrónomo configurable;
 - salida 2D, VR Box binocular, Cardboard 3DoF, Quest en panel 2D y Quest WebXR para patrones procedurales o escenarios 360°;
-- batería Quest procedural persistente con patrones curvos, disco frontal, flujo de puntos 3D, blanco independiente, recentrado breve y trazabilidad angular sin guardar poses crudas;
+- batería Quest procedural persistente con esfera envolvente, panel curvo, disco frontal, flujo de puntos 3D, blanco independiente, recentrado breve y trazabilidad angular sin guardar poses crudas;
+- sesiones presenciales mixtas con un único traspaso PC → Quest: la estación recibe solo su bloque y el cierre profesional combina ambos resultados;
 - VR Box 2D temporizado sin seguimiento ni controles, y Cardboard opcional con giroscopio, calibración frontal, perfil óptico transportable y controles duplicados;
 - advertencia y reordenamiento recomendado cuando una sesión mezcla cualquier tarea sin visor con un bloque VR Box;
 - controles de postura, superficie y supervisión, con bloqueos domiciliarios para tareas de mayor riesgo;

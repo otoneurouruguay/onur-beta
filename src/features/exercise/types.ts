@@ -11,7 +11,7 @@ export type ObjectDirection = 'horizontal' | 'vertical' | 'diagonal_down' | 'dia
 export type SaccadePattern = ObjectDirection | 'random'
 export type ExerciseDisplayMode = 'standard' | 'vr_box' | 'quest_browser'
 export type QuestPresentationMode = 'panel_2d' | 'immersive_webxr'
-export type QuestImmersiveGeometry = 'curved_panel' | 'cylinder' | 'front_disc' | 'particle_tunnel'
+export type QuestImmersiveGeometry = 'curved_panel' | 'cylinder' | 'sphere' | 'front_disc' | 'particle_tunnel'
 export type QuestImmersiveCoverage = 90 | 180 | 360
 export type PreparationSeconds = 0 | 5 | 10 | 20
 export type ExerciseKind = 'visual_stimulus' | 'guided_physical'
@@ -244,7 +244,7 @@ export function normalizeExerciseConfig(config: Partial<ExerciseConfig>, legacyP
     questPresentationMode: config.purpose === 'immersive_context'
       ? 'immersive_webxr'
       : config.questPresentationMode === 'immersive_webxr' ? 'immersive_webxr' : 'panel_2d',
-    questImmersiveGeometry: ['curved_panel', 'cylinder', 'front_disc', 'particle_tunnel'].includes(String(config.questImmersiveGeometry))
+    questImmersiveGeometry: ['curved_panel', 'cylinder', 'sphere', 'front_disc', 'particle_tunnel'].includes(String(config.questImmersiveGeometry))
       ? config.questImmersiveGeometry as QuestImmersiveGeometry
       : 'cylinder',
     questImmersiveCoverage: [90, 180, 360].includes(Number(config.questImmersiveCoverage))

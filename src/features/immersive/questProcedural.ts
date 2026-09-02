@@ -37,7 +37,7 @@ export function recommendedQuestGeometry(config: Pick<ExerciseConfig, 'purpose' 
   if (config.purpose === 'optic_flow' || config.backgroundType === 'radial_flow') return 'particle_tunnel'
   if (config.backgroundType === 'spiral') return 'front_disc'
   if (config.purpose === 'smooth_pursuit' || config.purpose === 'saccades' || config.backgroundType === 'solid') return 'curved_panel'
-  return 'cylinder'
+  return 'sphere'
 }
 
 export function isQuestProceduralImmersive(config: ExerciseConfig) {

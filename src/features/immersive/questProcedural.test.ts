@@ -25,7 +25,8 @@ describe('modalidad procedural Quest WebXR', () => {
   })
 
   it('elige una geometría coherente por patrón o finalidad', () => {
-    expect(recommendedQuestGeometry(procedural({ backgroundType: 'bars' }))).toBe('cylinder')
+    expect(recommendedQuestGeometry(procedural({ backgroundType: 'bars' }))).toBe('sphere')
+    expect(normalizeExerciseConfig({ questImmersiveGeometry: 'sphere' }).questImmersiveGeometry).toBe('sphere')
     expect(recommendedQuestGeometry(procedural({ backgroundType: 'spiral' }))).toBe('front_disc')
     expect(recommendedQuestGeometry({ ...applyExercisePurpose(defaultExerciseConfig, 'saccades') })).toBe('curved_panel')
     expect(recommendedQuestGeometry({ ...applyExercisePurpose(defaultExerciseConfig, 'optic_flow'), backgroundType: 'radial_flow' })).toBe('particle_tunnel')
@@ -55,8 +56,8 @@ describe('modalidad procedural Quest WebXR', () => {
   it('rechaza mezclar WebXR procedural con panel 2D o escenario contextual', () => {
     const panel = { ...procedural({ name: 'Panel' }), questPresentationMode: 'panel_2d' as const }
     const contextual = applyExercisePurpose(defaultExerciseConfig, 'immersive_context')
-    expect(validateSession(session([procedural(), panel])).exercises).toContain('únicamente ejercicios inmersivos procedurales')
-    expect(validateSession(session([procedural(), contextual])).exercises).toContain('no se mezcla')
+    expect(validateSession(session([procedural(), panel])).exercises).toContain('únicamente ejercicios WebXR procedurales')
+    expect(validateSession(session([procedural(), contextual])).exercises).toContain('homogéneo')
   })
 
   it('descarta modalidades sin logística coherente para este motor', () => {

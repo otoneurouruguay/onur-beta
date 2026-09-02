@@ -60,6 +60,8 @@ describe('creación de ejercicios', () => {
     fireEvent.click(immersive)
     expect(immersive).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByText('Parámetros WebXR avanzados'))
+    expect(screen.getByLabelText(/^Geometría/)).toHaveValue('sphere')
+    expect(screen.getByRole('option', { name: 'Esfera envolvente' })).toBeInTheDocument()
     expect(screen.getByLabelText('Velocidad angular Quest')).toBeInTheDocument()
     expect(screen.getByLabelText('Tamaño angular del patrón Quest')).toBeInTheDocument()
     expect(screen.getByText(/una sola inmersión durante toda la batería/i)).toBeInTheDocument()
